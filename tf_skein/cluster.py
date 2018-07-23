@@ -154,10 +154,8 @@ class SkeinCluster(Cluster):
         env_name = self.env.name
         env_path = self.env.create()
 
-        # TODO: how to allow extra files?
-        t2v_dir = os.path.dirname(os.path.abspath(__file__))
-        t2v_zip_path = shutil.make_archive("t2v", "zip", t2v_dir)
-        
+        # TODO: allow to pass extra files and env. variables.g
+
         classpath = check_output([
             os.path.join(os.environ["HADOOP_HOME"], "bin", "hadoop"),
             "classpath",
@@ -166,7 +164,6 @@ class SkeinCluster(Cluster):
         krb5_cc_name = os.environ["KRB5CCNAME"].replace("FILE:", "", 1)
 
         task_files = {
-            "t2v": t2v_zip_path,
             env_name: env_path,
             os.path.basename(krb5_cc_name): krb5_cc_name
         }

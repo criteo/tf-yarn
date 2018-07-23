@@ -15,9 +15,9 @@ from subprocess import check_output
 import dill
 import skein
 import tensorflow as tf
-from knit import CondaCreator
 from skein.model import ApplicationState
 
+from .env import Env
 from ._internal import (
     iter_available_sock_addrs,
     _spec_from_iter,
@@ -99,17 +99,6 @@ class LocalCluster(Cluster):
                     os._exit(-1)
 
 
-class CondaEnv(typing.NamedTuple):
-    name: str
-    packages: typing.List[str]
-    channels: typing.List[str] = ["conda-forge"]
-
-    def create(self):
-        cc = CondaCreator(channels=self.channels)
-        fp = hash((frozenset(self.packages), frozenset(self.channels)))
-        return cc.create_env(f"{self.name}-{fp:x}", self.packages)
-
-
 class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int
@@ -136,17 +125,13 @@ class SkeinCluster(Cluster):
        terminate, and therefore should be killed, once all other
        tasks are finished.
     """
-    from sys import version_info as v
-    # TODO: how to allow extra packages? pip packages?
-    env = CondaEnv(
-        name=f"tf",
+    env = Env(
+        name="tf",
         packages=[
-            f"python={v.major}.{v.minor}.{v.micro}",
-            "skein",
             "dill=" + dill.__version__,
+            "skein",  # TODO: pip install from Git.
             "tensorflow=" + tf.__version__
         ])
-    del v
 
     def __init__(self, task_specs: typing.Dict[str, TaskSpec]):
         self.task_specs = defaultdict(lambda: TaskSpec(0, 0, 0), task_specs)

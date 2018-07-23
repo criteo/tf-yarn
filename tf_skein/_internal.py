@@ -3,13 +3,16 @@ import os
 import socket
 import typing
 from base64 import b64encode, b64decode
-from threading import Thread
 from contextlib import ExitStack, contextmanager
+from threading import Thread
 
 import dill
 
 
 class MonitoredThread(Thread):
+    """A thread which captures any exception occurred during the
+    execution of ``target``.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -28,10 +31,10 @@ class MonitoredThread(Thread):
 def iter_available_sock_addrs():
     """Iterate available TCP ports to listen on.
 
-    The iterator holds a reference to all the acquired TCP ports until
-    it is closed. This does not eliminate the chance of collision
-    between multiple concurrent Python processes, but it makes it
-    slightly less likely.
+    The acquired TCP sockets are hold open until the generator is
+    closed. This does not eliminate the chance of collision between
+    multiple concurrent Python processes, but it makes it slightly
+    less likely.
     """
     with ExitStack() as stack:
         host = socket.gethostname()
@@ -81,15 +84,18 @@ def _spec_from_kv(kv, num_workers: int, num_ps: int):
 
 
 def encode_fn(fn) -> str:
+    """Encode a function in a plain-text format."""
     return b64encode(dill.dumps(fn)).decode()
 
 
 def decode_fn(s: str):
+    """Decode a function encoded by ``encode_fn``."""
     return dill.loads(b64decode(s))
 
 
 @contextmanager
-def set_env(**kwargs):
+def xset_environ(**kwargs):
+    """Exclusively set keys in the environment."""
     for key, value in kwargs.items():
         if os.environ[key]:
             raise RuntimeError(f"{key} already set in os.environ: {value}")

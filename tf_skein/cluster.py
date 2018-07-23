@@ -22,7 +22,7 @@ from ._internal import (
     iter_available_sock_addrs,
     _spec_from_iter,
     encode_fn,
-    set_env
+    xset_environ
 )
 
 
@@ -83,7 +83,7 @@ class LocalCluster(Cluster):
                         "cluster": self.spec,
                         "task": {"type": task, "index": idx}
                     })
-                    with set_env(TF_CONFIG=tf_config):
+                    with xset_environ(TF_CONFIG=tf_config):
                         config = config_fn()
                     futures.append(executor.submit(experiment_fn(config)))
 

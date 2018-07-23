@@ -12,7 +12,8 @@ from ._internal import (
     _spec_from_kv,
     MonitoredThread,
     decode_fn,
-    set_env)
+    xset_environ
+)
 from .cluster import ExperimentFn, ConfigFn
 
 
@@ -51,7 +52,7 @@ def main(
         "task": {"type": task_type, "index": task_id},
         "environment": "google" if fake_google_env else ""
     })
-    with set_env(TF_CONFIG=tf_config):
+    with xset_environ(TF_CONFIG=tf_config):
         config = config_fn()
 
     if fake_google_env:

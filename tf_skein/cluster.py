@@ -126,11 +126,11 @@ class SkeinCluster(Cluster):
        tasks are finished.
     """
     env = Env(
-        name="tf",
+        name=__package__,
         packages=[
-            "dill=" + dill.__version__,
-            "skein",  # TODO: pip install from Git.
-            "tensorflow=" + tf.__version__
+            "dill==" + dill.__version__,
+            "git+http://github.com/jcrist/skein",
+            "tensorflow==" + tf.__version__
         ])
 
     def __init__(self, task_specs: typing.Dict[str, TaskSpec]):

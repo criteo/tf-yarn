@@ -19,8 +19,7 @@ from .cluster import ExperimentFn, ConfigFn
 class ApplicationClient(skein.ApplicationClient):
     @property
     def current_container(self):
-        # TODO: ensure new skein on the executors.
-        return next(c for c in self.containers()
+        return next(c for c in self.get_containers()
                     if c.yarn_container_id == os.environ["CONTAINER_ID"])
 
 

@@ -142,8 +142,7 @@ class SkeinCluster(Cluster):
         assert self.task_specs["chief"].instances <= 1
 
     def __repr__(self):
-        # TODO: implement.
-        return f"LocalCluster({self.spec})"
+        return f"SkeinCluster({self.task_specs})"
 
     __str__ = __repr__
 

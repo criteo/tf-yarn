@@ -1,1 +1,14 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="tf_skein",
+    packages=find_packages(),
+    version="0.1.0",
+    install_requires=[
+      "tensorflow==1.9",
+      "dill==0.2.8",
+      "skein"
+    ],
+    python_requires=">=3.6"
+)
 

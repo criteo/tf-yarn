@@ -79,7 +79,7 @@ class Env(typing.NamedTuple):
 
         logger.info("Creating new env" + self.name)
         _call([
-            conda_bin, "create", "-p", env_path, "-y", "-q",
+            conda_bin, "create", "-p", env_path, "-y", "-q", "--copy",
             "python=" + self.python
         ], env=dict(os.environ))
 

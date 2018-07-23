@@ -105,6 +105,10 @@ class TaskSpec(typing.NamedTuple):
     instances: int = 1
 
 
+#: A "dummy" ``TaskSpec``.
+TaskSpec.NONE = TaskSpec(0, 0, 0)
+
+
 class SkeinCluster(Cluster):
     """Multi-node cluster running on Skein.
 
@@ -134,7 +138,7 @@ class SkeinCluster(Cluster):
         ])
 
     def __init__(self, task_specs: typing.Dict[str, TaskSpec]):
-        self.task_specs = defaultdict(lambda: TaskSpec(0, 0, 0), task_specs)
+        self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
 
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.
@@ -184,7 +188,7 @@ class SkeinCluster(Cluster):
 
         services = {}
         for task_type, task_spec in self.task_specs.items():
-            if not task_spec.instances:
+            if task_spec is TaskSpec.NONE:
                 continue
 
             services[task_type] = skein.Service(

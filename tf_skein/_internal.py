@@ -1,8 +1,12 @@
 import errno
+import os
 import socket
 import typing
+from base64 import b64encode, b64decode
 from threading import Thread
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
+
+import dill
 
 
 class MonitoredThread(Thread):
@@ -21,7 +25,7 @@ class MonitoredThread(Thread):
             self._exc = exc
 
 
-def _iter_available_sock_addrs():
+def iter_available_sock_addrs():
     """Iterate available TCP ports to listen on.
 
     The iterator holds a reference to all the acquired TCP ports until
@@ -74,3 +78,27 @@ def _spec_from_kv(kv, num_workers: int, num_ps: int):
         spec.setdefault("worker", []).append(kv.wait(f"worker:{idx}"))
 
     return spec
+
+
+def encode_fn(fn) -> str:
+    return b64encode(dill.dumps(fn)).decode()
+
+
+def decode_fn(s: str):
+    return dill.loads(b64decode(s))
+
+
+@contextmanager
+def set_env(**kwargs):
+    for key, value in kwargs.items():
+        if os.environ[key]:
+            raise RuntimeError(f"{key} already set in os.environ: {value}")
+
+    os.environ.update(kwargs)
+    yield
+
+    for key in kwargs:
+        try:
+            os.environ.pop(key)
+        except KeyError:
+            raise RuntimeError(f"{key} is missing from os.environ")

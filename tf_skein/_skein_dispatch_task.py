@@ -1,19 +1,19 @@
 import argparse
+import json
 import os
 import time
-from base64 import b64decode
 from contextlib import closing
 
-import dill
 import skein
 import tensorflow as tf
 
-from .cluster import configure_run, ExperimentFn
 from ._internal import (
-    _iter_available_sock_addrs,
+    iter_available_sock_addrs,
     _spec_from_kv,
-    MonitoredThread
-)
+    MonitoredThread,
+    decode_fn,
+    set_env)
+from .cluster import ExperimentFn, ConfigFn
 
 
 class ApplicationClient(skein.ApplicationClient):
@@ -26,25 +26,13 @@ class ApplicationClient(skein.ApplicationClient):
 
 def main(
     task_type: str,
-    model_dir: str,
+    config_fn: ConfigFn,
     experiment_fn: ExperimentFn,
     num_workers: int,
     num_ps: int
 ):
-    # TODO: ensure new skein on the executors.
-    # Remove this once https://github.com/jcrist/skein/pull/31
-    # is merged.
-    container_id = os.environ['CONTAINER_ID']
-    for local_dir in os.environ['LOCAL_DIRS'].split(','):
-        container_dir = os.path.join(local_dir, container_id)
-        crt_path = os.path.join(container_dir, ".skein.crt")
-        pem_path = os.path.join(container_dir, ".skein.pem")
-        if os.path.exists(crt_path) and os.path.exists(pem_path):
-            os.environ["LOCAL_DIRS"] = local_dir
-            break
-
     client = ApplicationClient.from_current()
-    with closing(_iter_available_sock_addrs()) as it:
+    with closing(iter_available_sock_addrs()) as it:
         task_id = client.current_container.instance
         task = f"{task_type}:{task_id}"
         client.kv[task] = sock_addr = next(it)
@@ -59,11 +47,13 @@ def main(
     # code path as the rest and spawns a server regardless of
     # the "environment" value.
     fake_google_env = task_type != "evaluator" and task_type != "ps"
-    config = configure_run(model_dir, tf_config={
+    tf_config = json.dumps({
         "cluster": spec,
         "task": {"type": task_type, "index": task_id},
         "environment": "google" if fake_google_env else ""
     })
+    with set_env(TF_CONFIG=tf_config):
+        config = config_fn()
 
     if fake_google_env:
         # XXX this is not immune to a race condition.
@@ -115,8 +105,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)
-    parser.add_argument("--model-dir", type=str)
-    parser.add_argument("--fn", type=str)
+    parser.add_argument("--config-fn", type=str)
+    parser.add_argument("--experiment-fn", type=str)
     parser.add_argument(
         "task_type",
         choices=["ps", "worker", "chief", "evaluator"])
@@ -124,7 +114,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(
         args.task_type,
-        args.model_dir,
-        dill.loads(b64decode(args.fn)),
+        decode_fn(args.config_fn),
+        decode_fn(args.experiment_fn),
         args.num_workers,
         args.num_ps)

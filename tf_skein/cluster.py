@@ -7,7 +7,6 @@ import sys
 import time
 import traceback
 import typing
-from base64 import b64encode
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing, contextmanager
@@ -19,7 +18,12 @@ import tensorflow as tf
 from knit import CondaCreator
 from skein.model import ApplicationState
 
-from ._internal import _iter_available_sock_addrs, _spec_from_iter
+from ._internal import (
+    iter_available_sock_addrs,
+    _spec_from_iter,
+    encode_fn,
+    set_env
+)
 
 
 class Experiment(typing.NamedTuple):
@@ -31,6 +35,7 @@ class Experiment(typing.NamedTuple):
         return tf.estimator.train_and_evaluate(*self)
 
 
+ConfigFn = typing.Callable[[], tf.estimator.RunConfig]
 ExperimentFn = typing.Callable[[tf.estimator.RunConfig], Experiment]
 
 
@@ -40,7 +45,7 @@ class Cluster(abc.ABC):
         return logging.getLogger(self.__class__.__name__)
 
     @abc.abstractmethod
-    def run(self, model_dir: str, experiment_fn: ExperimentFn):
+    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
         """Train a model in this cluster."""
         raise NotImplementedError
 
@@ -56,7 +61,7 @@ class LocalCluster(Cluster):
     """
     @classmethod
     def allocate(cls, *, num_workers=0, num_ps=0):
-        with closing(_iter_available_sock_addrs()) as it:
+        with closing(iter_available_sock_addrs()) as it:
             return cls(_spec_from_iter(it, num_workers, num_ps))
 
     def __init__(self, spec: typing.Dict[str, typing.List[str]]):
@@ -67,17 +72,19 @@ class LocalCluster(Cluster):
 
     __str__ = __repr__
 
-    def run(self, model_dir, experiment_fn):
+    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
         tasks = list(self.spec.items())
         tasks.append(("evaluator", [None]))
         with ThreadPoolExecutor() as executor:
             futures = []
             for task, hosts in tasks:
                 for idx, _host in enumerate(hosts):
-                    config = configure_run(model_dir, tf_config={
+                    tf_config = json.dumps({
                         "cluster": self.spec,
                         "task": {"type": task, "index": idx}
                     })
+                    with set_env(TF_CONFIG=tf_config):
+                        config = config_fn()
                     futures.append(executor.submit(experiment_fn(config)))
 
             for future in as_completed(futures):
@@ -155,7 +162,7 @@ class SkeinCluster(Cluster):
 
     __str__ = __repr__
 
-    def run(self, model_dir: str, experiment_fn: ExperimentFn):
+    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
         env_name = self.env.name
         env_path = self.env.create()
 
@@ -188,8 +195,8 @@ class SkeinCluster(Cluster):
             f"{env_name}/{env_name}/bin/python -m t2v._skein_dispatch_task "
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "
-            f"--model-dir={model_dir} "
-            f"--fn={b64encode(dill.dumps(experiment_fn)).decode()} ")
+            f"--config-fn={encode_fn(config_fn)} "
+            f"--experiment-fn={encode_fn(experiment_fn)} ")
 
         services = {}
         for task_type, task_spec in self.task_specs.items():
@@ -209,10 +216,11 @@ class SkeinCluster(Cluster):
             app_id = client.submit(spec)
 
             # TODO: run TB automatically via ``tensorboard.program``.
+
             self.logger.info(f"Starting training")
             self.logger.info(
-                f"Run ``tensorboard --logdir={model_dir}`` to monitor the "
-                "training metrics in TensorBoard.")
+                f"Run ``tensorboard --logdir={config_fn().model_dir}`` "
+                "to monitor the training metrics in TensorBoard.")
 
             with _shutdown(client.connect(app_id)):
                 while client.application_report(app_id).state not in [
@@ -240,20 +248,3 @@ def _shutdown(app: skein.ApplicationClient):
             app.shutdown(status)
         except skein.exceptions.ConnectionError:
             pass  # Application already down.
-
-
-# TODO: allow custom run configs.
-def configure_run(model_dir, seed=42, tf_config=None):
-    if tf_config:
-        os.environ["TF_CONFIG"] = json.dumps(tf_config)
-
-    session_config = tf.ConfigProto(
-        allow_soft_placement=True,
-        log_device_placement=False)
-    return tf.estimator.RunConfig(
-        model_dir=model_dir,
-        tf_random_seed=seed,
-        session_config=session_config,
-        # Save checkpoints often to get a smooth eval curve.
-        save_checkpoints_secs=60,
-        keep_checkpoint_max=100)

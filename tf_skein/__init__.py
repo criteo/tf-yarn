@@ -1,7 +1,7 @@
 __all__ = [
     "Env",
-    "SkeinCluster", "TaskSpec"
+    "YARNCluster", "TaskSpec"
 ]
 
 from .env import Env
-from .cluster import SkeinCluster, TaskSpec
+from .cluster import YARNCluster, TaskSpec

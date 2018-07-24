@@ -109,7 +109,7 @@ class TaskSpec(typing.NamedTuple):
 TaskSpec.NONE = TaskSpec(0, 0, 0)
 
 
-class SkeinCluster(Cluster):
+class YARNCluster(Cluster):
     """Multi-node cluster running on Skein.
 
     The implementation schedules each distributed TensorFlow task on
@@ -177,7 +177,9 @@ class SkeinCluster(Cluster):
                  "/usr/lib/hadoop-criteo/hadoop/lib/native"]),
         }
         task_command = (
-            f"{env_name}/{env_name}/bin/python -m t2v._skein_dispatch_task "
+            # TODO: remove env_name/env_name.
+            # TODO: make sure tf_skein is part of the env.
+            f"{env_name}/{env_name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "
             f"--config-fn={encode_fn(config_fn)} "

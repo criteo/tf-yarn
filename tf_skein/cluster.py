@@ -89,6 +89,7 @@ class LocalCluster(Cluster):
                         "cluster": self.spec,
                         "task": {"type": task, "index": idx}
                     })
+                    # XXX this might be broken due to env collision.
                     with xset_environ(TF_CONFIG=tf_config):
                         config = config_fn()
                     futures.append(executor.submit(experiment_fn(config)))
@@ -135,16 +136,23 @@ class YARNCluster(Cluster):
        terminate, and therefore should be killed, once all other
        tasks are finished.
     """
-    env = Env(
+    DEFAULT_ENV = Env(
         name=__package__,
         packages=[
             "dill==" + dill.__version__,
-            "git+http://github.com/jcrist/skein",
+            "git+http://github.com/criteo-forks/skein",
+            # TODO: remove this hack!
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "tensorflow==" + tf.__version__
         ])
 
-    def __init__(self, task_specs: typing.Dict[str, TaskSpec]):
+    def __init__(
+        self,
+        task_specs: typing.Dict[str, TaskSpec],
+        env: Env = DEFAULT_ENV
+    ):
         self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
+        self.env = env
 
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.
@@ -152,7 +160,7 @@ class YARNCluster(Cluster):
         assert self.task_specs["chief"].instances <= 1
 
     def __repr__(self):
-        return f"SkeinCluster({self.task_specs})"
+        return f"SkeinCluster({self.task_specs}, {self.env})"
 
     __str__ = __repr__
 
@@ -160,7 +168,7 @@ class YARNCluster(Cluster):
         env_name = self.env.name
         env_path = self.env.create()
 
-        # TODO: allow to pass extra files and env. variables.g
+        # TODO: allow to pass extra files and env. variables.
 
         classpath = check_output([
             os.path.join(os.environ["HADOOP_HOME"], "bin", "hadoop"),

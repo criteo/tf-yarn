@@ -77,7 +77,7 @@ class Env(typing.NamedTuple):
         conda_envs = os.path.join(conda_root, "envs")
         env_path = os.path.join(conda_envs, self.name)
         if not os.path.exists(env_path):
-            logger.info("Creating new env" + self.name)
+            logger.info("Creating new env " + self.name)
             _call([
                 conda_bin, "create", "-p", env_path, "-y", "-q", "--copy",
                 "python=" + self.python

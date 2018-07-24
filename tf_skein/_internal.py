@@ -56,7 +56,7 @@ def iter_available_sock_addrs():
 
 def encode_fn(fn) -> str:
     """Encode a function in a plain-text format."""
-    return b64encode(dill.dumps(fn)).decode()
+    return b64encode(dill.dumps(fn, recurse=True)).decode()
 
 
 def decode_fn(s: str):
@@ -64,21 +64,13 @@ def decode_fn(s: str):
     return dill.loads(b64decode(s))
 
 
-@contextmanager
 def xset_environ(**kwargs):
     """Exclusively set keys in the environment."""
     for key, value in kwargs.items():
-        if os.environ[key]:
+        if key in os.environ:
             raise RuntimeError(f"{key} already set in os.environ: {value}")
 
     os.environ.update(kwargs)
-    yield
-
-    for key in kwargs:
-        try:
-            os.environ.pop(key)
-        except KeyError:
-            raise RuntimeError(f"{key} is missing from os.environ")
 
 
 class KVBarrier:

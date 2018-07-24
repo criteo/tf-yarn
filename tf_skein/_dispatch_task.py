@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 from contextlib import closing
 
@@ -48,8 +49,9 @@ def main(
         "task": {"type": task_type, "index": task_id},
         "environment": "google" if fake_google_env else ""
     })
-    with xset_environ(TF_CONFIG=tf_config):
-        config = config_fn()
+
+    xset_environ(TF_CONFIG=tf_config)
+    config = config_fn()
 
     if fake_google_env:
         # XXX this is not immune to a race condition.
@@ -81,6 +83,8 @@ def main(
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level="INFO")
+
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)

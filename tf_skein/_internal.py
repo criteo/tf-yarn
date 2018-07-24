@@ -1,6 +1,7 @@
 import errno
 import logging
 import os
+import shutil
 import socket
 import typing
 from base64 import b64encode, b64decode
@@ -73,8 +74,27 @@ def xset_environ(**kwargs):
     os.environ.update(kwargs)
 
 
+def zip_inplace(path):
+    assert os.path.exists(path)
+    assert os.path.isdir(path)
+
+    zip_path = path + ".zip"
+    if not os.path.exists(zip_path):
+        created = shutil.make_archive(
+            os.path.basename(path),
+            "zip",
+            root_dir=path)
+
+        try:
+            os.rename(created, zip_path)
+        except OSError as e:
+            os.remove(created)  # Cleanup on failure.
+            raise e from None
+    return zip_path
+
+
 class KVBarrier:
-    def __init__(self, kv, stage: str, num_workers: int, num_ps: int):
+    def __init__(self, kv, stage: str, num_workers: int, num_ps: int) -> None:
         self.kv = kv
         self.stage = stage
         self.num_workers = num_workers

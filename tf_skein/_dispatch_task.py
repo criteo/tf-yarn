@@ -75,7 +75,7 @@ def main(
     # "ps" tasks never terminate and therefore cannot be joined.
     if task_type != "ps":
         thread.join()
-        if thread.exception():
+        if thread.exception() is not None:
             raise thread.exception()
 
     stop_barrier = KVBarrier(client.kv, "stop", num_workers, num_ps)

@@ -4,13 +4,17 @@
 import json
 import logging
 import os
-import shutil
 import sys
 import typing
 import warnings
 from subprocess import check_output, Popen, PIPE, CalledProcessError
 from sys import version_info as v
 from urllib.request import urlretrieve
+
+import dill
+import tensorflow as tf
+
+from ._internal import zip_inplace
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +31,10 @@ class Env(typing.NamedTuple):
         Python version in the MAJOR.MINOR.MICRO format. Defaults to the
         version of ``sys.executable``.
 
-    packages : list of str
-        A list of packages to install in the environment. The packages
-        are installed via pip, therefore all of the following forms
-        are supported::
+    packages : list
+        Packages to install in the environment. The packages are
+        installed via pip, therefore all of the following forms are
+        supported::
 
             SomeProject>=1,<2
             git+https://github.com/org/SomeProject
@@ -91,18 +95,16 @@ class Env(typing.NamedTuple):
             logger.info("Installing packages into " + self.name)
             _call([env_python_bin, "-m", "pip", "install"] + self.packages)
 
-        env_zip_path = env_path + ".zip"
-        if not os.path.exists(env_zip_path):
-            path = shutil.make_archive(
-                self.name,
-                "zip",
-                root_dir=env_path)
+        return zip_inplace(env_path)
 
-            try:
-                os.rename(path, env_zip_path)
-            except OSError:
-                os.remove(path)  # Cleanup on failure.
-        return env_zip_path
+
+Env.MINIMAL = Env(
+    name="tf_skein_minimal_env",
+    packages=[
+        "dill==" + dill.__version__,
+        "git+http://github.com/criteo-forks/skein",
+        "tensorflow==" + tf.__version__
+    ])
 
 
 def _install_miniconda(root: str):

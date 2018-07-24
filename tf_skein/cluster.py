@@ -12,7 +12,7 @@ import skein
 import tensorflow as tf
 from skein.model import ApplicationState
 
-from ._internal import encode_fn
+from ._internal import encode_fn, zip_inplace
 from .env import Env
 
 
@@ -42,57 +42,84 @@ TaskSpec.NONE = TaskSpec(0, 0, 0)
 class YARNCluster:
     """Multi-node cluster running on Skein.
 
-    The implementation schedules each distributed TensorFlow task on
-    a dedicated PySpark executor. Roughly, it proceeds as follows:
+    The implementation allocates a service with the requested number
+    of instances for each distributed TensorFlow task. Each instance
+    runs ``_dispatch_task`` which roughly does the following.
 
-    1. Create a "fake" RDD with one partition per executor.
-    2. On each executor find an available TCP port and communicate the
-       resulting socket address (host/port pair) to other executors
-       using the "init" barrier. This is a synchronization point
-       which ensures that all tasks in the cluster are ready to
-       talk over the network before the Estimator machinery attempts
-       to initialize a `tf.train.MonitoredSession`.
-    3. Reconstruct the cluster spec from the list of socket addresses
+    1. Find an an available TCP port and communicate the resulting
+       socket address (host/port pair) to other instances using the
+       "init" barrier. This is a synchronization point which ensures
+       that all tasks in the cluster are ready to talk over the
+       network before the Estimator machinery attempts to initialize
+       a `tf.train.MonitoredSession`.
+    2. Reconstruct the cluster spec from the list of socket addresses
        accumulated by the barrier, and preempt a TensorFlow server.
-    4. Start the training and synchronize on the "stop" barrier.
+    3. Start the training and synchronize on the "stop" barrier.
        The barrier compensates for the fact that "ps" tasks never
        terminate, and therefore should be killed, once all other
        tasks are finished.
-    """
-    DEFAULT_ENV = Env(
-        name=__package__,
-        packages=[
-            "dill==" + dill.__version__,
-            "git+http://github.com/criteo-forks/skein",
-            # TODO: remove this hack!
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "tensorflow==" + tf.__version__
-        ])
 
+    Parameters
+    ----------
+    task_specs
+        Defines the resources to allocate for each task type. The keys
+        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+        ``"evaluator"``. The minimal spec must contain at least
+        ``"chief"``.
+    env
+        Defines the Python environment on the instances.
+    """
     def __init__(
         self,
         task_specs: typing.Dict[str, TaskSpec],
-        env: Env = DEFAULT_ENV
-    ):
+        env: Env = Env.MINIMAL
+    ) -> None:
         self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
         self.env = env
         self.logger = logging.getLogger(self.__class__.__name__)
 
+        all_task_types = {"chief", "worker", "ps", "evaluator"}
+        if not task_specs.keys() <= all_task_types:
+            raise ValueError(
+                f"task_spec keys must be a subset of: {all_task_types}")
+
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.
         assert self.task_specs["evaluator"].instances <= 1
-        assert self.task_specs["chief"].instances <= 1
+        assert self.task_specs["chief"].instances == 1
 
     def __repr__(self):
         return f"SkeinCluster({self.task_specs}, {self.env})"
 
     __str__ = __repr__
 
-    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
-        env_name = self.env.name
-        env_path = self.env.create()
+    def run(
+        self,
+        config_fn: ConfigFn,
+        experiment_fn: ExperimentFn,
+        files: typing.Dict[str, str] = None
+    ):
+        """
+        Run an experiment on YARN.
 
-        # TODO: allow to pass extra files and env. variables.
+        Parameters
+        ----------
+        config_fn
+            Configuration function for the TensorFlow estimator run.
+
+        experiment_fn
+            A function constructing the estimator alongside the train
+            and eval specs.
+
+        files
+            Local files or directories to upload to the container.
+            The keys are the target locations of the resources relative
+            to the container root, while the values -- their
+            corresponding local sources. Note that container root is
+            appended to ``PYTHONPATH``. Therefore, any listed Python
+            module a package is automatically importable.
+        """
+        env_name = self.env.name
 
         classpath = check_output([
             os.path.join(os.environ["HADOOP_HOME"], "bin", "hadoop"),
@@ -102,11 +129,21 @@ class YARNCluster:
         krb5_cc_name = os.environ["KRB5CCNAME"].replace("FILE:", "", 1)
 
         task_files = {
-            env_name: env_path,
-            os.path.basename(krb5_cc_name): krb5_cc_name
+            env_name: self.env.create(),
+            os.path.basename(krb5_cc_name): krb5_cc_name,
+            __package__: zip_inplace(os.path.dirname(__file__))
         }
 
+        for target, source in (files or {}).items():
+            assert target not in task_files
+            task_files[target] = (
+                zip_inplace(source) if os.path.isdir(source) else source
+            )
+
         task_env = {
+            # Make Python modules/packages passed via ``self.env.files``
+            # importable.
+            "PYTHONPATH": ".",
             "KRB5CCNAME": os.path.basename(krb5_cc_name),
             "HADOOP_HDFS_HOME": "/usr/lib/hadoop-hdfs",
             "CLASSPATH": classpath,
@@ -115,7 +152,6 @@ class YARNCluster:
                  "/usr/lib/hadoop-criteo/hadoop/lib/native"]),
         }
         task_command = (
-            # TODO: make sure tf_skein is part of the env.
             f"{env_name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "

@@ -1,14 +1,10 @@
-import abc
-import json
 import logging
 import os
 import sys
 import time
-import traceback
 import typing
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import closing, contextmanager
+from contextlib import contextmanager
 from subprocess import check_output
 
 import dill
@@ -16,11 +12,7 @@ import skein
 import tensorflow as tf
 from skein.model import ApplicationState
 
-from ._internal import (
-    iter_available_sock_addrs,
-    encode_fn,
-    xset_environ
-)
+from ._internal import encode_fn
 from .env import Env
 
 
@@ -37,75 +29,6 @@ ConfigFn = typing.Callable[[], tf.estimator.RunConfig]
 ExperimentFn = typing.Callable[[tf.estimator.RunConfig], Experiment]
 
 
-class Cluster(abc.ABC):
-    @property
-    def logger(self):
-        return logging.getLogger(self.__class__.__name__)
-
-    @abc.abstractmethod
-    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
-        """Train a model in this cluster."""
-        raise NotImplementedError
-
-
-class LocalCluster(Cluster):
-    """Single-node cluster.
-
-    By default, the cluster is allocated with just a "chief" worker,
-    and an "evaluator", meaning that all the training happens within
-    the same process. It is possible to introduce other "worker"
-    and "ps" tasks, if needed, but this is likely to degrade
-    performance.
-    """
-    @classmethod
-    def allocate(cls, *, num_workers=0, num_ps=0):
-        with closing(iter_available_sock_addrs()) as it:
-            spec = {
-                "chief": [next(it)],
-            }
-
-            for _ in range(num_workers):
-                spec.setdefault("worker", []).append(next(it))
-            for _ in range(num_ps):
-                spec.setdefault("ps", []).append(next(it))
-            return cls(spec)
-
-    def __init__(self, spec: typing.Dict[str, typing.List[str]]):
-        self.spec = spec
-
-    def __repr__(self):
-        return f"LocalCluster({self.spec})"
-
-    __str__ = __repr__
-
-    def run(self, config_fn: ConfigFn, experiment_fn: ExperimentFn):
-        tasks = list(self.spec.items())
-        tasks.append(("evaluator", [None]))
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            for task, hosts in tasks:
-                for idx, _host in enumerate(hosts):
-                    tf_config = json.dumps({
-                        "cluster": self.spec,
-                        "task": {"type": task, "index": idx}
-                    })
-                    # XXX this might be broken due to env collision.
-                    with xset_environ(TF_CONFIG=tf_config):
-                        config = config_fn()
-                    futures.append(executor.submit(experiment_fn(config)))
-
-            for future in as_completed(futures):
-                exc_value = future.exception()
-                if exc_value:
-                    # Simply re-throwing the exception keeps the executor
-                    # waiting for the remaining tasks in an exit hook.
-                    traceback.print_exception(
-                        type(exc_value),
-                        exc_value,
-                        exc_value.__traceback__)
-                    os._exit(-1)
-
-
 class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int
@@ -116,7 +39,7 @@ class TaskSpec(typing.NamedTuple):
 TaskSpec.NONE = TaskSpec(0, 0, 0)
 
 
-class YARNCluster(Cluster):
+class YARNCluster:
     """Multi-node cluster running on Skein.
 
     The implementation schedules each distributed TensorFlow task on
@@ -153,6 +76,7 @@ class YARNCluster(Cluster):
     ):
         self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
         self.env = env
+        self.logger = logging.getLogger(self.__class__.__name__)
 
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.

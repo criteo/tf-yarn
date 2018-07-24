@@ -4,7 +4,7 @@ import os
 import socket
 import typing
 from base64 import b64encode, b64decode
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 from threading import Thread
 
 import dill

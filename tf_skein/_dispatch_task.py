@@ -1,44 +1,40 @@
 import argparse
 import json
 import os
-import time
 from contextlib import closing
 
 import skein
 import tensorflow as tf
 
 from ._internal import (
-    iter_available_sock_addrs,
-    _spec_from_kv,
+    KVBarrier,
     MonitoredThread,
+    iter_available_sock_addrs,
     decode_fn,
     xset_environ
 )
 from .cluster import ExperimentFn, ConfigFn
 
 
-class ApplicationClient(skein.ApplicationClient):
-    @property
-    def current_container(self):
-        return next(c for c in self.get_containers()
-                    if c.yarn_container_id == os.environ["CONTAINER_ID"])
-
-
 def main(
-    task_type: str,
     config_fn: ConfigFn,
     experiment_fn: ExperimentFn,
     num_workers: int,
     num_ps: int
 ):
-    client = ApplicationClient.from_current()
-    with closing(iter_available_sock_addrs()) as it:
-        task_id = client.current_container.instance
-        task = f"{task_type}:{task_id}"
-        client.kv[task] = sock_addr = next(it)
+    client = skein.ApplicationClient.from_current()
+    current_container = next(
+        c for c in client.get_containers()
+        if c.yarn_container_id == os.environ["CONTAINER_ID"])
 
-        # This blocks waiting for other tasks to register.
-        spec = _spec_from_kv(client.kv, num_workers, num_ps)
+    task_type = current_container.service_name
+    task_id = current_container.instance
+    task = f"{task_type}:{task_id}"
+
+    with closing(iter_available_sock_addrs()) as it:
+        init_barrier = KVBarrier(client.kv, "init", num_workers, num_ps)
+        sock_addr = next(it)
+        spec = init_barrier.wait(task, sock_addr)
 
     # Preempt to ensure all tasks in the cluster are ready to
     # accept incoming traffic by the time we create the training
@@ -64,7 +60,6 @@ def main(
             config=config.session_config,
             start=True)
 
-    task = f"{task_type}:{task_id}"
     thread = MonitoredThread(
         name=task,
         target=experiment_fn(config),
@@ -81,24 +76,8 @@ def main(
         if thread.exception():
             raise thread.exception()
 
-    # TODO: explain that chief _creates_ a key and unblocks others.
-    if task_type == "chief":
-        client.kv["stopped"] = task + ";"
-    else:
-        while True:
-            stopped = client.kv.wait("stopped")
-            if task + ";" in stopped:
-                break
-
-            client.kv["stopped"] = stopped + task + ";"
-
-    while True:
-        stopped = client.kv.wait("stopped")
-        if stopped.count(";") == num_workers + num_ps + 2:
-            break
-        time.sleep(30)
-
-    return sock_addr, task
+    stop_barrier = KVBarrier(client.kv, "stop", num_workers, num_ps)
+    stop_barrier.wait(task)
 
 
 if __name__ == "__main__":
@@ -107,13 +86,9 @@ if __name__ == "__main__":
     parser.add_argument("--num-ps", type=int)
     parser.add_argument("--config-fn", type=str)
     parser.add_argument("--experiment-fn", type=str)
-    parser.add_argument(
-        "task_type",
-        choices=["ps", "worker", "chief", "evaluator"])
 
     args = parser.parse_args()
     main(
-        args.task_type,
         decode_fn(args.config_fn),
         decode_fn(args.experiment_fn),
         args.num_workers,

@@ -62,7 +62,15 @@ class LocalCluster(Cluster):
     @classmethod
     def allocate(cls, *, num_workers=0, num_ps=0):
         with closing(iter_available_sock_addrs()) as it:
-            return cls(_spec_from_iter(it, num_workers, num_ps))
+            spec = {
+                "chief": [next(it)],
+            }
+
+            for _ in range(num_workers):
+                spec.setdefault("worker", []).append(next(it))
+            for _ in range(num_ps):
+                spec.setdefault("ps", []).append(next(it))
+            return cls(spec)
 
     def __init__(self, spec: typing.Dict[str, typing.List[str]]):
         self.spec = spec
@@ -183,7 +191,7 @@ class YARNCluster(Cluster):
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "
             f"--config-fn={encode_fn(config_fn)} "
-            f"--experiment-fn={encode_fn(experiment_fn)} ")
+            f"--experiment-fn={encode_fn(experiment_fn)}")
 
         services = {}
         for task_type, task_spec in self.task_specs.items():
@@ -191,7 +199,7 @@ class YARNCluster(Cluster):
                 continue
 
             services[task_type] = skein.Service(
-                [task_command + task_type],
+                [task_command],
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 instances=task_spec.instances,
                 files=task_files,

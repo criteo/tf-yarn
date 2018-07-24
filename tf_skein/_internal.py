@@ -1,4 +1,5 @@
 import errno
+import logging
 import os
 import socket
 import typing
@@ -53,36 +54,6 @@ def iter_available_sock_addrs():
             yield f"{host}:{port}"
 
 
-def _spec_from_iter(
-    reserved: typing.Iterator[str],
-    num_workers: int,
-    num_ps: int
-):
-    spec = {
-        "chief": [next(reserved)],
-    }
-
-    for _ in range(num_workers):
-        spec.setdefault("worker", []).append(next(reserved))
-    for _ in range(num_ps):
-        spec.setdefault("ps", []).append(next(reserved))
-    return spec
-
-
-def _spec_from_kv(kv, num_workers: int, num_ps: int):
-    spec = {
-        "chief": [kv.wait("chief:0")]
-    }
-
-    for idx in range(num_ps):
-        spec.setdefault("ps", []).append(kv.wait(f"ps:{idx}"))
-
-    for idx in range(num_workers):
-        spec.setdefault("worker", []).append(kv.wait(f"worker:{idx}"))
-
-    return spec
-
-
 def encode_fn(fn) -> str:
     """Encode a function in a plain-text format."""
     return b64encode(dill.dumps(fn)).decode()
@@ -108,3 +79,33 @@ def xset_environ(**kwargs):
             os.environ.pop(key)
         except KeyError:
             raise RuntimeError(f"{key} is missing from os.environ")
+
+
+class KVBarrier:
+    def __init__(self, kv, stage: str, num_workers: int, num_ps: int):
+        self.kv = kv
+        self.stage = stage
+        self.num_workers = num_workers
+        self.num_ps = num_ps
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def wait(self, key: str, value: str = ""):
+        self.logger.info(f"Entering {self.stage} barrier")
+        self.kv[self.stage + "/" + key] = value
+        self.logger.info(f"Written {key} = {value}")
+
+        def get(key):
+            self.logger.info("Waiting for " + key)
+            return self.kv.wait(self.stage + "/" + key)
+
+        spec = {
+            "chief": [get("chief:0")]
+        }
+
+        for idx in range(self.num_ps):
+            spec.setdefault("ps", []).append(get(f"ps:{idx}"))
+
+        for idx in range(self.num_workers):
+            spec.setdefault("worker", []).append(get(f"worker:{idx}"))
+
+        return spec

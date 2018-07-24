@@ -2,7 +2,6 @@ import abc
 import json
 import logging
 import os
-import shutil
 import sys
 import time
 import traceback
@@ -17,13 +16,12 @@ import skein
 import tensorflow as tf
 from skein.model import ApplicationState
 
-from .env import Env
 from ._internal import (
     iter_available_sock_addrs,
-    _spec_from_iter,
     encode_fn,
     xset_environ
 )
+from .env import Env
 
 
 class Experiment(typing.NamedTuple):
@@ -185,9 +183,8 @@ class YARNCluster(Cluster):
                  "/usr/lib/hadoop-criteo/hadoop/lib/native"]),
         }
         task_command = (
-            # TODO: remove env_name/env_name.
             # TODO: make sure tf_skein is part of the env.
-            f"{env_name}/{env_name}/bin/python -m tf_skein._dispatch_task "
+            f"{env_name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "
             f"--config-fn={encode_fn(config_fn)} "

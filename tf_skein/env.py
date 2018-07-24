@@ -4,6 +4,7 @@
 import json
 import logging
 import os
+import shutil
 import sys
 import typing
 import warnings
@@ -59,8 +60,8 @@ class Env(typing.NamedTuple):
 
         Returns
         -------
-        str
-            Path to the directory containing the created environment.
+        env_zip_path : str
+            Path to the zipped environment.
         """
         try:
             conda_info = json.loads(
@@ -69,28 +70,39 @@ class Env(typing.NamedTuple):
         except (OSError, IOError):
             warnings.warn("No conda found in PATH")
             conda_root = os.path.join(root, "tmp_conda")
-            _install_miniconda(conda_root)
 
         conda_bin = os.path.join(conda_root, "bin", "conda")
+        if not os.path.exists(conda_bin):
+            _install_miniconda(conda_root)
         conda_envs = os.path.join(conda_root, "envs")
         env_path = os.path.join(conda_envs, self.name)
-        if os.path.exists(env_path):
-            return env_path
+        if not os.path.exists(env_path):
+            logger.info("Creating new env" + self.name)
+            _call([
+                conda_bin, "create", "-p", env_path, "-y", "-q", "--copy",
+                "python=" + self.python
+            ], env=dict(os.environ))
 
-        logger.info("Creating new env" + self.name)
-        _call([
-            conda_bin, "create", "-p", env_path, "-y", "-q", "--copy",
-            "python=" + self.python
-        ], env=dict(os.environ))
+            env_python_bin = os.path.join(env_path, "bin", "python")
+            if not os.path.exists(env_python_bin):
+                raise RuntimeError(
+                    "Failed to create Python binary at " + env_python_bin)
 
-        env_python_bin = os.path.join(env_path, "bin", "python")
-        if not os.path.exists(env_python_bin):
-            raise RuntimeError(
-                "Failed to create Python binary at " + env_python_bin)
+            logger.info("Installing packages into " + self.name)
+            _call([env_python_bin, "-m", "pip", "install"] + self.packages)
 
-        logger.info("Installing packages into " + self.name)
-        _call([env_python_bin, "-m", "pip", "install"] + self.packages)
-        return env_path
+        env_zip_path = env_path + ".zip"
+        if not os.path.exists(env_zip_path):
+            path = shutil.make_archive(
+                self.name,
+                "zip",
+                root_dir=env_path)
+
+            try:
+                os.rename(path, env_zip_path)
+            except OSError:
+                os.remove(path)  # Cleanup on failure.
+        return env_zip_path
 
 
 def _install_miniconda(root: str):

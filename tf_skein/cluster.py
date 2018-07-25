@@ -7,7 +7,6 @@ from collections import defaultdict
 from contextlib import contextmanager
 from subprocess import check_output
 
-import dill
 import skein
 import tensorflow as tf
 from skein.model import ApplicationState

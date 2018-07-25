@@ -108,7 +108,7 @@ class KVBarrier:
 
         def get(target):
             if target == key:
-                return
+                return value
 
             self.logger.info("Waiting for " + target)
             return self.kv.wait(self.stage + "/" + target)

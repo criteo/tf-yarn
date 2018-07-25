@@ -1,8 +1,8 @@
 tf-skein
 ========
 
-Train your TensorFlow [estimators][tf-estimators] on YARN in ~~just one~~
-a few lines of code!
+<img src="https://gitlab.criteois.com/s.lebedev/tf-skein/raw/master/skein.png"
+    width="40%" />
 
 Installation
 ------------
@@ -15,7 +15,7 @@ $ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
 Quickstart
 ----------
 
-The core abstraction in `tf_skein` is called an `ExperimentFn`. It is
+The core abstraction in `tf-skein` is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
@@ -96,7 +96,7 @@ the evaluation in parallel with the training.
 
 ### TensorFlow ⇆ Skein
 
-`tf_skein` is based on [Skein][skein], a Python library for deploying
+`tf-skein` is based on [Skein][skein], a Python library for deploying
 applications on YARN. Each TensorFlow task type is mapped to a Skein
 `Service` with an appropriate number of instances. For example, the
 diagram from the previous section requires 4 services:

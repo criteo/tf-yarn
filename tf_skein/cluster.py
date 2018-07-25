@@ -98,6 +98,7 @@ class YARNCluster:
     def run(
         self,
         experiment_fn: ExperimentFn,
+        *,
         queue: str = "default",
         files: typing.Dict[str, str] = None
     ):

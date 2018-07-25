@@ -108,7 +108,7 @@ To allocate a GPU-enabled container set the `queue` argument to
 
 ```python
 cluster = YARNCluster(...)
-cluster.run(experiment_fn, queue="ml-gpu")
+cluster.run(experiment_fn, queue="ml-gpu", ...)
 ```
 
 Limitations

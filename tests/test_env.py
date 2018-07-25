@@ -1,5 +1,5 @@
 import os
-from subprocess import check_call
+from subprocess import check_output
 
 from tf_skein import Env
 
@@ -16,4 +16,4 @@ def test_env_create(tmpdir):
     assert os.path.isdir(env_path)
 
     env_python_bin = os.path.join(env_path, "bin", "python")
-    check_call([env_python_bin, "-m", "pycodestyle", "--version"])
+    check_output([env_python_bin, "-m", "pycodestyle", "--version"])

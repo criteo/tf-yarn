@@ -45,8 +45,8 @@ class YARNCluster:
     """Multi-node cluster running on Skein.
 
     The implementation allocates a service with the requested number
-    of instances for each distributed TensorFlow task. Each instance
-    runs ``_dispatch_task`` which roughly does the following.
+    of instances for each distributed TensorFlow task type. Each
+    instance runs ``_dispatch_task`` which roughly does the following.
 
     1. Find an an available TCP port and communicate the resulting
        socket address (host/port pair) to other instances using the

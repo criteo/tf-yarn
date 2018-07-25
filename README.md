@@ -1,8 +1,8 @@
 tf-skein
 ========
 
-Train your TensorFlow [estimators][tf-estimators] on YARN using ~one~
-only a few lines of code!
+Train your TensorFlow [estimators][tf-estimators] on YARN in ~~one~~
+a few lines of code!
 
 Installation
 ------------

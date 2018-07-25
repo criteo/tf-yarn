@@ -3,16 +3,10 @@ import os
 import tensorflow as tf
 
 import winequality
-from tf_skein import Experiment, YARNCluster, TaskSpec, Env
+from tf_skein import Experiment, YARNCluster, TaskSpec
 
 
-def config_fn():
-    return tf.estimator.RunConfig(
-        tf_random_seed=42,
-        model_dir=f"hdfs://root/user/{os.environ['USER']}/dnn_classification")
-
-
-def experiment_fn(config: tf.estimator.RunConfig) -> Experiment:
+def experiment_fn() -> Experiment:
     train, test = winequality.get_dataset()
 
     def train_input_fn():
@@ -33,6 +27,9 @@ def experiment_fn(config: tf.estimator.RunConfig) -> Experiment:
         for name in winequality.FEATURES
     ]
 
+    config = tf.estimator.RunConfig(
+        tf_random_seed=42,
+        model_dir=f"hdfs://root/user/{os.environ['USER']}/dnn_classification")
     estimator = tf.estimator.DNNClassifier(
         hidden_units=[20, 20],
         feature_columns=feature_columns, n_classes=10,
@@ -53,8 +50,6 @@ if __name__ == "__main__":
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
         "evaluator": TaskSpec(memory=2**10, vcores=1)
     })
-
-    tf.logging.set_verbosity("INFO")
-    cluster.run(config_fn, experiment_fn, files={
+    cluster.run(experiment_fn, files={
         os.path.basename(winequality.__file__): winequality.__file__
     })

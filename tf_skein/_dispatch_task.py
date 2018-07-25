@@ -14,11 +14,10 @@ from ._internal import (
     decode_fn,
     xset_environ
 )
-from .cluster import ExperimentFn, ConfigFn
+from .cluster import ExperimentFn
 
 
 def main(
-    config_fn: ConfigFn,
     experiment_fn: ExperimentFn,
     num_workers: int,
     num_ps: int
@@ -44,14 +43,15 @@ def main(
     # code path as the rest and spawns a server regardless of
     # the "environment" value.
     fake_google_env = task_type != "evaluator" and task_type != "ps"
-    tf_config = json.dumps({
+    xset_environ(TF_CONFIG=json.dumps({
         "cluster": spec,
         "task": {"type": task_type, "index": task_id},
         "environment": "google" if fake_google_env else ""
-    })
+    }))
 
-    xset_environ(TF_CONFIG=tf_config)
-    config = config_fn()
+    experiment = experiment_fn()
+    # TODO: ensure the config matches the cluster spec.
+    config = experiment.config
 
     if fake_google_env:
         # XXX this is not immune to a race condition.
@@ -64,7 +64,7 @@ def main(
 
     thread = MonitoredThread(
         name=task,
-        target=experiment_fn(config),
+        target=experiment,
         # "ps" tasks do not terminate by themselves. See
         # https://github.com/tensorflow/tensorflow/issues/4713
         daemon=task_type == "ps")
@@ -88,12 +88,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)
-    parser.add_argument("--config-fn", type=str)
     parser.add_argument("--experiment-fn", type=str)
 
     args = parser.parse_args()
     main(
-        decode_fn(args.config_fn),
         decode_fn(args.experiment_fn),
         args.num_workers,
         args.num_ps)

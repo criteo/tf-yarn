@@ -20,12 +20,15 @@ class Experiment(typing.NamedTuple):
     train_spec: tf.estimator.TrainSpec
     eval_spec: tf.estimator.EvalSpec
 
+    @property
+    def config(self) -> tf.estimator.RunConfig:
+        return self.estimator.config
+
     def __call__(self):
         return tf.estimator.train_and_evaluate(*self)
 
 
-ConfigFn = typing.Callable[[], tf.estimator.RunConfig]
-ExperimentFn = typing.Callable[[tf.estimator.RunConfig], Experiment]
+ExperimentFn = typing.Callable[[], Experiment]
 
 
 class TaskSpec(typing.NamedTuple):
@@ -94,7 +97,6 @@ class YARNCluster:
 
     def run(
         self,
-        config_fn: ConfigFn,
         experiment_fn: ExperimentFn,
         files: typing.Dict[str, str] = None
     ):
@@ -103,9 +105,6 @@ class YARNCluster:
 
         Parameters
         ----------
-        config_fn
-            Configuration function for the TensorFlow estimator run.
-
         experiment_fn
             A function constructing the estimator alongside the train
             and eval specs.
@@ -130,7 +129,7 @@ class YARNCluster:
         task_files = {
             env_name: self.env.create(),
             os.path.basename(krb5_cc_name): krb5_cc_name,
-            __package__: zip_inplace(os.path.dirname(__file__))
+            __package__: zip_inplace(os.path.dirname(__file__), replace=True)
         }
 
         for target, source in (files or {}).items():
@@ -154,7 +153,6 @@ class YARNCluster:
             f"{env_name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={self.task_specs['ps'].instances} "
             f"--num-workers={self.task_specs['worker'].instances} "
-            f"--config-fn={encode_fn(config_fn)} "
             f"--experiment-fn={encode_fn(experiment_fn)}")
 
         services = {}
@@ -176,9 +174,10 @@ class YARNCluster:
 
             # TODO: run TB automatically via ``tensorboard.program``.
 
+            experiment = experiment_fn()
             self.logger.info(f"Starting training")
             self.logger.info(
-                f"Run ``tensorboard --logdir={config_fn().model_dir}`` "
+                f"Run ``tensorboard --logdir={experiment.config.model_dir}`` "
                 "to monitor the training metrics in TensorBoard.")
 
             with _shutdown(client.connect(app_id)):
@@ -188,6 +187,10 @@ class YARNCluster:
                     ApplicationState.KILLED
                 ]:
                     time.sleep(30)
+
+            # TODO: report failures, ideally giving links to the logs of
+            # the failed containers.
+            return experiment.estimator
 
 
 @contextmanager

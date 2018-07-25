@@ -106,9 +106,12 @@ class KVBarrier:
         self.kv[self.stage + "/" + key] = value
         self.logger.info(f"Written {key} = {value}")
 
-        def get(key):
-            self.logger.info("Waiting for " + key)
-            return self.kv.wait(self.stage + "/" + key)
+        def get(target):
+            if target == key:
+                return
+
+            self.logger.info("Waiting for " + target)
+            return self.kv.wait(self.stage + "/" + target)
 
         spec = {
             "chief": [get("chief:0")]

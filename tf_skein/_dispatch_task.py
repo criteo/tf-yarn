@@ -50,8 +50,9 @@ def main(
     }))
 
     experiment = experiment_fn()
-    # TODO: ensure the config matches the cluster spec.
     config = experiment.config
+    assert config.task_type == task_type
+    assert config.task_id == task_id
 
     if fake_google_env:
         # XXX this is not immune to a race condition.

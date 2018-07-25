@@ -98,6 +98,7 @@ class YARNCluster:
     def run(
         self,
         experiment_fn: ExperimentFn,
+        queue: str = "default",
         files: typing.Dict[str, str] = None
     ):
         """
@@ -108,6 +109,9 @@ class YARNCluster:
         experiment_fn
             A function constructing the estimator alongside the train
             and eval specs.
+
+        queue
+            YARN queue to use.
 
         files
             Local files or directories to upload to the container.
@@ -167,15 +171,15 @@ class YARNCluster:
                 files=task_files,
                 env=task_env)
 
-        spec = skein.ApplicationSpec(services)
+        # TODO: experiment name?
+        spec = skein.ApplicationSpec(services, queue=queue)
         security = skein.Security.from_new_directory(force=True)
         with skein.Client(security=security) as client:
             app_id = client.submit(spec)
 
-            # TODO: run TB automatically via ``tensorboard.program``.
-
             experiment = experiment_fn()
             self.logger.info(f"Starting training")
+            # TODO: run TB automatically via ``tensorboard.program``.
             self.logger.info(
                 f"Run ``tensorboard --logdir={experiment.config.model_dir}`` "
                 "to monitor the training metrics in TensorBoard.")

@@ -4,6 +4,7 @@ tf-skein
 <img src="https://gitlab.criteois.com/s.lebedev/tf-skein/raw/master/skein.png"
     width="40%" />
 
+
 Installation
 ------------
 
@@ -39,7 +40,7 @@ Having an `experiment_fn` we can run it on YARN using a `YARNCluster`.
 The cluster needs to know in advance how much resources to allocate for
 each of the distributed TensorFlow task types.
 
-The dataset in the `dnn_classification.py` example is tiny and does not need
+The dataset in `examples/dnn_classification.py` is tiny and does not need
 multi-node training. Therefore, it can be scheduled using just the `"chief"`
 and `"evaluator"` tasks.
 
@@ -94,28 +95,21 @@ the evaluation in parallel with the training.
 ```
 
 
-### TensorFlow ⇆ Skein
+### TensorFlow ⇆ YARN
 
-`tf-skein` is based on [Skein][skein], a Python library for deploying
-applications on YARN. Each TensorFlow task type is mapped to a Skein
-`Service` with an appropriate number of instances. For example, the
-diagram from the previous section requires 4 services:
+`tf-skein` allocates a container for each distributed TensorFlow task. The
+resources of the containers are configured separately for each task type.
 
-```yaml
-services:
-  chief:
-    instances: 1
-  worker:
-    instances: 2
-  ps:
-    instances: 1
-  evaluator:
-    instances: 1
+### GPU/CPU
+
+By default `tf-skein` allocates containers from the queue with CPU-only nodes.
+To allocate a GPU-enabled container set the `queue` argument to
+`YARNCluster.run` to `"ml-gpu"`:
+
+```python
+cluster = YARNCluster(...)
+cluster.run(experiment_fn, queue="ml-gpu")
 ```
-
-See Skein [documentation][skein-tutorial] for a more detailed introduction to
-the library.
-
 
 Limitations
 -----------

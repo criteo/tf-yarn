@@ -40,30 +40,28 @@ Having an `experiment_fn` we can run it on YARN using a `YARNCluster`.
 The cluster needs to know in advance how much resources to allocate for
 each of the distributed TensorFlow task types.
 
+TODO: update.
+
 The dataset in `examples/dnn_classification.py` is tiny and does not need
 multi-node training. Therefore, it can be scheduled using just the `"chief"`
 and `"evaluator"` tasks.
 
 ```python
-from tf_skein import TaskSpec, YARNCluster
+from tf_skein import Env, TaskSpec, YARNCluster
 
-cluster = YARNCluster(task_specs={
-    "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-    "evaluator": TaskSpec(memory=2**10, vcores=1)
+cluster = YARNCluster(files={
+    os.path.basename(winequality.__file__): winequality.__file__
 })
 ```
 
 The final step is to call the `run` method.
 
 ```python
-cluster.run(experiment_fn, files={
-    os.path.basename(winequality.__file__): winequality.__file__
+cluster.run(experiment_fn, task_specs={
+    "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+    "evaluator": TaskSpec(memory=2**10, vcores=1)
 })
 ```
-
-Note that `run` allows to upload arbitrary files to the YARN containers.
-Moreover, the uploaded Python modules and packages are automatically
-importable. Refer to the API docs for more details.
 
 ### Distributed TensorFlow 101
 
@@ -94,11 +92,14 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
-
 ### TensorFlow ⇆ YARN
 
 `tf-skein` allocates a container for each distributed TensorFlow task. The
 resources of the containers are configured separately for each task type.
+
+### `Env`
+
+TODO: explain Env.MININMAL_{CPU,GPU} and extended_with
 
 ### GPU/CPU
 
@@ -110,6 +111,9 @@ To allocate a GPU-enabled container set the `queue` argument to
 cluster = YARNCluster(...)
 cluster.run(experiment_fn, queue="ml-gpu", ...)
 ```
+
+TODO: node_label = "gpu"
+TODO: CPU-optimized versions of the libraries.
 
 Limitations
 -----------

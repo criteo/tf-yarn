@@ -7,6 +7,7 @@ import os
 import sys
 import typing
 import warnings
+from collections import ChainMap
 from subprocess import check_output, Popen, PIPE, CalledProcessError
 from sys import version_info as v
 from urllib.request import urlretrieve
@@ -32,9 +33,9 @@ class Env(typing.NamedTuple):
         version of ``sys.executable``.
 
     packages : list
-        Packages to install in the environment. The packages are
-        installed via pip, therefore all of the following forms are
-        supported::
+        Python packages to install in the environment. The packages
+        are installed via pip, therefore all of the following forms
+        are supported::
 
             SomeProject>=1,<2
             git+https://github.com/org/SomeProject
@@ -49,8 +50,10 @@ class Env(typing.NamedTuple):
     packages: typing.List[str] = []
 
     def extended_with(self, name: str, packages: typing.List[str]) -> 'Env':
-        """Extend the environment with additional packages."""
-        return self._replace(name=name, packages=self.packages + packages)
+        """Extend the environment with additional packages. """
+        return self._replace(
+            name=name,
+            packages=self.packages + (packages or []))
 
     def create(self, root: str = os.path.dirname(__file__)) -> str:
         """Create the environment.
@@ -107,7 +110,7 @@ Env.MINIMAL_CPU = Env(
     packages=[
         "dill==" + dill.__version__,
         "git+http://github.com/criteo-forks/skein",
-        "tensorflow=" + tf.__version__
+        "tensorflow==" + tf.__version__
     ])
 
 Env.MINIMAL_GPU = Env(

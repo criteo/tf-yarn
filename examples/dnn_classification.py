@@ -1,9 +1,11 @@
+import logging
 import os
 
 import tensorflow as tf
 
 import winequality
-from tf_skein import Experiment, YARNCluster, TaskSpec
+
+from tf_skein import Experiment, YARNCluster, TaskSpec, Env
 
 
 def experiment_fn() -> Experiment:
@@ -46,10 +48,10 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
     winequality.ensure_dataset_on_hdfs()
 
-    cluster = YARNCluster(task_specs={
+    cluster = YARNCluster(files={
+        os.path.basename(winequality.__file__): winequality.__file__
+    })
+    cluster.run(experiment_fn, task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
         "evaluator": TaskSpec(memory=2**10, vcores=1)
-    })
-    cluster.run(experiment_fn, files={
-        os.path.basename(winequality.__file__): winequality.__file__
     })

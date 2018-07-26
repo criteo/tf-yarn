@@ -43,6 +43,33 @@ class TaskSpec(typing.NamedTuple):
 #: A "dummy" ``TaskSpec``.
 TaskSpec.NONE = TaskSpec(0, 0, 0)
 
+# The following is specific to the Criteo infra. Moreover, the
+# definitions assume that the system submitting the application
+# is "sufficiently close" to that of the containers.
+
+
+def criteo_hdfs_vars():
+    """TODO"""
+    hadoop_home = os.environ.setdefault("HADOOP_HOME", "/usr/lib/hadoop")
+    hadoop_classpath = check_output([
+        os.path.join(hadoop_home, "bin", "hadoop"),
+        "classpath",
+        "--glob"
+    ])
+    return {
+        "HADOOP_HDFS_HOME": "/usr/lib/hadoop-hdfs",
+        "CLASSPATH": hadoop_classpath.decode().strip(),
+        "LD_LIBRARY_PATH": ":".join([
+            f"{os.environ['JAVA_HOME']}/jre/lib/amd64/server",
+            "/usr/lib/hadoop-criteo/hadoop/lib/native"
+        ])
+    }
+
+
+def criteo_cuda_vars():
+    """TODO"""
+    return {}  # TODO
+
 
 class YARNCluster:
     """Multi-node cluster running on Skein.
@@ -66,35 +93,33 @@ class YARNCluster:
 
     Parameters
     ----------
-    task_specs
-        Defines the resources to allocate for each task type. The keys
-        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-        ``"evaluator"``. The minimal spec must contain at least
-        ``"chief"``.
-    env
-        Defines the Python environment on the instances.
+    env : Env
+        The Python environment to deploy on the containers.
+
+    files : dict
+        Local files or directories to upload to the container.
+        The keys are the target locations of the resources relative
+        to the container root, while the values -- their
+        corresponding local sources. Note that container root is
+        appended to ``PYTHONPATH``. Therefore, any listed Python
+        module a package is automatically importable.
+
+    vars : dict
+        Environment variables to forward to the containers.
     """
     def __init__(
         self,
-        task_specs: typing.Dict[str, TaskSpec],
-        env: Env = Env.MINIMAL_CPU
+        env: Env = Env.MINIMAL_CPU,
+        files: typing.Dict[str, str] = None,
+        vars: typing.Dict[str, str] = criteo_hdfs_vars()
     ) -> None:
-        self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
         self.env = env
+        self.files = files or {}
+        self.vars = vars or {}
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        all_task_types = {"chief", "worker", "ps", "evaluator"}
-        if not task_specs.keys() <= all_task_types:
-            raise ValueError(
-                f"task_spec keys must be a subset of: {all_task_types}")
-
-        # TODO: compute num_ps from the model size and the number of
-        # executors. See https://stackoverflow.com/a/46080567/262432.
-        assert self.task_specs["evaluator"].instances <= 1
-        assert self.task_specs["chief"].instances == 1
-
     def __repr__(self):
-        return f"SkeinCluster({self.task_specs}, {self.env})"
+        return f"SkeinCluster(env={self.env})"
 
     __str__ = __repr__
 
@@ -102,8 +127,8 @@ class YARNCluster:
         self,
         experiment_fn: ExperimentFn,
         *,
-        queue: str = "default",
-        files: typing.Dict[str, str] = None
+        task_specs: typing.Dict[str, TaskSpec],
+        queue: str = "default"
     ):
         """
         Run an experiment on YARN.
@@ -114,57 +139,51 @@ class YARNCluster:
             A function constructing the estimator alongside the train
             and eval specs.
 
+        task_specs
+            Resources to allocate for each task type. The keys
+            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+            ``"evaluator"``. The minimal spec must contain at least
+            ``"chief"``.
+
         queue
             YARN queue to use.
-
-        files
-            Local files or directories to upload to the container.
-            The keys are the target locations of the resources relative
-            to the container root, while the values -- their
-            corresponding local sources. Note that container root is
-            appended to ``PYTHONPATH``. Therefore, any listed Python
-            module a package is automatically importable.
         """
-        env_name = self.env.name
+        all_task_types = {"chief", "worker", "ps", "evaluator"}
+        if not task_specs.keys() <= all_task_types:
+            raise ValueError(
+                f"task_spec keys must be a subset of: {all_task_types}")
 
-        classpath = check_output([
-            os.path.join(os.environ["HADOOP_HOME"], "bin", "hadoop"),
-            "classpath",
-            "--glob"
-        ]).decode().strip()
-        krb5_cc_name = os.environ["KRB5CCNAME"].replace("FILE:", "", 1)
+        # TODO: compute num_ps from the model size and the number of
+        # executors. See https://stackoverflow.com/a/46080567/262432.
+        task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
+        assert task_specs["evaluator"].instances <= 1
+        assert task_specs["chief"].instances == 1
 
         task_files = {
-            env_name: self.env.create(),
-            os.path.basename(krb5_cc_name): krb5_cc_name,
+            self.env.name: self.env.create(),
             __package__: zip_inplace(os.path.dirname(__file__), replace=True)
         }
 
-        for target, source in (files or {}).items():
+        for target, source in self.files.items():
             assert target not in task_files
             task_files[target] = (
                 zip_inplace(source) if os.path.isdir(source) else source
             )
 
         task_env = {
+            **self.vars,
             # Make Python modules/packages passed via ``self.env.files``
             # importable.
-            "PYTHONPATH": ".",
-            "KRB5CCNAME": os.path.basename(krb5_cc_name),
-            "HADOOP_HDFS_HOME": "/usr/lib/hadoop-hdfs",
-            "CLASSPATH": classpath,
-            "LD_LIBRARY_PATH": ":".join(
-                [f"{os.environ['JAVA_HOME']}/jre/lib/amd64/server",
-                 "/usr/lib/hadoop-criteo/hadoop/lib/native"]),
+            "PYTHONPATH": ".:" + self.vars.get("PYTHONPATH", ""),
         }
         task_command = (
-            f"{env_name}/bin/python -m tf_skein._dispatch_task "
-            f"--num-ps={self.task_specs['ps'].instances} "
-            f"--num-workers={self.task_specs['worker'].instances} "
+            f"{self.env.name}/bin/python -m tf_skein._dispatch_task "
+            f"--num-ps={task_specs['ps'].instances} "
+            f"--num-workers={task_specs['worker'].instances} "
             f"--experiment-fn={encode_fn(experiment_fn)}")
 
         services = {}
-        for task_type, task_spec in self.task_specs.items():
+        for task_type, task_spec in task_specs.items():
             if task_spec is TaskSpec.NONE:
                 continue
 

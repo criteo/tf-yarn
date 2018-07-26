@@ -145,7 +145,10 @@ def _call(cmd, **kwargs):
     logger.info(" ".join(cmd))
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE, **kwargs)
     out, err = proc.communicate()
-    logger.debug(out)
-    logger.debug(err)
     if proc.returncode:
+        logger.error(out)
+        logger.error(err)
         raise CalledProcessError(proc.returncode, cmd)
+    else:
+        logger.debug(out)
+        logger.debug(err)

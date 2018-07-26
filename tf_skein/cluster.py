@@ -35,6 +35,9 @@ class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int
     instances: int = 1
+    #: YARN node label expression to apply when requesting containers
+    #: for this task type. Defaults to ``""`` which matches all nodes.
+    node_label: int = ""
 
 
 #: A "dummy" ``TaskSpec``.
@@ -169,6 +172,7 @@ class YARNCluster:
                 [task_command],
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 instances=task_spec.instances,
+                node_label=task_spec.node_label,
                 files=task_files,
                 env=task_env)
 

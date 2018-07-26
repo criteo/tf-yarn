@@ -48,6 +48,10 @@ class Env(typing.NamedTuple):
     python: str = f"{v.major}.{v.minor}.{v.micro}"
     packages: typing.List[str] = []
 
+    def extended_with(self, name: str, packages: typing.List[str]) -> 'Env':
+        """Extend the environment with additional packages."""
+        return self._replace(name=name, packages=self.packages + packages)
+
     def create(self, root: str = os.path.dirname(__file__)) -> str:
         """Create the environment.
 
@@ -98,12 +102,20 @@ class Env(typing.NamedTuple):
         return zip_inplace(env_path)
 
 
-Env.MINIMAL = Env(
-    name="tf_skein_minimal_env",
+Env.MINIMAL_CPU = Env(
+    name="tf_skein_minimal_cpu_env",
     packages=[
         "dill==" + dill.__version__,
         "git+http://github.com/criteo-forks/skein",
-        "tensorflow==" + tf.__version__
+        "tensorflow=" + tf.__version__
+    ])
+
+Env.MINIMAL_GPU = Env(
+    name="tf_skein_minimal_gpu_env",
+    packages=[
+        "dill==" + dill.__version__,
+        "git+http://github.com/criteo-forks/skein",
+        "tensorflow-gpu==" + tf.__version__
     ])
 
 

@@ -74,7 +74,7 @@ class YARNCluster:
     def __init__(
         self,
         task_specs: typing.Dict[str, TaskSpec],
-        env: Env = Env.MINIMAL
+        env: Env = Env.MINIMAL_CPU
     ) -> None:
         self.task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
         self.env = env

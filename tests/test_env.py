@@ -17,3 +17,14 @@ def test_env_create(tmpdir):
 
     env_python_bin = os.path.join(env_path, "bin", "python")
     check_output([env_python_bin, "-m", "pycodestyle", "--version"])
+
+
+def test_env_extended_with():
+    env = Env.MINIMAL_CPU._replace()
+    new_env = env.extended_with("extended", ["pycodestyle"])
+
+    assert env == Env.MINIMAL_CPU  # Unchanged?
+
+    assert new_env.name == "extended"
+    assert set(env.packages) <= set(new_env.packages)
+    assert "pycodestyle" in new_env.packages

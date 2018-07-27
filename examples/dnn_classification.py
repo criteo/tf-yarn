@@ -47,6 +47,7 @@ def experiment_fn() -> Experiment:
 
 if __name__ == "__main__":
     winequality.ensure_dataset_on_hdfs()
+    logging.basicConfig(level="INFO")
 
     cluster = YARNCluster(files={
         os.path.basename(winequality.__file__): winequality.__file__

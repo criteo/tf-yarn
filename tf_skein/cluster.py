@@ -8,11 +8,13 @@ from contextlib import contextmanager
 
 import skein
 import tensorflow as tf
-from skein.model import ApplicationState
+from skein.model import FinalStatus
 
 from . import criteo_vars
 from ._internal import encode_fn, zip_inplace
 from .env import Env
+
+logger = logging.getLogger(__name__)
 
 
 class Experiment(typing.NamedTuple):
@@ -89,7 +91,6 @@ class YARNCluster:
         self.env = env
         self.files = files or {}
         self.vars = vars or criteo_vars.hdfs()
-        self.logger = logging.getLogger(self.__class__.__name__)
 
     def __repr__(self):
         return f"SkeinCluster(env={self.env})"
@@ -172,30 +173,52 @@ class YARNCluster:
         spec = skein.ApplicationSpec(services, queue=queue)
         security = skein.Security.from_new_directory(force=True)
         with skein.Client(security=security) as client:
+            logger.info(f"Submitting experiment to {queue} queue")
             app_id = client.submit(spec)
 
-            experiment = experiment_fn()
-            self.logger.info(f"Starting training")
             # TODO: run TB automatically via ``tensorboard.program``.
-            self.logger.info(
+            experiment = experiment_fn()
+            logger.info(
                 f"Run ``tensorboard --logdir={experiment.config.model_dir}`` "
                 "to monitor the training metrics in TensorBoard.")
 
-            with _shutdown(client.connect(app_id)):
-                while client.application_report(app_id).state not in [
-                    ApplicationState.FINISHED,
-                    ApplicationState.FAILED,
-                    ApplicationState.KILLED
-                ]:
-                    time.sleep(30)
+            final_status, containers = _await_termination(client, app_id)
+            logger.info(
+                f"Application {app_id} finished with status {final_status}")
+            for id, (state, yarn_logs) in sorted(containers.items()):
+                logger.info(f"{id:>16} {state} {yarn_logs}")
 
-            # TODO: report failures, ideally giving links to the logs of
-            # the failed containers.
             return experiment.estimator
 
 
+def _await_termination(
+    client: skein.Client,
+    app_id: str,
+    poll_every_secs: int = 10
+):
+    with _shutdown(client.connect(app_id)) as app:
+        final_status = FinalStatus.UNDEFINED
+        containers = {}
+        try:
+            while final_status is FinalStatus.UNDEFINED:
+                time.sleep(poll_every_secs)
+                final_status = client.application_report(app_id).final_status
+                for c in app.get_containers():
+                    containers[c.id] = (c.state, c.yarn_container_logs)
+        except skein.exceptions.ConnectionError:
+            # Yes, this probably means the daemon already shutdown,
+            # and we have a stale status. However, the current API
+            # does not seem to allow for a better solution.
+            # See jcrist/skein#46.
+            pass
+
+        return final_status, containers
+
+
 @contextmanager
-def _shutdown(app: skein.ApplicationClient):
+def _shutdown(
+    app: skein.ApplicationClient
+) -> typing.ContextManager[skein.ApplicationClient]:
     try:
         yield app
     finally:

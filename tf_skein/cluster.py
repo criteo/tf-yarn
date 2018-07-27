@@ -11,7 +11,7 @@ import skein
 import tensorflow as tf
 from skein.model import FinalStatus
 
-from . import criteo_vars
+from . import _criteo
 from ._internal import encode_fn, zip_inplace
 from .env import Env
 
@@ -31,8 +31,12 @@ class Experiment(typing.NamedTuple):
 ExperimentFn = typing.Callable[[], Experiment]
 
 
-#: CPU/GPU? You tell me!
-TaskFlavor = Enum("TaskFlavour", ["CPU", "GPU"])
+class TaskFlavor(Enum):
+    CPU = 0
+    GPU = 1
+
+
+NodeLabelFn = typing.Callable[[TaskFlavor], str]
 
 
 class TaskSpec(typing.NamedTuple):
@@ -90,9 +94,9 @@ class YARNCluster:
     ) -> None:
         self.env = env
         self.files = files or {}
-        self.vars = vars or criteo_vars.hdfs()
+        self.vars = vars or _criteo.hdfs()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"SkeinCluster(env={self.env})"
 
     __str__ = __repr__
@@ -102,8 +106,9 @@ class YARNCluster:
         experiment_fn: ExperimentFn,
         *,
         task_specs: typing.Dict[str, TaskSpec],
-        queue: str = "default"
-    ):
+        queue: str = "default",
+        node_label_fn: NodeLabelFn = _criteo.node_label_fn
+    ) -> None:
         """
         Run an experiment on YARN.
 
@@ -121,6 +126,10 @@ class YARNCluster:
 
         queue
             YARN queue to use.
+
+        node_label_fn
+            A function mapping ``TaskFlavor`` to the corresponding YARN
+            node label expressions.
         """
         all_task_types = {"chief", "worker", "ps", "evaluator"}
         if not task_specs.keys() <= all_task_types:
@@ -158,17 +167,15 @@ class YARNCluster:
                 continue
 
             # TODO: use internal PyPI for CPU-optimized TF.
-            # TODO: how to make this modular/extensible?
             if task_spec.flavor is TaskFlavor.CPU:
                 env = self.env.extended_with(
                     self.env.name + "_cpu",
                     packages=["tensorflow"])
-                node_label = ""
             else:
+                assert task_spec.flavor is TaskFlavor.GPU
                 env = self.env.extended_with(
                     self.env.name + "_gpu",
                     packages=["tensorflow-gpu"])
-                node_label = "gpu"  # Criteo-specific.
 
             task_command = (
                 f"{env.name}/bin/python -m tf_skein._dispatch_task "
@@ -180,7 +187,7 @@ class YARNCluster:
                 [task_command],
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 instances=task_spec.instances,
-                node_label=node_label,
+                node_label=node_label_fn(task_spec.flavor),
                 files={**task_files, env.name: env.create()},
                 env=task_env)
 

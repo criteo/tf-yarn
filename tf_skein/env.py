@@ -104,6 +104,7 @@ class Env(typing.NamedTuple):
         return zip_inplace(env_path)
 
 
+# TODO: use internal PyPI for CPU-optimized TF.
 Env.MINIMAL_CPU = Env(
     name="tf_skein_minimal_cpu_env",
     packages=[

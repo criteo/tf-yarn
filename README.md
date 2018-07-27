@@ -37,26 +37,31 @@ def experiment_fn():
 ```
 
 Having an `experiment_fn` we can run it on YARN using a `YARNCluster`.
-The cluster needs to know in advance how much resources to allocate for
-each of the distributed TensorFlow task types.
+The cluster needs to know in advance the environment it will be working it.
+The environment consists of
 
-TODO: update.
-
-The dataset in `examples/dnn_classification.py` is tiny and does not need
-multi-node training. Therefore, it can be scheduled using just the `"chief"`
-and `"evaluator"` tasks.
+* Python interpreter and packages, see `Env.MINIMAL_CPU` and `Env.MINIMAL_GPU`;
+* local files to be uploaded, and
+* environment variables to be forwarded.
 
 ```python
-from tf_skein import Env, TaskSpec, YARNCluster
+from tf_skein import YARNCluster
 
 cluster = YARNCluster(files={
     os.path.basename(winequality.__file__): winequality.__file__
 })
 ```
 
-The final step is to call the `run` method.
+The final step is to call the `run` method with an `experiment_fn` and
+a dictionary specifying how much resources to allocate for each of the
+distributed TensorFlow task types. The dataset in
+`examples/dnn_classification.py` is tiny and does not need multi-node
+training. Therefore, it can be scheduled using just the `"chief"` and
+`"evaluator"` tasks. Each task will be executed in its own container.
 
 ```python
+from tf_skein import TaskSpec
+
 cluster.run(experiment_fn, task_specs={
     "chief": TaskSpec(memory=2 * 2**10, vcores=4),
     "evaluator": TaskSpec(memory=2**10, vcores=1)
@@ -92,28 +97,42 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
-### TensorFlow ⇆ YARN
+### Setting up the Python environment
 
-`tf-skein` allocates a container for each distributed TensorFlow task. The
-resources of the containers are configured separately for each task type.
+`Env` specifies the Python environment shipped to the containers. `tf-skein`
+comes with two predefined environments: `Env.MINIMAL_CPU` (default) and
+`Env.MINIMAL_GPU` which differ in the TensorFlow build the use: CPU- or
+GPU-enabled.
 
-### `Env`
-
-TODO: explain Env.MININMAL_{CPU,GPU} and extended_with
-
-### GPU/CPU
-
-By default `tf-skein` allocates containers from the queue with CPU-only nodes.
-To allocate a GPU-enabled container set the `queue` argument to
-`YARNCluster.run` to `"ml-gpu"`:
+Additional pip-installable packages can be added via the `Env.extended_with`
+method. Note that the method returns a *new* environment.
 
 ```python
-cluster = YARNCluster(...)
-cluster.run(experiment_fn, queue="ml-gpu", ...)
+from tf_skein import Env
+
+keras_gpu_env = Env.MINIMAL_GPU.extended_with("keras_gpu_env", packages=[
+    "keras==2.2.0"
+])
 ```
 
-TODO: node_label = "gpu"
-TODO: CPU-optimized versions of the libraries.
+### Running on GPU@Criteo
+
+By default `YARNCluster` runs an experiment on CPU-only nodes. To run on GPU
+on the pa4.preprod cluster:
+
+1. Set the `"queue"` argument to `YARNCluster.run` to `"ml-gpu"`.
+2. Set `TaskSpec.node_label` to `"gpu"` for relevant task types. In general,
+   it is a good idea to run compute heavy `"chief"`, `"worker"` tasks on GPU,
+   while keeping `"ps"` and `"evaluator"` on CPU.
+
+Example:
+
+```python
+cluster.run(experiment_fn, queue="ml-gpu", task_specs={
+    "chief": TaskSpec(memory=2 * 2**10, vcores=4, node_label="gpu"),
+    "evaluator": TaskSpec(memory=2**10, vcores=1)
+})
+```
 
 Limitations
 -----------

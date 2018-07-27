@@ -124,7 +124,7 @@ on the pa4.preprod cluster:
    general, it is a good idea to run compute heavy `"chief"`, `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
 
-[Example](examples/gpu_example.py):
+Relevant part of [examples/gpu_example.py](examples/gpu_example.py):
 
 ```python
 from tf_skein import TaskFlavor
@@ -135,20 +135,24 @@ cluster.run(experiment_fn, queue="ml-gpu", task_specs={
 })
 ```
 
-### TensorBoard
-
-`tf-skein` does not currently integrate with TensorBoard, even though
-the only requirement for doing so, `model_dir`, is already exposed
-via `Experiment.config`.
-
 Limitations
 -----------
+
+### Using `tf-skein` on Windows/macOS
 
 `tf-skein` uses [Miniconda][miniconda] for creating relocatable
 Python environments. The package management, however, is done by
 pip to allow for more flexibility. The downside to that is that
 it is impossible to create an environment for an OS/architecture
 different from the one the library is running on.
+
+TODO: assume Python is installed and use PEX?
+
+### TensorBoard
+
+`tf-skein` does not currently integrate with TensorBoard, even though
+the only requirement for doing so, `model_dir`, is already exposed
+via `Experiment.config`.
 
 [miniconda]: https://conda.io/miniconda.html
 [tf-estimators]: https://www.tensorflow.org/guide/estimators

@@ -134,6 +134,12 @@ cluster.run(experiment_fn, queue="ml-gpu", task_specs={
 })
 ```
 
+### TensorBoard
+
+`tf-skein` does not currently integrate with TensorBoard, even though
+the only requirement for doing so, `model_dir`, is already exposed
+via `Experiment.config`.
+
 Limitations
 -----------
 

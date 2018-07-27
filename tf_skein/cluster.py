@@ -175,20 +175,11 @@ class YARNCluster:
         with skein.Client(security=security) as client:
             logger.info(f"Submitting experiment to {queue} queue")
             app_id = client.submit(spec)
-
-            # TODO: run TB automatically via ``tensorboard.program``.
-            experiment = experiment_fn()
-            logger.info(
-                f"Run ``tensorboard --logdir={experiment.config.model_dir}`` "
-                "to monitor the training metrics in TensorBoard.")
-
             final_status, containers = _await_termination(client, app_id)
             logger.info(
                 f"Application {app_id} finished with status {final_status}")
             for id, (state, yarn_logs) in sorted(containers.items()):
                 logger.info(f"{id:>16} {state} {yarn_logs}")
-
-            return experiment.estimator
 
 
 def _await_termination(

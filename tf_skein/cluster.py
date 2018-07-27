@@ -13,7 +13,7 @@ from skein.model import FinalStatus
 
 from . import _criteo
 from ._internal import encode_fn, zip_inplace
-from .env import Env
+from .env import PyEnv
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class YARNCluster:
 
     Parameters
     ----------
-    env : Env
+    pyenv : PyEnv
         The Python environment to deploy on the containers.
 
     files : dict
@@ -83,21 +83,21 @@ class YARNCluster:
         appended to ``PYTHONPATH``. Therefore, any listed Python
         module a package is automatically importable.
 
-    vars : dict
+    env_vars : dict
         Environment variables to forward to the containers.
     """
     def __init__(
         self,
-        env: Env = Env.MINIMAL,
+        pyenv: PyEnv = PyEnv.MINIMAL,
         files: typing.Dict[str, str] = None,
-        vars: typing.Dict[str, str] = None
+        env_vars: typing.Dict[str, str] = None
     ) -> None:
-        self.env = env
+        self.pyenv = pyenv
         self.files = files or {}
-        self.vars = vars or _criteo.hdfs()
+        self.env_vars = env_vars or _criteo.hdfs()
 
     def __repr__(self) -> str:
-        return f"SkeinCluster(env={self.env})"
+        return f"SkeinCluster(env={self.pyenv})"
 
     __str__ = __repr__
 
@@ -143,7 +143,7 @@ class YARNCluster:
         assert task_specs["chief"].instances == 1
 
         task_files = {
-            self.env.name: self.env.create(),
+            self.pyenv.name: self.pyenv.create(),
             __package__: zip_inplace(os.path.dirname(__file__))
         }
 
@@ -154,10 +154,10 @@ class YARNCluster:
             )
 
         task_env = {
-            **self.vars,
+            **self.env_vars,
             # Make Python modules/packages passed via ``self.env.files``
             # importable.
-            "PYTHONPATH": ".:" + self.vars.get("PYTHONPATH", ""),
+            "PYTHONPATH": ".:" + self.env_vars.get("PYTHONPATH", ""),
             "EXPERIMENT_FN": encode_fn(experiment_fn)
         }
 
@@ -168,13 +168,13 @@ class YARNCluster:
 
             # TODO: use internal PyPI for CPU-optimized TF.
             if task_spec.flavor is TaskFlavor.CPU:
-                env = self.env.extended_with(
-                    self.env.name + "_cpu",
+                env = self.pyenv.extended_with(
+                    self.pyenv.name + "_cpu",
                     packages=["tensorflow"])
             else:
                 assert task_spec.flavor is TaskFlavor.GPU
-                env = self.env.extended_with(
-                    self.env.name + "_gpu",
+                env = self.pyenv.extended_with(
+                    self.pyenv.name + "_gpu",
                     packages=["tensorflow-gpu"])
 
             task_command = (

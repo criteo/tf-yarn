@@ -40,7 +40,7 @@ Having an `experiment_fn` we can run it on YARN using a `YARNCluster`.
 The cluster needs to know in advance the environment it will be working it.
 The environment consists of
 
-* Python interpreter and packages, see `Env.MINIMAL`,
+* Python interpreter and packages, see `PyEnv.MINIMAL`,
 * local files to be uploaded, and
 * environment variables to be forwarded.
 
@@ -99,17 +99,17 @@ the evaluation in parallel with the training.
 
 ### Setting up the Python environment
 
-`Env` specifies the Python environment shipped to the containers. `tf-skein`
-comes with a predefined environment `Env.MINIMAL` which contains the Python
+`PyEnv` specifies the Python environment shipped to the containers. `tf-skein`
+comes with a predefined environment `PyEnv.MINIMAL` which contains the Python
 interpreter along with the `tf-skein` dependencies.
 
-Additional pip-installable packages can be added via the `Env.extended_with`
+Additional pip-installable packages can be added via the `PyEnv.extended_with`
 method. Note that the method returns a *new* environment.
 
 ```python
-from tf_skein import Env
+from tf_skein import PyEnv
 
-keras_env = Env.MINIMAL.extended_with("keras_env", packages=[
+keras_env = PyEnv.MINIMAL.extended_with("keras_env", packages=[
     "keras==2.2.0"
 ])
 ```

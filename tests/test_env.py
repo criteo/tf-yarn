@@ -1,11 +1,11 @@
 import os
 from subprocess import check_output
 
-from tf_skein import Env
+from tf_skein import PyEnv
 
 
 def test_env_create(tmpdir):
-    env = Env(
+    env = PyEnv(
         name="test",
         packages=["pycodestyle"])
     env_zip_path = env.create(str(tmpdir))
@@ -20,10 +20,10 @@ def test_env_create(tmpdir):
 
 
 def test_env_extended_with():
-    env = Env.MINIMAL_CPU._replace()
+    env = PyEnv.MINIMAL_CPU._replace()
     new_env = env.extended_with("extended", ["pycodestyle"])
 
-    assert env == Env.MINIMAL_CPU  # Unchanged?
+    assert env == PyEnv.MINIMAL_CPU  # Unchanged?
 
     assert new_env.name == "extended"
     assert set(env.packages) <= set(new_env.packages)

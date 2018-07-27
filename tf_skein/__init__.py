@@ -1,10 +1,10 @@
 __all__ = [
-    "Env",
+    "PyEnv",
     "Experiment",
     "TaskFlavor", "TaskSpec", "YARNCluster",
 ]
 
-from .env import Env
+from .env import PyEnv
 from .cluster import (
     Experiment,
     TaskFlavor, TaskSpec, YARNCluster

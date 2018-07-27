@@ -18,7 +18,7 @@ from ._internal import zip_inplace
 logger = logging.getLogger(__name__)
 
 
-class Env(typing.NamedTuple):
+class PyEnv(typing.NamedTuple):
     """An isolated Python environment.
 
     Attributes
@@ -47,7 +47,7 @@ class Env(typing.NamedTuple):
     python: str = f"{v.major}.{v.minor}.{v.micro}"
     packages: typing.List[str] = []
 
-    def extended_with(self, name: str, packages: typing.List[str]) -> 'Env':
+    def extended_with(self, name: str, packages: typing.List[str]) -> 'PyEnv':
         """Extend the environment with additional packages. """
         return self._replace(
             name=name,
@@ -104,7 +104,7 @@ class Env(typing.NamedTuple):
         return zip_inplace(env_path)
 
 
-Env.MINIMAL = Env(
+PyEnv.MINIMAL = PyEnv(
     name="tf_skein_minimal_env",
     packages=[
         "dill==" + dill.__version__,

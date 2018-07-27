@@ -27,9 +27,6 @@ class Experiment(typing.NamedTuple):
     def config(self) -> tf.estimator.RunConfig:
         return self.estimator.config
 
-    def __call__(self):
-        return tf.estimator.train_and_evaluate(*self)
-
 
 ExperimentFn = typing.Callable[[], Experiment]
 

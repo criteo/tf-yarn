@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from contextlib import closing
+from functools import partial
 
 import skein
 import tensorflow as tf
@@ -69,7 +70,7 @@ def main(
 
     thread = MonitoredThread(
         name=task,
-        target=experiment,
+        target=partial(tf.estimator.train_and_evaluate, *experiment),
         # "ps" tasks do not terminate by themselves. See
         # https://github.com/tensorflow/tensorflow/issues/4713
         daemon=task_type == "ps")

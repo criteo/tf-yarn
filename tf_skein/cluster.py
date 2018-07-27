@@ -11,7 +11,7 @@ import skein
 import tensorflow as tf
 from skein.model import FinalStatus
 
-from . import _criteo
+from ._criteo import get_default_env_vars, get_default_node_label_fn
 from ._internal import encode_fn, zip_inplace
 from .env import PyEnv
 
@@ -94,7 +94,7 @@ class YARNCluster:
     ) -> None:
         self.pyenv = pyenv
         self.files = files or {}
-        self.env_vars = env_vars or _criteo.hdfs()
+        self.env_vars = env_vars or get_default_env_vars()
 
     def __repr__(self) -> str:
         return f"SkeinCluster(env={self.pyenv})"
@@ -107,7 +107,7 @@ class YARNCluster:
         *,
         task_specs: typing.Dict[str, TaskSpec],
         queue: str = "default",
-        node_label_fn: NodeLabelFn = _criteo.node_label_fn
+        node_label_fn: NodeLabelFn = get_default_node_label_fn()
     ) -> None:
         """
         Run an experiment on YARN.
@@ -134,7 +134,7 @@ class YARNCluster:
         all_task_types = {"chief", "worker", "ps", "evaluator"}
         if not task_specs.keys() <= all_task_types:
             raise ValueError(
-                f"task_spec keys must be a subset of: {all_task_types}")
+                f"task_specs.keys() must be a subset of: {all_task_types}")
 
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.

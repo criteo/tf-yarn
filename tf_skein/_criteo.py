@@ -1,15 +1,18 @@
 import os
 from subprocess import check_output
 
-from tf_skein import TaskFlavor
 
-# The following is specific to the Criteo infra. Moreover, the
-# definitions assume that the system submitting the application
-# is "sufficiently close" to that of the containers.
+def is_criteo():
+    return "CRITEO_ENV" in os.environ
 
 
-def hdfs_vars():
-    """TODO"""
+def get_default_env_vars():
+    if not is_criteo():
+        return {}
+
+    # The following is specific to the Criteo infra. Moreover, the
+    # definitions assume that the system submitting the application
+    # is "sufficiently close" to that of the containers.
     hadoop_home = os.environ.setdefault("HADOOP_HOME", "/usr/lib/hadoop")
     hadoop_classpath = check_output([
         os.path.join(hadoop_home, "bin", "hadoop"),
@@ -26,9 +29,12 @@ def hdfs_vars():
     }
 
 
-def node_label_fn(task_flavor: TaskFlavor) -> str:
-    if task_flavor is TaskFlavor.CPU:
-        return ""
-    else:
-        assert task_flavor is TaskFlavor.GPU
-        return "gpu"
+def get_default_node_label_fn():
+    if not is_criteo():
+        return lambda _: ""
+
+    from .cluster import TaskFlavor
+    return {
+        TaskFlavor.CPU: "",
+        TaskFlavor.GPU: "gpu"
+    }.__getitem__

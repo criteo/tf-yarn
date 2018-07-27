@@ -7,7 +7,6 @@ import os
 import sys
 import typing
 import warnings
-from collections import ChainMap
 from subprocess import check_output, Popen, PIPE, CalledProcessError
 from sys import version_info as v
 from urllib.request import urlretrieve

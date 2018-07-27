@@ -5,12 +5,12 @@ import time
 import typing
 from collections import defaultdict
 from contextlib import contextmanager
-from subprocess import check_output
 
 import skein
 import tensorflow as tf
 from skein.model import ApplicationState
 
+from . import criteo_vars
 from ._internal import encode_fn, zip_inplace
 from .env import Env
 
@@ -42,33 +42,6 @@ class TaskSpec(typing.NamedTuple):
 
 #: A "dummy" ``TaskSpec``.
 TaskSpec.NONE = TaskSpec(0, 0, 0)
-
-# The following is specific to the Criteo infra. Moreover, the
-# definitions assume that the system submitting the application
-# is "sufficiently close" to that of the containers.
-
-
-def criteo_hdfs_vars():
-    """TODO"""
-    hadoop_home = os.environ.setdefault("HADOOP_HOME", "/usr/lib/hadoop")
-    hadoop_classpath = check_output([
-        os.path.join(hadoop_home, "bin", "hadoop"),
-        "classpath",
-        "--glob"
-    ])
-    return {
-        "HADOOP_HDFS_HOME": "/usr/lib/hadoop-hdfs",
-        "CLASSPATH": hadoop_classpath.decode().strip(),
-        "LD_LIBRARY_PATH": ":".join([
-            f"{os.environ['JAVA_HOME']}/jre/lib/amd64/server",
-            "/usr/lib/hadoop-criteo/hadoop/lib/native"
-        ])
-    }
-
-
-def criteo_cuda_vars():
-    """TODO"""
-    return {}  # TODO
 
 
 class YARNCluster:
@@ -111,11 +84,11 @@ class YARNCluster:
         self,
         env: Env = Env.MINIMAL_CPU,
         files: typing.Dict[str, str] = None,
-        vars: typing.Dict[str, str] = criteo_hdfs_vars()
+        vars: typing.Dict[str, str] = None
     ) -> None:
         self.env = env
         self.files = files or {}
-        self.vars = vars or {}
+        self.vars = vars or criteo_vars.hdfs()
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def __repr__(self):

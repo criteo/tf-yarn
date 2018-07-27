@@ -91,8 +91,10 @@ if __name__ == "__main__":
     parser.add_argument("--num-ps", type=int)
     parser.add_argument("--experiment-fn", type=str)
 
-    args = parser.parse_args()
-    main(
-        decode_fn(args.experiment_fn),
-        args.num_workers,
-        args.num_ps)
+    try:
+        experiment_fn = decode_fn(os.environ["EXPERIMENT_FN"])
+    except KeyError:
+        parser.error("EXPERIMENT_FN environment variable must be set")
+    else:
+        args = parser.parse_args()
+        main(experiment_fn, args.num_workers, args.num_ps)

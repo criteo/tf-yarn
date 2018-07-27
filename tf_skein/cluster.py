@@ -148,12 +148,12 @@ class YARNCluster:
             # Make Python modules/packages passed via ``self.env.files``
             # importable.
             "PYTHONPATH": ".:" + self.vars.get("PYTHONPATH", ""),
+            "EXPERIMENT_FN": encode_fn(experiment_fn)
         }
         task_command = (
             f"{self.env.name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={task_specs['ps'].instances} "
-            f"--num-workers={task_specs['worker'].instances} "
-            f"--experiment-fn={encode_fn(experiment_fn)}")
+            f"--num-workers={task_specs['worker'].instances} ")
 
         services = {}
         for task_type, task_spec in task_specs.items():

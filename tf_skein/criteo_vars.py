@@ -23,8 +23,3 @@ def hdfs():
             "/usr/lib/hadoop-criteo/hadoop/lib/native"
         ])
     }
-
-
-def cuda():
-    """TODO"""
-    return {}

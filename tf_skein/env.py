@@ -12,7 +12,6 @@ from sys import version_info as v
 from urllib.request import urlretrieve
 
 import dill
-import tensorflow as tf
 
 from ._internal import zip_inplace
 
@@ -98,27 +97,19 @@ class Env(typing.NamedTuple):
                 raise RuntimeError(
                     "Failed to create Python binary at " + env_python_bin)
 
-            logger.info("Installing packages into " + self.name)
-            _call([env_python_bin, "-m", "pip", "install"] + self.packages)
+            if self.packages:
+                logger.info("Installing packages into " + self.name)
+                _call([env_python_bin, "-m", "pip", "install"] + self.packages)
 
         return zip_inplace(env_path)
 
 
-# TODO: use internal PyPI for CPU-optimized TF.
-Env.MINIMAL_CPU = Env(
-    name="tf_skein_minimal_cpu_env",
+Env.MINIMAL = Env(
+    name="tf_skein_minimal_env",
     packages=[
         "dill==" + dill.__version__,
-        "git+http://github.com/criteo-forks/skein",
-        "tensorflow==" + tf.__version__
-    ])
-
-Env.MINIMAL_GPU = Env(
-    name="tf_skein_minimal_gpu_env",
-    packages=[
-        "dill==" + dill.__version__,
-        "git+http://github.com/criteo-forks/skein",
-        "tensorflow-gpu==" + tf.__version__
+        "git+http://github.com/criteo-forks/skein"
+        # XXX TensorFlow (CPU or GPU) will be added in ``YARNCluster``.
     ])
 
 

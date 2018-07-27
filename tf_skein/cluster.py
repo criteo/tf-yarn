@@ -5,6 +5,7 @@ import time
 import typing
 from collections import defaultdict
 from contextlib import contextmanager
+from enum import Enum
 
 import skein
 import tensorflow as tf
@@ -33,13 +34,15 @@ class Experiment(typing.NamedTuple):
 ExperimentFn = typing.Callable[[], Experiment]
 
 
+#: CPU/GPU? You tell me!
+TaskFlavor = Enum("TaskFlavour", ["CPU", "GPU"])
+
+
 class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int
     instances: int = 1
-    #: YARN node label expression to apply when requesting containers
-    #: for this task type. Defaults to ``""`` which matches all nodes.
-    node_label: int = ""
+    flavor: TaskFlavor = TaskFlavor.CPU
 
 
 #: A "dummy" ``TaskSpec``.
@@ -84,7 +87,7 @@ class YARNCluster:
     """
     def __init__(
         self,
-        env: Env = Env.MINIMAL_CPU,
+        env: Env = Env.MINIMAL,
         files: typing.Dict[str, str] = None,
         vars: typing.Dict[str, str] = None
     ) -> None:
@@ -135,7 +138,7 @@ class YARNCluster:
 
         task_files = {
             self.env.name: self.env.create(),
-            __package__: zip_inplace(os.path.dirname(__file__), replace=True)
+            __package__: zip_inplace(os.path.dirname(__file__))
         }
 
         for target, source in self.files.items():
@@ -151,22 +154,37 @@ class YARNCluster:
             "PYTHONPATH": ".:" + self.vars.get("PYTHONPATH", ""),
             "EXPERIMENT_FN": encode_fn(experiment_fn)
         }
-        task_command = (
-            f"{self.env.name}/bin/python -m tf_skein._dispatch_task "
-            f"--num-ps={task_specs['ps'].instances} "
-            f"--num-workers={task_specs['worker'].instances} ")
 
         services = {}
-        for task_type, task_spec in task_specs.items():
+        for task_type, task_spec in list(task_specs.items()):
             if task_spec is TaskSpec.NONE:
                 continue
+
+            # TODO: use internal PyPI for CPU-optimized TF.
+            # TODO: how to make this modular/extensible?
+            if task_spec.flavor is TaskFlavor.CPU:
+                env = self.env.extended_with(
+                    self.env.name + "_cpu",
+                    packages=["tensorflow"])
+                node_label = ""
+            else:
+                env = self.env.extended_with(
+                    self.env.name + "_gpu",
+                    packages=["tensorflow-gpu"])
+                node_label = "gpu"  # Criteo-specific.
+
+            task_command = (
+                f"{env.name}/bin/python -m tf_skein._dispatch_task "
+                f"--num-ps={task_specs['ps'].instances} "
+                f"--num-workers={task_specs['worker'].instances} "
+            )
 
             services[task_type] = skein.Service(
                 [task_command],
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 instances=task_spec.instances,
-                node_label=task_spec.node_label,
-                files=task_files,
+                node_label=node_label,
+                files={**task_files, env.name: env.create()},
                 env=task_env)
 
         # TODO: experiment name?
@@ -178,8 +196,8 @@ class YARNCluster:
             final_status, containers = _await_termination(client, app_id)
             logger.info(
                 f"Application {app_id} finished with status {final_status}")
-            for id, (state, yarn_logs) in sorted(containers.items()):
-                logger.info(f"{id:>16} {state} {yarn_logs}")
+            for id, (state, yarn_container_logs) in sorted(containers.items()):
+                logger.info(f"{id:>16} {state} {yarn_container_logs}")
 
 
 def _await_termination(

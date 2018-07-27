@@ -1,14 +1,14 @@
-import logging
 import os
 
 import tensorflow as tf
 
+from tf_skein import Experiment
+
 import winequality
+winequality.ensure_dataset_on_hdfs()
 
-from tf_skein import Experiment, YARNCluster, TaskSpec, Env
 
-
-def experiment_fn() -> Experiment:
+def get() -> Experiment:
     train, test = winequality.get_dataset()
 
     def train_input_fn():
@@ -43,16 +43,3 @@ def experiment_fn() -> Experiment:
             eval_input_fn,
             start_delay_secs=0,
             throttle_secs=30))
-
-
-if __name__ == "__main__":
-    winequality.ensure_dataset_on_hdfs()
-    logging.basicConfig(level="INFO")
-
-    cluster = YARNCluster(files={
-        os.path.basename(winequality.__file__): winequality.__file__
-    })
-    cluster.run(experiment_fn, task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-        "evaluator": TaskSpec(memory=2**10, vcores=1)
-    })

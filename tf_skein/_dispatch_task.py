@@ -55,7 +55,11 @@ def main(
     assert config.task_id == task_id
 
     if fake_google_env:
-        # XXX this is not immune to a race condition.
+        # XXX at this point the socket has already been closed.
+        #     Therefore, there is a potential race with concurrent
+        #     applications running on the same node. However,
+        #     ``tf.train.Server`` provides no API for wrapping an
+        #     existing TCP socket.
         tf.train.Server(
             config.cluster_spec,
             job_name=config.task_type,

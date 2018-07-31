@@ -11,7 +11,7 @@ import skein
 import tensorflow as tf
 from skein.model import FinalStatus
 
-from ._criteo import get_default_env_vars, get_default_node_label_fn
+from ._criteo import get_default_env_vars
 from ._internal import encode_fn, zip_inplace
 from .env import PyEnv
 
@@ -32,8 +32,14 @@ ExperimentFn = typing.Callable[[], Experiment]
 
 
 class TaskFlavor(Enum):
-    CPU = 0
-    GPU = 1
+    """The flavor values are YARN node label expressions.
+
+    That is, a task with a CPU flavor can be scheduled on any node,
+    whereas a task with a GPU flavor, only on the one labeled with
+    ``"gpu"``.
+    """
+    CPU = ""     # Default.
+    GPU = "gpu"
 
 
 NodeLabelFn = typing.Callable[[TaskFlavor], str]
@@ -106,8 +112,7 @@ class YARNCluster:
         experiment_fn: ExperimentFn,
         *,
         task_specs: typing.Dict[str, TaskSpec],
-        queue: str = "default",
-        node_label_fn: NodeLabelFn = get_default_node_label_fn()
+        queue: str = "default"
     ) -> None:
         """
         Run an experiment on YARN.
@@ -126,10 +131,6 @@ class YARNCluster:
 
         queue
             YARN queue to use.
-
-        node_label_fn
-            A function mapping ``TaskFlavor`` to the corresponding YARN
-            node label expressions.
         """
         all_task_types = {"chief", "worker", "ps", "evaluator"}
         if not task_specs.keys() <= all_task_types:
@@ -161,24 +162,24 @@ class YARNCluster:
             "EXPERIMENT_FN": encode_fn(experiment_fn)
         }
 
+        # TODO: use internal PyPI for CPU-optimized TF.
+        pyenvs = {
+            TaskFlavor.CPU: self.pyenv.extended_with(
+                self.pyenv.name + "_cpu",
+                packages=["tensorflow"]),
+            TaskFlavor.GPU: self.pyenv.extended_with(
+                self.pyenv.name + "_gpu",
+                packages=["tensorflow-gpu"])
+        }
+
         services = {}
         for task_type, task_spec in list(task_specs.items()):
             if task_spec is TaskSpec.NONE:
                 continue
 
-            # TODO: use internal PyPI for CPU-optimized TF.
-            if task_spec.flavor is TaskFlavor.CPU:
-                env = self.pyenv.extended_with(
-                    self.pyenv.name + "_cpu",
-                    packages=["tensorflow"])
-            else:
-                assert task_spec.flavor is TaskFlavor.GPU
-                env = self.pyenv.extended_with(
-                    self.pyenv.name + "_gpu",
-                    packages=["tensorflow-gpu"])
-
+            pyenv = pyenvs[task_spec.flavor]
             task_command = (
-                f"{env.name}/bin/python -m tf_skein._dispatch_task "
+                f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
                 f"--num-ps={task_specs['ps'].instances} "
                 f"--num-workers={task_specs['worker'].instances} "
             )
@@ -187,8 +188,8 @@ class YARNCluster:
                 [task_command],
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 instances=task_spec.instances,
-                node_label=node_label_fn(task_spec.flavor),
-                files={**task_files, env.name: env.create()},
+                node_label=task_spec.flavor.value,
+                files={**task_files, pyenv.name: pyenv.create()},
                 env=task_env)
 
         # TODO: experiment name?

@@ -27,14 +27,3 @@ def get_default_env_vars():
             "/usr/lib/hadoop-criteo/hadoop/lib/native"
         ])
     }
-
-
-def get_default_node_label_fn():
-    if not is_criteo():
-        return lambda _: ""
-
-    from .cluster import TaskFlavor
-    return {
-        TaskFlavor.CPU: "",
-        TaskFlavor.GPU: "gpu"
-    }.__getitem__

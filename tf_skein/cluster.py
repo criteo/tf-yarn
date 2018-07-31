@@ -12,7 +12,7 @@ import tensorflow as tf
 from skein.model import FinalStatus
 
 from ._criteo import get_default_env_vars
-from ._internal import encode_fn, zip_inplace
+from ._internal import encode_fn, zip_inplace, get_krb5_cc_path
 from .env import PyEnv
 
 logger = logging.getLogger(__name__)
@@ -143,9 +143,11 @@ class YARNCluster:
         assert task_specs["evaluator"].instances <= 1
         assert task_specs["chief"].instances == 1
 
+        cc_path = get_krb5_cc_path()
         task_files = {
             self.pyenv.name: self.pyenv.create(),
-            __package__: zip_inplace(os.path.dirname(__file__))
+            __package__: zip_inplace(os.path.dirname(__file__)),
+            os.path.basename(cc_path): cc_path
         }
 
         for target, source in self.files.items():
@@ -156,10 +158,12 @@ class YARNCluster:
 
         task_env = {
             **self.env_vars,
+            "EXPERIMENT_FN": encode_fn(experiment_fn),
+            # Proxy the Kerberos ticket.
+            "KRB5CCNAME": os.path.basename(cc_path),
             # Make Python modules/packages passed via ``self.env.files``
             # importable.
             "PYTHONPATH": ".:" + self.env_vars.get("PYTHONPATH", ""),
-            "EXPERIMENT_FN": encode_fn(experiment_fn)
         }
 
         # TODO: use internal PyPI for CPU-optimized TF.

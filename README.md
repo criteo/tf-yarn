@@ -8,9 +8,20 @@ tf-skein
 Installation
 ------------
 
+Make sure you have Python 3.6+ and Maven (required by Skein) available and then
+run:
+
+```bash
+$ pip install git+https://github.com/criteo-forks/skein#egg=criteo-forks-skein
+$ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
+```
+
+<!-- Uncomment once upstream PRs to skein are merged.
+
 ```bash
 $ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
 ```
+-->
 
 
 Quickstart
@@ -66,6 +77,13 @@ cluster.run(experiment_fn, task_specs={
     "chief": TaskSpec(memory=2 * 2**10, vcores=4),
     "evaluator": TaskSpec(memory=2**10, vcores=1)
 })
+```
+
+To run the full example, clone the repository and run the following from the
+repository root:
+
+```bash
+$ ./run_example.sh examples/cpu_example.py
 ```
 
 ### Distributed TensorFlow 101

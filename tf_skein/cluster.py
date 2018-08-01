@@ -132,16 +132,10 @@ class YARNCluster:
         queue
             YARN queue to use.
         """
-        all_task_types = {"chief", "worker", "ps", "evaluator"}
-        if not task_specs.keys() <= all_task_types:
-            raise ValueError(
-                f"task_specs.keys() must be a subset of: {all_task_types}")
-
         # TODO: compute num_ps from the model size and the number of
         # executors. See https://stackoverflow.com/a/46080567/262432.
         task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
-        assert task_specs["evaluator"].instances <= 1
-        assert task_specs["chief"].instances == 1
+        _check_task_specs(task_specs)
 
         cc_path = get_krb5_cc_path()
         task_files = {
@@ -207,6 +201,22 @@ class YARNCluster:
                 f"Application {app_id} finished with status {final_status}")
             for id, (state, yarn_container_logs) in sorted(containers.items()):
                 logger.info(f"{id:>16} {state} {yarn_container_logs}")
+
+
+def _check_task_specs(task_specs):
+    all_task_types = {"chief", "worker", "ps", "evaluator"}
+    if not task_specs.keys() <= all_task_types:
+        raise ValueError(
+            f"task_specs.keys() must be a subset of: {all_task_types}")
+
+    if task_specs["chief"].instances != 1:
+        raise ValueError("exactly one 'chief' task is required")
+    if task_specs["chief"].instances > 1:
+        raise ValueError("no more than one 'evaluator' task is allowed")
+    if task_specs["worker"].instances > 0 and not task_specs["ps"].instances:
+        raise ValueError(
+            "task_specs must contain at least a single 'ps' task for "
+            "multi-worker training")
 
 
 def _await_termination(

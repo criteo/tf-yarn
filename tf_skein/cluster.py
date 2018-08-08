@@ -3,7 +3,7 @@ import os
 import sys
 import time
 import typing
-from collections import defaultdict
+from collections import defaultdict, ChainMap
 from contextlib import contextmanager
 from enum import Enum
 
@@ -100,7 +100,7 @@ class YARNCluster:
     ) -> None:
         self.pyenv = pyenv
         self.files = files or {}
-        self.env_vars = env_vars or get_default_env_vars()
+        self.env_vars = ChainMap(env_vars or {}, get_default_env_vars())
 
     def __repr__(self) -> str:
         return f"SkeinCluster(env={self.pyenv})"

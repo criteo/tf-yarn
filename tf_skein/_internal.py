@@ -115,13 +115,14 @@ class KVBarrier:
 
     def wait(self, key: str, value: str = ""):
         self.logger.info(f"Entering {self.stage} barrier")
-        self.kv[self.stage + "/" + key] = value
+        self.kv[self.stage + "/" + key] = value.encode()
         self.logger.info(f"Written {key} = {value}")
 
         def get(target):
             if target == key:
                 return value
 
+            # TODO: use event queue instead?
             self.logger.info("Waiting for " + target)
             return self.kv.wait(self.stage + "/" + target)
 

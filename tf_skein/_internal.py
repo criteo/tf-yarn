@@ -122,9 +122,8 @@ class KVBarrier:
             if target == key:
                 return value
 
-            # TODO: use event queue instead?
             self.logger.info("Waiting for " + target)
-            return self.kv.wait(self.stage + "/" + target)
+            return self.kv.wait(self.stage + "/" + target).decode()
 
         spec = {
             "chief": [get("chief:0")]

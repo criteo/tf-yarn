@@ -147,7 +147,9 @@ class YARNCluster:
         for target, source in self.files.items():
             assert target not in task_files
             task_files[target] = (
-                zip_inplace(source) if os.path.isdir(source) else source
+                zip_inplace(source, replace=True)
+                if os.path.isdir(source)
+                else source
             )
 
         task_env = {

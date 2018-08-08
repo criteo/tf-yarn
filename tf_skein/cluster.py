@@ -213,7 +213,7 @@ def _check_task_specs(task_specs):
 
     if task_specs["chief"].instances != 1:
         raise ValueError("exactly one 'chief' task is required")
-    if task_specs["chief"].instances > 1:
+    if task_specs["evaluator"].instances > 1:
         raise ValueError("no more than one 'evaluator' task is allowed")
     if task_specs["worker"].instances > 0 and not task_specs["ps"].instances:
         raise ValueError(

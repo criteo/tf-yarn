@@ -126,13 +126,13 @@ class KVBarrier:
             return self.kv.wait(self.stage + "/" + target).decode()
 
         spec = {
-            "chief": [get("chief:0")]
+            "chief": [get("chief_0")]
         }
 
         for idx in range(self.num_ps):
-            spec.setdefault("ps", []).append(get(f"ps:{idx}"))
+            spec.setdefault("ps", []).append(get(f"ps_{idx}"))
 
         for idx in range(self.num_workers):
-            spec.setdefault("worker", []).append(get(f"worker:{idx}"))
+            spec.setdefault("worker", []).append(get(f"worker_{idx}"))
 
         return spec

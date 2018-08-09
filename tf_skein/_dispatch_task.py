@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import typing
 from contextlib import closing
 from functools import partial
 
@@ -20,18 +21,10 @@ from .cluster import ExperimentFn
 
 def dispatch(
     experiment_fn: ExperimentFn,
-    num_workers: int,
-    num_ps: int
-):
-    client = skein.ApplicationClient.from_current()
-    task_type, task_id = os.environ["SKEIN_CONTAINER_ID"].split("_", 1)
-    task = f"{task_type}:{task_id}"
-
-    with closing(iter_available_sock_addrs()) as it:
-        init_barrier = KVBarrier(client.kv, "init", num_workers, num_ps)
-        sock_addr = next(it)
-        spec = init_barrier.wait(task, sock_addr)
-
+    task_type: str,
+    task_id: int,
+    spec: typing.Dict[str, typing.List[str]]
+) -> MonitoredThread:
     # Preempt to ensure all tasks in the cluster are ready to
     # accept incoming traffic by the time we create the training
     # session. Note that "evaluator" does not need a cluster,
@@ -64,23 +57,42 @@ def dispatch(
             start=True)
 
     thread = MonitoredThread(
-        name=task,
+        name=f"{task_type}:{task_id}",
         target=partial(tf.estimator.train_and_evaluate, *experiment),
         # "ps" tasks do not terminate by themselves. See
         # https://github.com/tensorflow/tensorflow/issues/4713
         daemon=task_type == "ps")
     thread.start()
 
-    tf.logging.info(f"Started {task}")
+    tf.logging.info(f"Started {task_type}:{task_id}")
 
     # "ps" tasks never terminate and therefore cannot be joined.
     if task_type != "ps":
         thread.join()
-        if thread.exception() is not None:
-            raise thread.exception()
 
+    return thread
+
+
+def main(
+    experiment_fn: ExperimentFn,
+    num_workers: int,
+    num_ps: int
+) -> None:
+    task = os.environ["SKEIN_CONTAINER_ID"]
+    task_type, task_id = task.split("_", 1)
+    task_id = int(task_id)
+    client = skein.ApplicationClient.from_current()
+
+    with closing(iter_available_sock_addrs()) as it:
+        init_barrier = KVBarrier(client.kv, "init", num_workers, num_ps)
+        sock_addr = next(it)
+        spec = init_barrier.wait(task, sock_addr)
+
+    thread = dispatch(experiment_fn, task_type, task_id, spec)
     stop_barrier = KVBarrier(client.kv, "stop", num_workers, num_ps)
     stop_barrier.wait(task)
+    if thread.exception() is not None:
+        raise thread.exception()
 
 
 if __name__ == "__main__":
@@ -97,4 +109,4 @@ if __name__ == "__main__":
         parser.error("EXPERIMENT_FN environment variable must be set")
     else:
         args = parser.parse_args()
-        dispatch(experiment_fn, args.num_workers, args.num_ps)
+        main(experiment_fn, args.num_workers, args.num_ps)

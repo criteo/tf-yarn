@@ -1,15 +1,12 @@
 import logging
 import os
-import sys
 import time
 import typing
 from collections import defaultdict, ChainMap
-from contextlib import contextmanager
 from enum import Enum
 
 import skein
 import tensorflow as tf
-from skein.model import FinalStatus
 
 from ._criteo import get_default_env_vars
 from ._internal import encode_fn, zip_inplace, get_krb5_cc_path
@@ -194,15 +191,13 @@ class YARNCluster:
 
         # TODO: experiment name?
         spec = skein.ApplicationSpec(services, queue=queue)
-        security = skein.Security.from_new_directory(force=True)
-        with skein.Client(security=security) as client:
+        with skein.Client() as client:
             logger.info(f"Submitting experiment to {queue} queue")
             app_id = client.submit(spec)
-            final_status, containers = _await_termination(client, app_id)
+            final_status = _await_termination(client, app_id)
             logger.info(
                 f"Application {app_id} finished with status {final_status}")
-            for id, (state, yarn_container_logs) in sorted(containers.items()):
-                logger.info(f"{id:>16} {state} {yarn_container_logs}")
+            # TODO: report per-container status via KV.
 
 
 def _check_task_specs(task_specs):
@@ -225,45 +220,20 @@ def _await_termination(
     client: skein.Client,
     app_id: str,
     poll_every_secs: int = 10
-):
-    with _shutdown(client.connect(app_id)) as app:
-        final_status = FinalStatus.UNDEFINED
-        containers = {}
-        try:
-            while final_status is FinalStatus.UNDEFINED:
-                time.sleep(poll_every_secs)
-                final_status = client.application_report(app_id).final_status
-                for c in app.get_containers():
-                    containers[c.id] = (c.state, c.yarn_container_logs)
-        except skein.exceptions.ConnectionError:
-            # Yes, this probably means the daemon already shutdown,
-            # and we have a stale status. However, the current API
-            # does not seem to allow for a better solution.
-            # See jcrist/skein#46.
-            pass
+) -> skein.core.FinalStatus:
+    # Ensure SIGINT is not masked to enable kill on C-c.
+    import signal
+    signal.signal(signal.SIGINT, signal.default_int_handler)
 
-        return final_status, containers
-
-
-@contextmanager
-def _shutdown(
-    app: skein.ApplicationClient
-) -> typing.ContextManager[skein.ApplicationClient]:
     try:
-        yield app
-    finally:
-        _exc_type, exc_value, _exc_tb = sys.exc_info()
-        if isinstance(exc_value, (KeyboardInterrupt, SystemExit)):
-            status = "KILLED"
-        elif exc_value is not None:
-            status = "FAILED"
-        else:
-            status = "SUCCEEDED"
+        while True:
+            report = client.application_report(app_id)
+            final_status = report.final_status
+            # TODO: log status on each tick?
+            if final_status != "undefined":
+                return final_status
 
-        try:
-            app.shutdown(status)
-        except skein.exceptions.ConnectionError:
-            pass  # Application already down.
-
-        if exc_value is not None:
-            raise
+            time.sleep(poll_every_secs)
+    except (KeyboardInterrupt, SystemExit):
+        client.kill_application(app_id)
+        return skein.core.FinalStatus.KILLED

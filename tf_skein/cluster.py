@@ -264,3 +264,6 @@ def _shutdown(
             app.shutdown(status)
         except skein.exceptions.ConnectionError:
             pass  # Application already down.
+
+        if exc_value is not None:
+            raise

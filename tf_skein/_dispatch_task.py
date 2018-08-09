@@ -18,18 +18,13 @@ from ._internal import (
 from .cluster import ExperimentFn
 
 
-def main(
+def dispatch(
     experiment_fn: ExperimentFn,
     num_workers: int,
     num_ps: int
 ):
     client = skein.ApplicationClient.from_current()
-    current_container = next(
-        c for c in client.get_containers()
-        if c.yarn_container_id == os.environ["CONTAINER_ID"])
-
-    task_type = current_container.service_name
-    task_id = current_container.instance
+    task_type, task_id = os.environ["SKEIN_CONTAINER_ID"].split("_", 1)
     task = f"{task_type}:{task_id}"
 
     with closing(iter_available_sock_addrs()) as it:
@@ -102,4 +97,4 @@ if __name__ == "__main__":
         parser.error("EXPERIMENT_FN environment variable must be set")
     else:
         args = parser.parse_args()
-        main(experiment_fn, args.num_workers, args.num_ps)
+        dispatch(experiment_fn, args.num_workers, args.num_ps)

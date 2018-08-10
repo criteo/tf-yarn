@@ -20,7 +20,6 @@ def get_default_env_vars():
         "--glob"
     ])
     return {
-        "HADOOP_HDFS_HOME": "/usr/lib/hadoop-hdfs",
         "CLASSPATH": hadoop_classpath.decode().strip(),
         "LD_LIBRARY_PATH": ":".join([
             f"{os.environ['JAVA_HOME']}/jre/lib/amd64/server",

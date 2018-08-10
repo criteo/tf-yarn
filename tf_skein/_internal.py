@@ -55,18 +55,6 @@ def iter_available_sock_addrs():
             yield f"{host}:{port}"
 
 
-def get_krb5_cc_path() -> str:
-    try:
-        cc_name = os.environ["KRB5CCNAME"]
-    except KeyError:
-        raise RuntimeError("KRB5CCNAME not set in os.environ. Run kinit?")
-
-    cc_type, cc_path = cc_name.split(":", 1)
-    if cc_type != "FILE":
-        raise RuntimeError("Only FILE credentials cache is supported")
-    return cc_path
-
-
 def encode_fn(fn) -> str:
     """Encode a function in a plain-text format."""
     return b64encode(dill.dumps(fn, recurse=True)).decode()

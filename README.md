@@ -27,6 +27,8 @@ $ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
 Quickstart
 ----------
 
+TODO: ExperimentFn first, then task_specs.
+
 The core abstraction in `tf-skein` is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
@@ -79,11 +81,22 @@ cluster.run(experiment_fn, task_specs={
 })
 ```
 
-To run the full example, clone the repository and run the following from the
-repository root:
+Sidenote: to run the example end-to-end, clone the repository and run:
 
 ```bash
 $ ./run_example.sh examples/cpu_example.py
+```
+
+TODO: A more elaborate configuration involving a `"ps"` and multiple `"worker"`
+tasks might look like:
+
+```python
+cluster.run(experiment_fn, task_specs={
+    "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+    "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=2),
+    "ps": TaskSpec(memory=2 * 2**10, vcores=1),
+    "evaluator": TaskSpec(memory=2**10, vcores=1)
+})
 ```
 
 ### Distributed TensorFlow 101

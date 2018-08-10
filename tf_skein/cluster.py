@@ -39,9 +39,6 @@ class TaskFlavor(Enum):
     GPU = "gpu"
 
 
-NodeLabelFn = typing.Callable[[TaskFlavor], str]
-
-
 class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int

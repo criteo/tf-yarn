@@ -30,7 +30,7 @@ class MonitoredThread(Thread):
             self._exc = exc
 
 
-def iter_available_sock_addrs():
+def iter_available_sock_addrs() -> typing.Iterator[typing.Tuple[str, int]]:
     """Iterate available TCP ports to listen on.
 
     The acquired TCP sockets are hold open until the generator is
@@ -52,7 +52,7 @@ def iter_available_sock_addrs():
                     raise
 
             _ipaddr, port = s.getsockname()
-            yield f"{host}:{port}"
+            yield (host, port)
 
 
 def encode_fn(fn) -> str:

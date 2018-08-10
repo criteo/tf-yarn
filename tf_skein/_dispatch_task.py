@@ -85,8 +85,8 @@ def main(
 
     with closing(iter_available_sock_addrs()) as it:
         init_barrier = KVBarrier(client.kv, "init", num_workers, num_ps)
-        sock_addr = next(it)
-        spec = init_barrier.wait(task, sock_addr)
+        host, port = next(it)
+        spec = init_barrier.wait(task, f"{host}:{port}")
 
     thread = dispatch(experiment_fn, task_type, task_id, spec)
     stop_barrier = KVBarrier(client.kv, "stop", num_workers, num_ps)

@@ -20,11 +20,10 @@ def test_iter_available_sock_addrs():
         sock_addrs = {next(it) for _ in range(5)}
         assert len(sock_addrs) == 5  # No duplicates.
 
-        for sock_addr in sock_addrs:
-            host, port = sock_addr.split(":", 1)
+        for host, port in sock_addrs:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             with pytest.raises(OSError) as exc_info:
-                s.bind((host, int(port)))
+                s.bind((host, port))
 
             # Ensure that the iterator holds the sockets open.
             assert exc_info.value.errno == errno.EADDRINUSE

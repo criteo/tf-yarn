@@ -73,10 +73,7 @@ def run_on_yarn(
 
     1. Find an an available TCP port and communicate the resulting
        socket address (host/port pair) to other instances using the
-       "init" barrier. This is a synchronization point which ensures
-       that all tasks in the cluster are ready to talk over the
-       network before the Estimator machinery attempts to initialize
-       a `tf.train.MonitoredSession`.
+       "init" barrier.
     2. Reconstruct the cluster spec from the list of socket addresses
        accumulated by the barrier, and preempt a TensorFlow server.
     3. Start the training and synchronize on the "stop" barrier.

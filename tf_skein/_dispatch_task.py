@@ -25,36 +25,15 @@ def dispatch(
     task_id: int,
     spec: typing.Dict[str, typing.List[str]]
 ) -> MonitoredThread:
-    # Preempt to ensure all tasks in the cluster are ready to
-    # accept incoming traffic by the time we create the training
-    # session. Note that "evaluator" does not need a cluster,
-    # and (for unknown reasons) "ps" does not follow the same
-    # code path as the rest and spawns a server regardless of
-    # the "environment" value.
-    fake_google_env = task_type != "evaluator" and task_type != "ps"
     xset_environ(TF_CONFIG=json.dumps({
         "cluster": spec,
-        "task": {"type": task_type, "index": task_id},
-        "environment": "google" if fake_google_env else ""
+        "task": {"type": task_type, "index": task_id}
     }))
 
     experiment = experiment_fn()
     config = experiment.config
     assert config.task_type == task_type
     assert config.task_id == task_id
-
-    if fake_google_env:
-        # XXX at this point the socket has already been closed.
-        #     Therefore, there is a potential race with concurrent
-        #     applications running on the same node. However,
-        #     ``tf.train.Server`` provides no API for wrapping an
-        #     existing TCP socket.
-        tf.train.Server(
-            config.cluster_spec,
-            job_name=config.task_type,
-            task_index=config.task_id,
-            config=config.session_config,
-            start=True)
 
     thread = MonitoredThread(
         name=f"{task_type}:{task_id}",
@@ -83,6 +62,7 @@ def main(
     task_id = int(task_id)
     client = skein.ApplicationClient.from_current()
 
+    # TODO: retry if the port is occupied because of the race condition.
     with closing(iter_available_sock_addrs()) as it:
         init_barrier = KVBarrier(client.kv, "init", num_workers, num_ps)
         host, port = next(it)

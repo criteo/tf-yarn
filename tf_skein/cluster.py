@@ -1,14 +1,17 @@
+import hashlib
 import logging
 import os
 import time
 import typing
 from collections import defaultdict, ChainMap
 from enum import Enum
+from sys import version_info as v
 
+import dill
 import skein
 import tensorflow as tf
 
-from ._criteo import get_default_env_vars
+from ._criteo import get_default_env
 from ._internal import encode_fn, zip_inplace
 from .env import PyEnv
 
@@ -19,6 +22,7 @@ class Experiment(typing.NamedTuple):
     estimator: tf.estimator.Estimator
     train_spec: tf.estimator.TrainSpec
     eval_spec: tf.estimator.EvalSpec
+    # TODO: experiment name?
 
     @property
     def config(self) -> tf.estimator.RunConfig:
@@ -50,8 +54,18 @@ class TaskSpec(typing.NamedTuple):
 TaskSpec.NONE = TaskSpec(0, 0, 0)
 
 
-class YARNCluster:
-    """Multi-node cluster running on Skein.
+def run_on_yarn(
+    experiment_fn: ExperimentFn,
+    task_specs: typing.Dict[str, TaskSpec],
+    *,
+    python: str = f"{v.major}.{v.minor}.{v.micro}",
+    pip_packages: typing.List[str] = None,
+    files: typing.Dict[str, str] = None,
+    env: typing.Dict[str, str] = None,
+    queue: str = "default",
+    name_nodes: typing.List[str] = None
+) -> None:
+    """Run an experiment on YARN.
 
     The implementation allocates a service with the requested number
     of instances for each distributed TensorFlow task type. Each
@@ -72,10 +86,34 @@ class YARNCluster:
 
     Parameters
     ----------
-    pyenv : PyEnv
-        The Python environment to deploy on the containers.
+    experiment_fn
+        A function constructing the estimator alongside the train
+        and eval specs.
 
-    files : dict
+    task_specs
+        Resources to allocate for each task type. The keys
+        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+        ``"evaluator"``. The minimal spec must contain at least
+        ``"chief"``.
+
+    python
+        Python version in the MAJOR.MINOR.MICRO format. Defaults to the
+        version of ``sys.executable``.
+
+    pip_packages
+        Python packages to install in the environment. The packages
+        are installed via pip, therefore all of the following forms
+        are supported::
+
+            SomeProject>=1,<2
+            git+https://github.com/org/SomeProject
+            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
+            path/to/SomeProject
+
+        See `Installing Packages <https://packaging.python.org/tutorials \
+        /installing-packages>`_ for more examples.
+
+    files
         Local files or directories to upload to the container.
         The keys are the target locations of the resources relative
         to the container root, while the values -- their
@@ -83,117 +121,78 @@ class YARNCluster:
         appended to ``PYTHONPATH``. Therefore, any listed Python
         module a package is automatically importable.
 
-    env_vars : dict
+    env
         Environment variables to forward to the containers.
+
+    queue
+        YARN queue to use.
+
+    name_nodes
+        A list of namenode URIs to acquire delegation tokens for.
     """
-    def __init__(
-        self,
-        pyenv: PyEnv = PyEnv.MINIMAL,
-        files: typing.Dict[str, str] = None,
-        env_vars: typing.Dict[str, str] = None
-    ) -> None:
-        self.pyenv = pyenv
-        self.files = files or {}
-        self.env_vars = ChainMap(env_vars or {}, get_default_env_vars())
+    # TODO: compute num_ps from the model size and the number of
+    # executors. See https://stackoverflow.com/a/46080567/262432.
+    task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
+    _check_task_specs(task_specs)
 
-    def __repr__(self) -> str:
-        return f"SkeinCluster(env={self.pyenv})"
+    # XXX this is Criteo-specific. Remove once Lake updates the container
+    #     environment. TODO: create a JIRA ticket.
+    env = ChainMap(env or {}, get_default_env())
 
-    __str__ = __repr__
+    pyenvs = _make_pyenvs(python, pip_packages or [])
 
-    def run(
-        self,
-        experiment_fn: ExperimentFn,
-        *,
-        task_specs: typing.Dict[str, TaskSpec],
-        queue: str = "default"
-    ) -> None:
-        """
-        Run an experiment on YARN.
+    task_files = {
+        __package__: zip_inplace(os.path.dirname(__file__), replace=True),
+    }
 
-        Parameters
-        ----------
-        experiment_fn
-            A function constructing the estimator alongside the train
-            and eval specs.
+    for target, source in (files or {}).items():
+        assert target not in task_files
+        task_files[target] = (
+            zip_inplace(source, replace=True)
+            if os.path.isdir(source)
+            else source
+        )
 
-        task_specs
-            Resources to allocate for each task type. The keys
-            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-            ``"evaluator"``. The minimal spec must contain at least
-            ``"chief"``.
+    task_env = {
+        **env,
+        "EXPERIMENT_FN": encode_fn(experiment_fn),
+        # Make Python modules/packages passed via ``self.env.files``
+        # importable.
+        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
+    }
 
-        queue
-            YARN queue to use.
-        """
-        # TODO: compute num_ps from the model size and the number of
-        # executors. See https://stackoverflow.com/a/46080567/262432.
-        task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
-        _check_task_specs(task_specs)
+    services = {}
+    for task_type, task_spec in list(task_specs.items()):
+        if task_spec is TaskSpec.NONE:
+            continue
 
-        task_files = {
-            self.pyenv.name: self.pyenv.create(),
-            __package__: zip_inplace(os.path.dirname(__file__)),
-        }
+        pyenv = pyenvs[task_spec.flavor]
+        task_command = (
+            f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
+            f"--num-ps={task_specs['ps'].instances} "
+            f"--num-workers={task_specs['worker'].instances} "
+        )
 
-        for target, source in self.files.items():
-            assert target not in task_files
-            task_files[target] = (
-                zip_inplace(source, replace=True)
-                if os.path.isdir(source)
-                else source
-            )
+        services[task_type] = skein.Service(
+            [task_command],
+            skein.Resources(task_spec.memory, task_spec.vcores),
+            instances=task_spec.instances,
+            node_label=task_spec.flavor.value,
+            files={**task_files, pyenv.name: pyenv.create()},
+            env=task_env)
 
-        task_env = {
-            **self.env_vars,
-            "EXPERIMENT_FN": encode_fn(experiment_fn),
-            # Make Python modules/packages passed via ``self.env.files``
-            # importable.
-            "PYTHONPATH": ".:" + self.env_vars.get("PYTHONPATH", ""),
-        }
-
-        # TODO: use internal PyPI for CPU-optimized TF.
-        pyenvs = {
-            TaskFlavor.CPU: self.pyenv.extended_with(
-                self.pyenv.name + "_cpu",
-                packages=["tensorflow"]),
-            TaskFlavor.GPU: self.pyenv.extended_with(
-                self.pyenv.name + "_gpu",
-                packages=["tensorflow-gpu"])
-        }
-
-        services = {}
-        for task_type, task_spec in list(task_specs.items()):
-            if task_spec is TaskSpec.NONE:
-                continue
-
-            pyenv = pyenvs[task_spec.flavor]
-            task_command = (
-                f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
-                f"--num-ps={task_specs['ps'].instances} "
-                f"--num-workers={task_specs['worker'].instances} "
-            )
-
-            services[task_type] = skein.Service(
-                [task_command],
-                skein.Resources(task_spec.memory, task_spec.vcores),
-                instances=task_spec.instances,
-                node_label=task_spec.flavor.value,
-                files={**task_files, pyenv.name: pyenv.create()},
-                env=task_env)
-
-        # TODO: experiment name?
-        spec = skein.ApplicationSpec(
-            services,
-            queue=queue,  # TODO vvv generalize.
-            name_nodes=["hdfs://prod-pa4", "hdfs://preprod-pa4"])
-        with skein.Client() as client:
-            logger.info(f"Submitting experiment to {queue} queue")
-            app_id = client.submit(spec)
-            final_status = _await_termination(client, app_id)
-            logger.info(
-                f"Application {app_id} finished with status {final_status}")
-            # TODO: report per-container status via KV.
+    spec = skein.ApplicationSpec(
+        services,
+        queue=queue,
+        name_nodes=name_nodes)
+    with skein.Client() as client:
+        logger.info(f"Submitting experiment to {queue} queue")
+        app_id = client.submit(spec)
+        final_status = _await_termination(client, app_id)
+        logger.info(
+            f"Application {app_id} finished with status {final_status}")
+        # TODO: report per-container status via KV.
+    # TODO: return the result of train_and_evaluate.
 
 
 def _check_task_specs(task_specs):
@@ -210,6 +209,23 @@ def _check_task_specs(task_specs):
         raise ValueError(
             "task_specs must contain at least a single 'ps' task for "
             "multi-worker training")
+
+
+def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
+    fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
+    pyenv = PyEnv(f"py{python}-{fp}", python, pip_packages + [
+        "dill==" + dill.__version__,
+        "git+http://github.com/criteo-forks/skein"
+    ])
+    # TODO: use internal PyPI for CPU-optimized TF.
+    return {
+        TaskFlavor.CPU: pyenv.extended_with(
+            pyenv.name + "-cpu",
+            packages=["tensorflow"]),
+        TaskFlavor.GPU: pyenv.extended_with(
+            pyenv.name + "-gpu",
+            packages=["tensorflow-gpu"])
+    }
 
 
 def _await_termination(

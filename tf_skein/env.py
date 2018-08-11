@@ -101,6 +101,10 @@ class PyEnv(typing.NamedTuple):
                 logger.info("Installing packages into " + self.name)
                 _call([env_python_bin, "-m", "pip", "install"] + self.packages)
 
+                requirements_path = os.path.join(env_path, "requirements.txt")
+                with open(requirements_path, "w") as f:
+                    print(*self.packages, sep=os.linesep, file=f)
+
         return zip_inplace(env_path)
 
 

@@ -6,7 +6,7 @@ def is_criteo():
     return "CRITEO_ENV" in os.environ
 
 
-def get_default_env_vars():
+def get_default_env():
     if not is_criteo():
         return {}
 

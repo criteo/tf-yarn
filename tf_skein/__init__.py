@@ -1,11 +1,9 @@
 __all__ = [
-    "PyEnv",
     "Experiment",
-    "TaskFlavor", "TaskSpec", "YARNCluster",
+    "run_on_yarn", "TaskFlavor", "TaskSpec",
 ]
 
-from .env import PyEnv
 from .cluster import (
     Experiment,
-    TaskFlavor, TaskSpec, YARNCluster
+    run_on_yarn, TaskFlavor, TaskSpec
 )

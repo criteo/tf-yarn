@@ -27,8 +27,6 @@ $ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
 Quickstart
 ----------
 
-TODO: ExperimentFn first, then task_specs.
-
 The core abstraction in `tf-skein` is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
@@ -49,44 +47,45 @@ def experiment_fn():
         tf.estimator.EvalSpec(eval_input_fn)
 ```
 
-Having an `experiment_fn` we can run it on YARN using a `YARNCluster`.
-The cluster needs to know in advance the environment it will be working it.
-The environment consists of
-
-* Python interpreter and packages, see `PyEnv.MINIMAL`,
-* local files to be uploaded, and
-* environment variables to be forwarded.
-
-```python
-from tf_skein import YARNCluster
-
-cluster = YARNCluster(files={
-    os.path.basename(winequality.__file__): winequality.__file__
-})
-```
-
-The final step is to call the `run` method with an `experiment_fn` and
-a dictionary specifying how much resources to allocate for each of the
-distributed TensorFlow task types. The dataset in
-`examples/cpu_example.py` is tiny and does not need multi-node
-training. Therefore, it can be scheduled using just the `"chief"` and
+The experiment can be scheduled on YARN using the `run_on_yarn` function which
+takes two required arguments: an `experimeng_fn`, and a dictionary specifying
+how much resources to allocate for each of the distributed TensorFlow task
+types. The dataset in `examples/cpu_example.py` is tiny and does not need
+multi-node training. Therefore, it can be scheduled using just the `"chief"` and
 `"evaluator"` tasks. Each task will be executed in its own container.
 
 ```python
-from tf_skein import TaskSpec
+from tf_skein import run_on_yarn, TaskSpec
 
-cluster.run(experiment_fn, task_specs={
-    "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-    "evaluator": TaskSpec(memory=2**10, vcores=1)
-})
+run_on_yarn(
+    experiment_fn,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+        "evaluator": TaskSpec(memory=2**10, vcores=1)
+    }
+)
 ```
 
-Sidenote: to run the example end-to-end, clone the repository and run:
+The final bit is to forward the Python dependencies of `cpy_example.py` to the
+YARN containers, in order for the chief and evaluator to be able to import it:
+
+```python
+run_on_yarn(
+    ...,
+    files={
+        os.path.basename(winequality.__file__): winequality.__file__,
+        os.path.basename(experiment_fn.__file__): experiment_fn.__file__,
+    }
+)
+```
+
+The full example can be ran as follows:
 
 ```bash
 $ ./run_example.sh examples/cpu_example.py
 ```
 
+<!--
 TODO: A more elaborate configuration involving a `"ps"` and multiple `"worker"`
 tasks might look like:
 
@@ -98,6 +97,7 @@ cluster.run(experiment_fn, task_specs={
     "evaluator": TaskSpec(memory=2**10, vcores=1)
 })
 ```
+-->
 
 ### Distributed TensorFlow 101
 
@@ -128,29 +128,28 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
-### Setting up the Python environment
+### Configuring the Python interpreter and packages
 
-`PyEnv` specifies the Python environment shipped to the containers. `tf-skein`
-comes with a predefined environment `PyEnv.MINIMAL` which contains the Python
-interpreter along with the `tf-skein` dependencies.
+`tf-skein` ships an isolated Python environment to the containers. By default
+it comes with a Python interpreter, TensorFlow, and a few of the `tf-skein`
+dependencies (see `requirements.txt` for the full list).
 
-Additional pip-installable packages can be added via the `PyEnv.extended_with`
-method. Note that the method returns a *new* environment.
+Additional pip-installable packages can be added via the `pip_packages` argument
+to `run_on_yarn`:
 
 ```python
-from tf_skein import PyEnv
-
-keras_env = PyEnv.MINIMAL.extended_with("keras_env", packages=[
-    "keras==2.2.0"
-])
+run_on_yarn(
+    ...,
+    pip_packages=["keras"]
+)
 ```
 
 ### Running on GPU@Criteo
 
-By default `YARNCluster` runs an experiment on CPU-only nodes. To run on GPU
+By default `run_on_yarn` runs an experiment on CPU-only nodes. To run on GPU
 on the pa4.preprod cluster:
 
-1. Set the `"queue"` argument to `YARNCluster.run` to `"ml-gpu"`.
+1. Set the `"queue"` argument to `run_on_yarn` to `"ml-gpu"`.
 2. Set `TaskSpec.flavor` to `TaskFlavor.GPU` for relevant task types. In
    general, it is a good idea to run compute heavy `"chief"`, `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
@@ -158,12 +157,16 @@ on the pa4.preprod cluster:
 Relevant part of [examples/gpu_example.py](examples/gpu_example.py):
 
 ```python
-from tf_skein import TaskFlavor
+from tf_skein import run_on_yarn, TaskFlavor
 
-cluster.run(experiment_fn, queue="ml-gpu", task_specs={
-    "chief": TaskSpec(memory=2 * 2**10, vcores=4, flavor=TaskFlavor.GPU),
-    "evaluator": TaskSpec(memory=2**10, vcores=1)
-})
+run_on_yarn(
+    experiment_fn,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4, flavor=TaskFlavor.GPU),
+        "evaluator": TaskSpec(memory=2**10, vcores=1)
+    },
+    queue="ml-gpu"
+)
 ```
 
 Limitations
@@ -177,7 +180,7 @@ pip to allow for more flexibility. The downside to that is that
 it is impossible to create an environment for an OS/architecture
 different from the one the library is running on.
 
-TODO: assume Python is installed and use PEX?
+<!-- TODO: assume Python is installed and use PEX? -->
 
 ### TensorBoard
 

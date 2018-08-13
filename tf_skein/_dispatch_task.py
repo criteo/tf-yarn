@@ -2,7 +2,6 @@ import argparse
 import json
 import logging
 import os
-from contextlib import closing
 from functools import partial
 
 import skein
@@ -10,7 +9,7 @@ import tensorflow as tf
 
 from ._internal import (
     MonitoredThread,
-    iter_available_sock_addrs,
+    reserve_sock_addr,
     decode_fn,
     spec_from_kv,
     xset_environ
@@ -31,15 +30,14 @@ def main(
     task_id = int(task_id)
     client = skein.ApplicationClient.from_current()
 
-    with closing(iter_available_sock_addrs()) as it:
-        host, port = next(it)
-        # Broadcast the addr to other tasks, and block until the full
-        # cluster spec is available.
+    # There is a race condition between acquiring a TPC port for the
+    # ``tf.train.Server``, and calling ``train_and_evaluate``.
+    # Therefore, it is important to keep the socket open for as long
+    # as possible to reduce the window of opportunity.
+    with reserve_sock_addr() as (host, port):
         broadcast("init/" + task, f"{host}:{port}")
         spec = spec_from_kv(client.kv, "init", num_workers, num_ps)
 
-        # XXX this code is within the ``with`` block to keep the socket
-        #     reserved until everything is ready to ``train_and_evaluate``.
         xset_environ(TF_CONFIG=json.dumps({
             "cluster": spec,
             "task": {"type": task_type, "index": task_id}

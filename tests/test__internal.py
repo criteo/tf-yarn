@@ -1,13 +1,12 @@
 import errno
 import os
 import socket
-from contextlib import closing
 from zipfile import ZipFile, is_zipfile
 
 import pytest
 
 from tf_skein._internal import (
-    iter_available_sock_addrs,
+    reserve_sock_addr,
     encode_fn,
     decode_fn,
     xset_environ,
@@ -17,17 +16,13 @@ from tf_skein._internal import (
 
 
 def test_iter_available_sock_addrs():
-    with closing(iter_available_sock_addrs()) as it:
-        sock_addrs = {next(it) for _ in range(5)}
-        assert len(sock_addrs) == 5  # No duplicates.
+    with reserve_sock_addr() as (host, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        with pytest.raises(OSError) as exc_info:
+            sock.bind((host, port))
 
-        for host, port in sock_addrs:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            with pytest.raises(OSError) as exc_info:
-                s.bind((host, port))
-
-            # Ensure that the iterator holds the sockets open.
-            assert exc_info.value.errno == errno.EADDRINUSE
+        # Ensure that the iterator holds the sockets open.
+        assert exc_info.value.errno == errno.EADDRINUSE
 
 
 def test_xset_environ(monkeypatch):

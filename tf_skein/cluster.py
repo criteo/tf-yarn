@@ -150,7 +150,7 @@ def run_on_yarn(
         "EXPERIMENT_FN": encode_fn(experiment_fn),
         # Make Python modules/packages passed via ``self.env.files``
         # importable.
-        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
+        "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
     }
 
     pyenvs = _make_pyenvs(python, pip_packages or [])

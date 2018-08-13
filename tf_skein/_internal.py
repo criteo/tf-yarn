@@ -1,10 +1,9 @@
-import errno
 import os
 import shutil
 import socket
 import typing
 from base64 import b64encode, b64decode
-from contextlib import ExitStack
+from contextlib import contextmanager
 from threading import Thread
 
 import dill
@@ -29,29 +28,19 @@ class MonitoredThread(Thread):
             self._exc = exc
 
 
-def iter_available_sock_addrs() -> typing.Iterator[typing.Tuple[str, int]]:
-    """Iterate available TCP ports to listen on.
+@contextmanager
+def reserve_sock_addr() -> typing.ContextManager[typing.Tuple[str, int]]:
+    """Reserve an available TCP port to listen on.
 
-    The acquired TCP sockets are hold open until the generator is
+    The acquired TCP socket is hold open until the generator is
     closed. This does not eliminate the chance of collision between
     multiple concurrent Python processes, but it makes it slightly
     less likely.
     """
-    with ExitStack() as stack:
-        host = socket.gethostname()
-        while True:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            stack.enter_context(s)
-            try:
-                s.bind(("", 0))
-            except socket.error as e:
-                if e.errno == errno.EADDRINUSE:
-                    continue
-                else:
-                    raise
-
-            _ipaddr, port = s.getsockname()
-            yield (host, port)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("", 0))
+        _ipaddr, port = sock.getsockname()
+        yield (socket.gethostname(), port)
 
 
 def encode_fn(fn) -> str:

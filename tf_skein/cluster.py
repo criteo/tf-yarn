@@ -149,9 +149,7 @@ def run_on_yarn(
         #     container environment. See LAKE-709.
         **get_default_env(),
         **(env or {}),
-        "EXPERIMENT_FN": encode_fn(experiment_fn),
-        # Make Python modules/packages passed via ``self.env.files``
-        # importable.
+        # Make Python modules/packages passed via ``files`` importable.
         "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
     }
 
@@ -163,6 +161,7 @@ def run_on_yarn(
             f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={task_specs['ps'].instances} "
             f"--num-workers={task_specs['worker'].instances} "
+            "--experiment-fn=" + encode_fn(experiment_fn)
         )
 
         services[task_type] = skein.Service(

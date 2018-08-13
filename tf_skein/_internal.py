@@ -1,5 +1,4 @@
 import errno
-import logging
 import os
 import shutil
 import socket
@@ -75,8 +74,7 @@ def xset_environ(**kwargs):
 
 
 def zip_inplace(path, replace=False):
-    assert os.path.exists(path)
-    assert os.path.isdir(path)
+    assert os.path.exists(path) and os.path.isdir(path)
 
     zip_path = path + ".zip"
     if not os.path.exists(zip_path) or replace:
@@ -93,34 +91,43 @@ def zip_inplace(path, replace=False):
     return zip_path
 
 
-class KVBarrier:
-    def __init__(self, kv, stage: str, num_workers: int, num_ps: int) -> None:
-        self.kv = kv
-        self.stage = stage
-        self.num_workers = num_workers
-        self.num_ps = num_ps
-        self.logger = logging.getLogger(self.__class__.__name__)
+def spec_from_kv(
+    kv,
+    stage: str,
+    num_workers: int,
+    num_ps: int
+) -> typing.Dict[str, list]:
+    def get(target):
+        return kv.wait(stage + "/" + target).decode()
 
-    def wait(self, key: str, value: str = ""):
-        self.logger.info(f"Entering {self.stage} barrier")
-        self.kv[self.stage + "/" + key] = value.encode()
-        self.logger.info(f"Written {key} = {value}")
+    spec = {
+        "chief": [get("chief_0")]
+    }
 
-        def get(target):
-            if target == key:
-                return value
+    for idx in range(num_ps):
+        spec.setdefault("ps", []).append(get(f"ps_{idx}"))
 
-            self.logger.info("Waiting for " + target)
-            return self.kv.wait(self.stage + "/" + target).decode()
+    for idx in range(num_workers):
+        spec.setdefault("worker", []).append(get(f"worker_{idx}"))
 
-        spec = {
-            "chief": [get("chief_0")]
-        }
+    return spec
 
-        for idx in range(self.num_ps):
-            spec.setdefault("ps", []).append(get(f"ps_{idx}"))
 
-        for idx in range(self.num_workers):
-            spec.setdefault("worker", []).append(get(f"worker_{idx}"))
+class StaticDefaultDict(dict):
+    """A ``dict`` with a static default value.
 
-        return spec
+    Unlike ``collections.defaultdict`` this implementation does not
+    implicitly update the mapping when queried with a missing key::
+
+        >>> d = StaticDefaultDict(default=42)
+        >>> d["foo"]
+        42
+        >>> d
+        {}
+    """
+    def __init__(self, *args, default, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default = default
+
+    def __missing__(self, key):
+        return self.default

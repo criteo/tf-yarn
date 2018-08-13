@@ -11,7 +11,8 @@ from tf_skein._internal import (
     encode_fn,
     decode_fn,
     xset_environ,
-    zip_inplace
+    zip_inplace,
+    StaticDefaultDict
 )
 
 
@@ -82,3 +83,8 @@ def test_zip_inplace_replace(tmpdir):
     assert os.stat(zip_path).st_mtime > stat.st_mtime
 
 
+def test_static_default_dict():
+    d = StaticDefaultDict({"foo": 42}, default=100500)
+    assert d["foo"] == 42
+    assert d["bar"] == 100500
+    assert "bar" not in d

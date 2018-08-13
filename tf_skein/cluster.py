@@ -3,7 +3,6 @@ import logging
 import os
 import time
 import typing
-from collections import defaultdict, ChainMap
 from enum import Enum
 from sys import version_info as v
 
@@ -12,10 +11,12 @@ import skein
 import tensorflow as tf
 
 from ._criteo import get_default_env
-from ._internal import encode_fn, zip_inplace
+from ._internal import encode_fn, zip_inplace, StaticDefaultDict
 from .env import PyEnv
 
 logger = logging.getLogger(__name__)
+
+here = os.path.dirname(__file__)
 
 
 class Experiment(typing.NamedTuple):
@@ -129,19 +130,10 @@ def run_on_yarn(
     """
     # TODO: compute num_ps from the model size and the number of
     # executors. See https://stackoverflow.com/a/46080567/262432.
-    task_specs = defaultdict(lambda: TaskSpec.NONE, task_specs)
+    task_specs = StaticDefaultDict(task_specs, default=TaskSpec.NONE)
     _check_task_specs(task_specs)
 
-    # XXX this is Criteo-specific. Remove once Lake updates the container
-    #     environment. TODO: create a JIRA ticket.
-    env = ChainMap(env or {}, get_default_env())
-
-    pyenvs = _make_pyenvs(python, pip_packages or [])
-
-    task_files = {
-        __package__: zip_inplace(os.path.dirname(__file__), replace=True),
-    }
-
+    task_files = {__package__: zip_inplace(here, replace=True)}
     for target, source in (files or {}).items():
         assert target not in task_files
         task_files[target] = (
@@ -151,18 +143,19 @@ def run_on_yarn(
         )
 
     task_env = {
-        **env,
+        # XXX this is Criteo-specific. Remove once Lake updates the
+        #     container environment. See LAKE-709.
+        **get_default_env(),
+        **(env or {}),
         "EXPERIMENT_FN": encode_fn(experiment_fn),
         # Make Python modules/packages passed via ``self.env.files``
         # importable.
         "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
     }
 
+    pyenvs = _make_pyenvs(python, pip_packages or [])
     services = {}
     for task_type, task_spec in list(task_specs.items()):
-        if task_spec is TaskSpec.NONE:
-            continue
-
         pyenv = pyenvs[task_spec.flavor]
         task_command = (
             f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
@@ -175,7 +168,7 @@ def run_on_yarn(
             skein.Resources(task_spec.memory, task_spec.vcores),
             instances=task_spec.instances,
             node_label=task_spec.flavor.value,
-            files={**task_files, pyenv.name: pyenv.create()},
+            files={**task_files, pyenv.name: zip_inplace(pyenv.create())},
             env=task_env)
 
     spec = skein.ApplicationSpec(

@@ -1,7 +1,7 @@
 import os
 from subprocess import check_output
 
-from tf_skein import PyEnv
+from tf_skein.env import PyEnv
 
 
 def test_env_create(tmpdir):

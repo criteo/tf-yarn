@@ -13,8 +13,6 @@ from urllib.request import urlretrieve
 
 import dill
 
-from ._internal import zip_inplace
-
 logger = logging.getLogger(__name__)
 
 
@@ -69,8 +67,8 @@ class PyEnv(typing.NamedTuple):
 
         Returns
         -------
-        env_zip_path : str
-            Path to the zipped environment.
+        env_path : str
+            Path to the environment root.
         """
         try:
             conda_info = json.loads(
@@ -105,16 +103,7 @@ class PyEnv(typing.NamedTuple):
                 with open(requirements_path, "w") as f:
                     print(*self.packages, sep=os.linesep, file=f)
 
-        return zip_inplace(env_path)
-
-
-PyEnv.MINIMAL = PyEnv(
-    name="tf_skein_minimal_env",
-    packages=[
-        "dill==" + dill.__version__,
-        "git+http://github.com/criteo-forks/skein"
-        # XXX TensorFlow (CPU or GPU) will be added in ``YARNCluster``.
-    ])
+        return env_path
 
 
 def _install_miniconda(root: str):

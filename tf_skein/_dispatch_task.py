@@ -65,7 +65,7 @@ def main(
         tf.logging.info(f"Stopped {task_type}:{task_id}")
         broadcast("stop/" + task)
         # Note that there is no synchronization happening here. In most
-        # cases the chief/workers are independent and can terminate
+        # cases the chief/workers are independent and could terminate
         # without waiting for the rest of the cluster. This is not true
         # for "ps" tasks.
 

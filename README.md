@@ -67,7 +67,7 @@ run_on_yarn(
 ```
 
 The final bit is to forward the Python dependencies of `cpy_example.py` to the
-YARN containers, in order for the chief and evaluator to be able to import it:
+YARN containers, in order for the tasks to be able to import them:
 
 ```python
 run_on_yarn(
@@ -84,20 +84,6 @@ The full example can be ran as follows:
 ```bash
 $ ./run_example.sh examples/cpu_example.py
 ```
-
-<!--
-TODO: A more elaborate configuration involving a `"ps"` and multiple `"worker"`
-tasks might look like:
-
-```python
-cluster.run(experiment_fn, task_specs={
-    "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-    "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=2),
-    "ps": TaskSpec(memory=2 * 2**10, vcores=1),
-    "evaluator": TaskSpec(memory=2**10, vcores=1)
-})
-```
--->
 
 ### Distributed TensorFlow 101
 
@@ -128,6 +114,24 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
+### Training with multiple workers
+
+Multi-worker clusters require at least a single parameter server aka `"ps"` task
+to store the parameters being optimized. It is generally a good idea to give
+`"ps"` tasks >1 vcores to allow for concurrent I/O processing.
+
+```python
+run_on_yarn(
+    ...,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+        "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=8),
+        "ps": TaskSpec(memory=2 * 2**10, vcores=8),
+        "evaluator": TaskSpec(memory=2**10, vcores=1)
+    }
+)
+```
+
 ### Configuring the Python interpreter and packages
 
 `tf-skein` ships an isolated Python environment to the containers. By default
@@ -147,7 +151,7 @@ run_on_yarn(
 ### Running on GPU@Criteo
 
 By default `run_on_yarn` runs an experiment on CPU-only nodes. To run on GPU
-on the pa4.preprod cluster:
+on the preprod-pa4 cluster:
 
 1. Set the `"queue"` argument to `run_on_yarn` to `"ml-gpu"`.
 2. Set `TaskSpec.flavor` to `TaskFlavor.GPU` for relevant task types. In
@@ -157,7 +161,7 @@ on the pa4.preprod cluster:
 Relevant part of [examples/gpu_example.py](examples/gpu_example.py):
 
 ```python
-from tf_skein import run_on_yarn, TaskFlavor
+from tf_skein import TaskFlavor
 
 run_on_yarn(
     experiment_fn,
@@ -166,6 +170,20 @@ run_on_yarn(
         "evaluator": TaskSpec(memory=2**10, vcores=1)
     },
     queue="ml-gpu"
+)
+```
+
+### Accessing prod-pa4 data from preprod-pa4 and vice-versa
+
+prod- and preprod- clusters are connected into a single ViewFS. In order to
+access prod- data from the containers in preprod- and vice-versa, tf-skein has
+to acquire a delegation token for the corresponding namenode. To make this
+happen list the namenode in the `name_nodes` argument to `run_on_yarn`:
+
+```python
+run_on_yarn(
+    ...,
+    name_nodes=["hdfs://prod-pa4"]
 )
 ```
 
@@ -180,6 +198,7 @@ pip to allow for more flexibility. The downside to that is that
 it is impossible to create an environment for an OS/architecture
 different from the one the library is running on.
 
+<!-- TODO: impossible to submit from Windows with a Linux env. -->
 <!-- TODO: assume Python is installed and use PEX? -->
 
 ### TensorBoard
@@ -187,6 +206,13 @@ different from the one the library is running on.
 `tf-skein` does not currently integrate with TensorBoard, even though
 the only requirement for doing so, `model_dir`, is already exposed
 via `Experiment.config`.
+
+### TaskFlavor<->YARN node label mapping
+
+`tf-skein` only supports two flavors of nodes: CPU-only and GPU-enabled.
+The latter ones are assumed to be labelled with `"gpu"`. Generalizing
+flavors is possible, but also undesirable this point as it will add an
+extra layer of complexity to the `run_on_yarn` implementation.
 
 [miniconda]: https://conda.io/miniconda.html
 [tf-estimators]: https://www.tensorflow.org/guide/estimators

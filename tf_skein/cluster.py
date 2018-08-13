@@ -11,8 +11,12 @@ import skein
 import tensorflow as tf
 
 from ._criteo import get_default_env
-from ._internal import encode_fn, zip_inplace, StaticDefaultDict
-from .env import PyEnv
+from ._internal import (
+    encode_fn,
+    zip_inplace,
+    PyEnv,
+    StaticDefaultDict
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +76,12 @@ def run_on_yarn(
     of instances for each distributed TensorFlow task type. Each
     instance runs ``_dispatch_task`` which roughly does the following.
 
-    1. Find an an available TCP port and communicate the resulting
-       socket address (host/port pair) to other instances using the
-       "init" barrier.
-    2. Reconstruct the cluster spec from the list of socket addresses
-       accumulated by the barrier, and preempt a TensorFlow server.
-    3. Start the training and synchronize on the "stop" barrier.
+    1. Reserve a TCP port and communicate the resulting socket address
+       (host/port pair) to other instances using the "init" barrier.
+    2. Spawn ``train_and_evaluate`` in a separate thread.
+    3. Synchronize the "ps" tasks on the "stop" barrier.
        The barrier compensates for the fact that "ps" tasks never
-       terminate, and therefore should be killed, once all other
+       terminate, and therefore should be killed once all other
        tasks are finished.
 
     Parameters
@@ -203,18 +205,22 @@ def _check_task_specs(task_specs):
 
 def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
     fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
-    pyenv = PyEnv(f"py{python}-{fp}", python, pip_packages + [
+    base_packages = [
         "dill==" + dill.__version__,
         "git+http://github.com/criteo-forks/skein"
-    ])
+    ]
     # TODO: use internal PyPI for CPU-optimized TF.
     return {
-        TaskFlavor.CPU: pyenv.extended_with(
-            pyenv.name + "-cpu",
-            packages=["tensorflow"]),
-        TaskFlavor.GPU: pyenv.extended_with(
-            pyenv.name + "-gpu",
-            packages=["tensorflow-gpu"])
+        TaskFlavor.CPU: PyEnv(
+            f"py{python}-{fp}-cpu",
+            python,
+            pip_packages + base_packages + ["tensorflow"]
+        ),
+        TaskFlavor.GPU: PyEnv(
+            f"py{python}-{fp}-gpu",
+            python,
+            pip_packages + base_packages + ["tensorflow-gpu"]
+        )
     }
 
 

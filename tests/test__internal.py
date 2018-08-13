@@ -1,6 +1,8 @@
 import errno
 import os
 import socket
+import sys
+from subprocess import check_output
 from zipfile import ZipFile, is_zipfile
 
 import pytest
@@ -11,7 +13,8 @@ from tf_skein._internal import (
     decode_fn,
     xset_environ,
     zip_inplace,
-    StaticDefaultDict
+    StaticDefaultDict,
+    PyEnv,
 )
 
 
@@ -83,3 +86,16 @@ def test_static_default_dict():
     assert d["foo"] == 42
     assert d["bar"] == 100500
     assert "bar" not in d
+
+
+def test_env_create(tmpdir):
+    env = PyEnv(
+        name="test",
+        python="{0.major}.{0.minor}".format(sys.version_info),
+        pip_packages=["pycodestyle"])
+    env_path = env.create(root=tmpdir)
+    assert os.path.exists(env_path)
+    assert os.path.isdir(env_path)
+
+    env_python_bin = os.path.join(env_path, "bin", "python")
+    check_output([env_python_bin, "-m", "pycodestyle", "--version"])

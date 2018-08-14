@@ -192,7 +192,7 @@ run_on_yarn(
 Limitations
 -----------
 
-### Using `tf-skein` on Windows/macOS
+### `tf-skein` on Windows/macOS
 
 `tf-skein` uses [Miniconda][miniconda] for creating relocatable
 Python environments. The package management, however, is done by
@@ -209,7 +209,7 @@ different from the one the library is running on.
 the only requirement for doing so, `model_dir`, is already exposed
 via `Experiment.config`.
 
-### TaskFlavor<->YARN node label mapping
+### TaskFlavor ↔ YARN node label mapping
 
 `tf-skein` only supports two flavors of nodes: CPU-only and GPU-enabled.
 The latter ones are assumed to be labelled with `"gpu"`. Generalizing

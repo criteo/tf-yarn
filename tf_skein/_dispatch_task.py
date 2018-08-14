@@ -7,6 +7,7 @@ import sys
 import skein
 import tensorflow as tf
 
+from . import ExperimentFn
 from ._internal import (
     MonitoredThread,
     reserve_sock_addr,
@@ -14,7 +15,6 @@ from ._internal import (
     spec_from_kv,
     xset_environ
 )
-from .cluster import ExperimentFn
 
 
 def main(

@@ -8,6 +8,7 @@ from zipfile import ZipFile, is_zipfile
 import pytest
 
 from tf_skein._internal import (
+    MonitoredThread,
     reserve_sock_addr,
     encode_fn,
     decode_fn,
@@ -18,7 +19,19 @@ from tf_skein._internal import (
 )
 
 
-def test_iter_available_sock_addrs():
+def test_monitored_thread():
+    def fail():
+        raise RuntimeError(42)
+
+    thread = MonitoredThread(target=fail)
+    thread.start()
+    thread.join()
+
+    assert isinstance(thread.exception(), RuntimeError)
+    assert thread.exception().args == (42, )
+
+
+def test_reserve_sock_addr():
     with reserve_sock_addr() as (host, port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         with pytest.raises(OSError) as exc_info:

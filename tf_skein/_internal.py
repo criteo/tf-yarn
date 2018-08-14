@@ -83,7 +83,7 @@ def zip_inplace(path, replace=False):
             root_dir=path)
 
         try:
-            os.rename(created, zip_path)
+            shutil.move(created, zip_path)
         except OSError as e:
             os.remove(created)  # Cleanup on failure.
             raise e from None

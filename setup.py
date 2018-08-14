@@ -5,7 +5,7 @@ setup(
     packages=find_packages(),
     version="0.1.0",
     install_requires=[
-      "tensorflow==1.9",
+      "tensorflow==1.10",
       "dill==0.2.8",
       "skein"
     ],

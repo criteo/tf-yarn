@@ -39,7 +39,7 @@ class MonitoredThread(Thread):
 
 
 @contextmanager
-def reserve_sock_addr() -> typing.ContextManager[typing.Tuple[str, int]]:
+def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
     """Reserve an available TCP port to listen on.
 
     The acquired TCP socket is hold open until the generator is

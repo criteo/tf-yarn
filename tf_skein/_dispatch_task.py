@@ -76,17 +76,15 @@ def main(
         daemon=task_type == "ps")
     thread.start()
 
-    if task_type == "ps":
-        broadcast("stop/" + task)
-    else:
+    if task_type != "ps":
         thread.join()
         tf.logging.info(f"Stopped {task_type}:{task_id}")
-        broadcast("stop/" + task)
 
     # The following (pessimistically) assumes the communication graph
     # between the tasks is complete. This means that each task has to
     # wait for all other tasks before exiting. This might not be true
     # in the presence of ``device_filters``.
+    broadcast("stop/" + task)
     spec_from_kv(client.kv, "stop", num_workers, num_ps)
     if thread.exception() is not None:
         raise thread.exception() from None

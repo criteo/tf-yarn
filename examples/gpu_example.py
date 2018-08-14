@@ -10,6 +10,8 @@ import winequality
 if __name__ == "__main__":
     logging.basicConfig(level="INFO")
 
+    winequality.ensure_dataset_on_hdfs()
+
     run_on_yarn(
         experiment_fn.get,
         task_specs={

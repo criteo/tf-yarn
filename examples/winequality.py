@@ -4,10 +4,11 @@ https://archive.ics.uci.edu/ml/datasets/Wine+Quality
 """
 
 import os
+import pwd
 import typing
+from subprocess import check_output
 
 import tensorflow as tf
-
 
 FEATURES = [
     "fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar",
@@ -18,20 +19,25 @@ LABEL = "quality"
 
 
 def ensure_dataset_on_hdfs():
-    path = f"hdfs://root/user/{os.environ['USER']}/winequality-red.csv"
+    path = get_dataset_hdfs_path()
     if not tf.gfile.Exists(path):
         tf.gfile.Copy(
             os.path.join(os.path.dirname(__file__), "winequality-red.csv"),
             path)
-    return path
+
+
+def get_dataset_hdfs_path():
+    # XXX the fs.defaultFS part is to make the examples work inside
+    #     ``hadoop-test-cluster``.
+    fs = check_output(
+        "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
+    user = pwd.getpwuid(os.getuid()).pw_name
+    return fs + f"/user/{user}/winequality-red.csv"
 
 
 def get_dataset(
-    path: str = None,
     train_fraction: float = 0.7
 ) -> typing.Tuple[tf.data.Dataset, tf.data.Dataset]:
-    path = path or ensure_dataset_on_hdfs()
-
     def split_label(*row):
         return dict(zip(FEATURES, row)), row[-1]
 
@@ -45,7 +51,7 @@ def get_dataset(
         return ~in_training_set(*row)
 
     data = tf.contrib.data.CsvDataset(
-        path,
+        get_dataset_hdfs_path(),
         [tf.float32] * len(FEATURES) + [tf.int32],
         header=True,
         field_delim=";")

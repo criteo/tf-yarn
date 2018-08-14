@@ -1,11 +1,12 @@
 import os
+import pwd
+from subprocess import check_output
 
 import tensorflow as tf
 
 from tf_skein import Experiment
 
 import winequality
-winequality.ensure_dataset_on_hdfs()
 
 
 def get() -> Experiment:
@@ -29,17 +30,23 @@ def get() -> Experiment:
         for name in winequality.FEATURES
     ]
 
+    # XXX the fs.defaultFS part is to make the examples work inside
+    #     ``hadoop-test-cluster``.
+    fs = check_output(
+        "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
+    user = pwd.getpwuid(os.getuid()).pw_name
     config = tf.estimator.RunConfig(
         tf_random_seed=42,
-        model_dir=f"hdfs://root/user/{os.environ['USER']}/dnn_classification")
+        model_dir=f"{fs}/user/{user}/dnn_classification")
     estimator = tf.estimator.DNNClassifier(
-        hidden_units=[20, 20],
+        hidden_units=[10, 10],
         feature_columns=feature_columns, n_classes=10,
         config=config)
     return Experiment(
         estimator,
-        tf.estimator.TrainSpec(train_input_fn, max_steps=1000),
+        tf.estimator.TrainSpec(train_input_fn, max_steps=10),
         tf.estimator.EvalSpec(
             eval_input_fn,
+            steps=10,
             start_delay_secs=0,
             throttle_secs=30))

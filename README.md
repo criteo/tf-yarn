@@ -12,8 +12,10 @@ Make sure you have Python 3.6+ and Maven (required by Skein) available and then
 run:
 
 ```bash
-$ pip install git+https://github.com/criteo-forks/skein#egg=criteo-forks-skein
-$ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
+$ git clone https://gitlab.criteois.com/s.lebedev/tf-skein.git
+$ cd tf-skein
+$ pip install -r requirements.txt
+$ pip install .
 ```
 
 <!-- Uncomment once upstream PRs to skein are merged.

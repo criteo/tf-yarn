@@ -160,7 +160,7 @@ on the preprod-pa4 cluster:
    general, it is a good idea to run compute heavy `"chief"`, `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
 
-Relevant part of [examples/gpu_example.py](examples/gpu_example.py):
+Relevant part of [`examples/gpu_example.py`](examples/gpu_example.py):
 
 ```python
 from tf_skein import TaskFlavor

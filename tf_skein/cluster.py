@@ -183,7 +183,6 @@ def run_on_yarn(
         logger.info(
             f"Application {app_id} finished with status {final_status}")
         # TODO: report per-container status via KV.
-    # TODO: return the result of train_and_evaluate.
 
 
 def _check_task_specs(task_specs):

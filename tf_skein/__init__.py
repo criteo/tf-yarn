@@ -225,12 +225,14 @@ def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
         TaskFlavor.CPU: PyEnv(
             f"py{python}-{fp}-cpu",
             python,
-            pip_packages + base_packages + ["tensorflow"]
+            pip_packages + base_packages + ["tensorflow==" + tf.__version__]
         ),
         TaskFlavor.GPU: PyEnv(
             f"py{python}-{fp}-gpu",
             python,
-            pip_packages + base_packages + ["tensorflow-gpu"]
+            pip_packages + base_packages + [
+                "tensorflow-gpu==" + tf.__version__
+            ]
         )
     }
 

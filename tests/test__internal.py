@@ -10,8 +10,8 @@ import pytest
 from tf_skein._internal import (
     MonitoredThread,
     reserve_sock_addr,
-    encode_fn,
-    decode_fn,
+    dump_fn,
+    load_fn,
     xset_environ,
     zip_inplace,
     StaticDefaultDict,
@@ -55,14 +55,16 @@ def test_xset_environ_failure(monkeypatch):
     assert os.environ["foo"] == "bar"
 
 
-def test_encode_fn_decode_fn():
+def test_encode_fn_decode_fn(tmpdir):
     def g(x):
         return x
 
     def f():
         return g(42)
 
-    assert decode_fn(encode_fn(f))() == f()
+    path = tmpdir.join("f.dill")
+    dump_fn(f, path)
+    assert load_fn(path)() == f()
 
 
 def test_zip_inplace(tmpdir):

@@ -11,7 +11,7 @@ from . import ExperimentFn
 from ._internal import (
     MonitoredThread,
     reserve_sock_addr,
-    decode_fn,
+    load_fn,
     spec_from_kv,
     xset_environ
 )
@@ -96,5 +96,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)
-    parser.add_argument("--experiment-fn", type=decode_fn)
+    parser.add_argument("--experiment-fn", type=load_fn)
     main(**vars(parser.parse_args()))

@@ -53,14 +53,16 @@ def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
         yield (socket.gethostname(), port)
 
 
-def encode_fn(fn) -> str:
-    """Encode a function in a plain-text format."""
-    return b64encode(dill.dumps(fn, recurse=True)).decode()
+def dump_fn(fn, path: str) -> None:
+    """Dump a function to a file in an unspecified binary format."""
+    with open(path, "wb") as file:
+        dill.dump(fn, file, recurse=True)
 
 
-def decode_fn(s: str):
-    """Decode a function encoded by ``encode_fn``."""
-    return dill.loads(b64decode(s))
+def load_fn(path: str):
+    """Load a function from a file produced by ``encode_fn``."""
+    with open(path, "rb") as file:
+        return dill.load(file)
 
 
 def xset_environ(**kwargs):

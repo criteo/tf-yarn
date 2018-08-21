@@ -5,6 +5,7 @@ import time
 import typing
 from enum import Enum
 from sys import version_info as v
+from tempfile import NamedTemporaryFile
 
 import dill
 import skein
@@ -12,7 +13,7 @@ import tensorflow as tf
 
 from ._criteo import get_default_env
 from ._internal import (
-    encode_fn,
+    dump_fn,
     zip_inplace,
     PyEnv,
     StaticDefaultDict
@@ -147,14 +148,11 @@ def run_on_yarn(
     task_specs = StaticDefaultDict(task_specs, default=TaskSpec.NONE)
     _check_task_specs(task_specs)
 
-    task_files = {__package__: zip_inplace(here, replace=True)}
-    for target, source in (files or {}).items():
-        assert target not in task_files
-        task_files[target] = (
-            zip_inplace(source, replace=True)
-            if os.path.isdir(source)
-            else source
-        )
+    task_files = _maybe_zip_task_files(files or {})
+    task_files[__package__] = zip_inplace(here, replace=True)
+    with NamedTemporaryFile(suffix=".dill", delete=False) as file:
+        dump_fn(experiment_fn, file.name)
+        task_files["experiment_fn.dill"] = file.name
 
     task_env = {
         # XXX this is Criteo-specific. Remove once Lake updates the
@@ -173,7 +171,7 @@ def run_on_yarn(
             f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
             f"--num-ps={task_specs['ps'].instances} "
             f"--num-workers={task_specs['worker'].instances} "
-            "--experiment-fn=" + encode_fn(experiment_fn)
+            "--experiment-fn=experiment_fn.dill"
         )
 
         services[task_type] = skein.Service(
@@ -212,6 +210,17 @@ def _check_task_specs(task_specs):
         raise ValueError(
             "task_specs must contain at least a single 'ps' task for "
             "multi-worker training")
+
+
+def _maybe_zip_task_files(files):
+    task_files = {}
+    for target, source in files.items():
+        assert target not in task_files
+        if os.path.isdir(source):
+            source = zip_inplace(source, replace=True)
+
+        task_files[target] = source
+    return task_files
 
 
 def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:

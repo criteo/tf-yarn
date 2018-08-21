@@ -1,15 +1,11 @@
-import logging
 import os
-
-from tf_yarn import run_on_yarn, TaskFlavor, TaskSpec
 
 import dnn_classifier_experiment as experiment_fn
 import winequality
 
+from tf_yarn import run_on_yarn, TaskFlavor, TaskSpec
 
 if __name__ == "__main__":
-    logging.basicConfig(level="INFO")
-
     winequality.ensure_dataset_on_hdfs()
 
     run_on_yarn(

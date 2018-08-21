@@ -2,9 +2,9 @@
 The tests in this module should be ran using the ``hadoop-test-cluster``
 package::
 
-     $ htcluster startup --mount .:tf-skein
+     $ htcluster startup --mount .:tf-yarn
      $ htclsuter login
-     $ cd tf-skein
+     $ cd tf-yarn
      $ pip install -r requirements.txt
      $ pip install pytest
      $ pytest -vv tests/test_cluster.py

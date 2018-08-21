@@ -1,7 +1,7 @@
 import logging
 import os
 
-from tf_skein import run_on_yarn, TaskSpec
+from tf_yarn import run_on_yarn, TaskSpec
 
 import dnn_classifier_experiment as experiment_fn
 import winequality

@@ -7,7 +7,7 @@ from zipfile import ZipFile, is_zipfile
 
 import pytest
 
-from tf_skein._internal import (
+from tf_yarn._internal import (
     MonitoredThread,
     reserve_sock_addr,
     dump_fn,

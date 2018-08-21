@@ -168,7 +168,7 @@ def run_on_yarn(
     for task_type, task_spec in list(task_specs.items()):
         pyenv = pyenvs[task_spec.flavor]
         task_command = (
-            f"{pyenv.name}/bin/python -m tf_skein._dispatch_task "
+            f"{pyenv.name}/bin/python -m tf_yarn._dispatch_task "
             f"--num-ps={task_specs['ps'].instances} "
             f"--num-workers={task_specs['worker'].instances} "
             "--experiment-fn=experiment_fn.dill"

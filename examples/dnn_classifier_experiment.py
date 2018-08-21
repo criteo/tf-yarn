@@ -4,7 +4,7 @@ from subprocess import check_output
 
 import tensorflow as tf
 
-from tf_skein import Experiment
+from tf_yarn import Experiment
 
 import winequality
 

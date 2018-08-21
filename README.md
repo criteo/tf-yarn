@@ -1,7 +1,7 @@
-tf-skeinᵝ
+tf-yarnᵝ
 =========
 
-<img src="https://gitlab.criteois.com/s.lebedev/tf-skein/raw/master/skein.png"
+<img src="https://gitlab.criteois.com/s.lebedev/tf-yarn/raw/master/skein.png"
     width="40%" />
 
 
@@ -12,8 +12,8 @@ Make sure you have Python 3.6+ and Maven (required by Skein) available and then
 run:
 
 ```bash
-$ git clone https://gitlab.criteois.com/s.lebedev/tf-skein.git
-$ cd tf-skein
+$ git clone https://gitlab.criteois.com/s.lebedev/tf-yarn.git
+$ cd tf-yarn
 $ pip install -r requirements.txt
 $ pip install .
 ```
@@ -21,7 +21,7 @@ $ pip install .
 <!-- Uncomment once upstream PRs to skein are merged.
 
 ```bash
-$ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
+$ pip install git+https://gitlab.criteois.com/s.lebedev/tf-yarn.git
 ```
 -->
 
@@ -29,7 +29,7 @@ $ pip install git+https://gitlab.criteois.com/s.lebedev/tf-skein.git
 Quickstart
 ----------
 
-The core abstraction in `tf-skein` is called an `ExperimentFn`. It is
+The core abstraction in `tf-yarn` is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
@@ -38,7 +38,7 @@ Here is a stripped down `experiment_fn` from
 it might look:
 
 ``` python
-from tf_skein import Experiment
+from tf_yarn import Experiment
 
 def experiment_fn():
     # ...
@@ -57,7 +57,7 @@ multi-node training. Therefore, it can be scheduled using just the `"chief"` and
 `"evaluator"` tasks. Each task will be executed in its own container.
 
 ```python
-from tf_skein import run_on_yarn, TaskSpec
+from tf_yarn import run_on_yarn, TaskSpec
 
 run_on_yarn(
     experiment_fn,
@@ -136,8 +136,8 @@ run_on_yarn(
 
 ### Configuring the Python interpreter and packages
 
-`tf-skein` ships an isolated Python environment to the containers. By default
-it comes with a Python interpreter, TensorFlow, and a few of the `tf-skein`
+`tf-yarn` ships an isolated Python environment to the containers. By default
+it comes with a Python interpreter, TensorFlow, and a few of the `tf-yarn`
 dependencies (see `requirements.txt` for the full list).
 
 Additional pip-installable packages can be added via the `pip_packages` argument
@@ -163,7 +163,7 @@ on the preprod-pa4 cluster:
 Relevant part of [`examples/gpu_example.py`](examples/gpu_example.py):
 
 ```python
-from tf_skein import TaskFlavor
+from tf_yarn import TaskFlavor
 
 run_on_yarn(
     experiment_fn,
@@ -178,7 +178,7 @@ run_on_yarn(
 ### Accessing prod-pa4 data from preprod-pa4 and vice-versa
 
 prod- and preprod- clusters are connected into a single ViewFS. In order to
-access prod- data from the containers in preprod- and vice-versa, tf-skein has
+access prod- data from the containers in preprod- and vice-versa, tf-yarn has
 to acquire a delegation token for the corresponding namenode. To make this
 happen list the namenode in the `name_nodes` argument to `run_on_yarn`:
 
@@ -192,9 +192,9 @@ run_on_yarn(
 Limitations
 -----------
 
-### `tf-skein` on Windows/macOS
+### `tf-yarn` on Windows/macOS
 
-`tf-skein` uses [Miniconda][miniconda] for creating relocatable
+`tf-yarn` uses [Miniconda][miniconda] for creating relocatable
 Python environments. The package management, however, is done by
 pip to allow for more flexibility. The downside to that is that
 it is impossible to create an environment for an OS/architecture
@@ -205,13 +205,13 @@ different from the one the library is running on.
 
 ### TensorBoard
 
-`tf-skein` does not currently integrate with TensorBoard, even though
+`tf-yarn` does not currently integrate with TensorBoard, even though
 the only requirement for doing so, `model_dir`, is already exposed
 via `Experiment.config`.
 
 ### TaskFlavor ↔ YARN node label mapping
 
-`tf-skein` only supports two flavors of nodes: CPU-only and GPU-enabled.
+`tf-yarn` only supports two flavors of nodes: CPU-only and GPU-enabled.
 The latter ones are assumed to be labelled with `"gpu"`. Generalizing
 flavors is possible, but also undesirable this point as it will add an
 extra layer of complexity to the `run_on_yarn` implementation.

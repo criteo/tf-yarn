@@ -74,7 +74,6 @@ def run_on_yarn(
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = None,
     queue: str = "default",
-    max_restarts: int = 0,
     name_nodes: typing.List[str] = None
 ) -> None:
     """Run an experiment on YARN.
@@ -134,12 +133,6 @@ def run_on_yarn(
     queue
         YARN queue to use.
 
-    max_restarts
-        Number of times to retry a failed task. The cap is applied
-        independently to each task type, that is ``max_restarts`` equal
-        to 1 allows at most one failed task of each type. Set to -1 for
-        unbounded retries.
-
     name_nodes
         A list of namenode URIs to acquire delegation tokens for.
     """
@@ -177,7 +170,7 @@ def run_on_yarn(
         services[task_type] = skein.Service(
             [task_command],
             skein.Resources(task_spec.memory, task_spec.vcores),
-            max_restarts=max_restarts,
+            max_restarts=0,
             instances=task_spec.instances,
             node_label=task_spec.flavor.value,
             files={**task_files, pyenv.name: zip_inplace(pyenv.create())},

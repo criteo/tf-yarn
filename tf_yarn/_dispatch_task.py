@@ -30,12 +30,14 @@ def main(
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
 
+    # XXX this assumes no service restarts, because after a restart
+    #     the task_id might exceed ``num_workers`` or ``num_ps``.
     task = os.environ["SKEIN_CONTAINER_ID"]
     task_type, task_id = task.split("_", 1)
     task_id = int(task_id)
     client = skein.ApplicationClient.from_current()
 
-    # There is a race condition between acquiring a TPC port for the
+    # There is a race condition between acquiring a TCP port for
     # ``tf.train.Server``, and calling ``train_and_evaluate``.
     # There is no TensorFlow API to get rid of the race condition
     # completely, but the window of opportunity can be reduced by

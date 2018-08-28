@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import typing
+from contextlib import suppress
 from enum import Enum
 from sys import version_info as v
 from tempfile import NamedTemporaryFile
@@ -10,6 +11,8 @@ from tempfile import NamedTemporaryFile
 import dill
 import skein
 import tensorflow as tf
+from skein.exceptions import SkeinError
+from skein.model import FinalStatus, ApplicationReport
 
 from ._criteo import get_default_env
 from ._internal import (
@@ -183,9 +186,7 @@ def run_on_yarn(
     with skein.Client() as client:
         logger.info(f"Submitting experiment to {queue} queue")
         app_id = client.submit(spec)
-        final_status = _await_termination(client, app_id)
-        logger.info(
-            f"Application {app_id} finished with status {final_status}")
+        _await_termination(client, app_id)
         # TODO: report per-container status via KV.
 
 
@@ -239,24 +240,45 @@ def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
     }
 
 
+def _format_report(report: ApplicationReport) -> str:
+    attrs = [
+        "queue",
+        "start_time",
+        "finish_time",
+        "final_status",
+        "tracking_url",
+        "user"
+    ]
+    return os.linesep + os.linesep.join(
+        f"{attr:>16}: {getattr(report, attr) or ''}" for attr in attrs)
+
+
 def _await_termination(
     client: skein.Client,
     app_id: str,
     poll_every_secs: int = 10
-) -> skein.core.FinalStatus:
+):
     # Ensure SIGINT is not masked to enable kill on C-c.
     import signal
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
     try:
+        state = "NEW"
         while True:
             report = client.application_report(app_id)
-            final_status = report.final_status
-            # TODO: log status on each tick?
-            if final_status != "undefined":
-                return final_status
-
+            logger.info(
+                f"Application report for {app_id} (state: {report.state})")
+            if state != report.state:
+                logger.info(_format_report(report))
+                state = report.state
+            if report.final_status != "undefined":
+                break
             time.sleep(poll_every_secs)
     except (KeyboardInterrupt, SystemExit):
-        client.kill_application(app_id)
-        return skein.core.FinalStatus.KILLED
+        with suppress(SkeinError):
+            client.kill_application(app_id)
+        logger.error("Application killed on user request")
+    except Exception:
+        with suppress(SkeinError):
+            client.connect(app_id).shutdown(FinalStatus.FAILED)
+        raise

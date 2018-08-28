@@ -93,7 +93,7 @@ def main(
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level="INFO")
+    tf.logging.set_verbosity("INFO")
 
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)

@@ -12,7 +12,7 @@ from ._internal import (
     MonitoredThread,
     reserve_sock_addr,
     load_fn,
-    spec_from_kv,
+    aggregate_from_kv,
     xset_environ
 )
 
@@ -45,7 +45,7 @@ def main(
     # See https://github.com/tensorflow/tensorflow/issues/21492
     with reserve_sock_addr() as (host, port):
         broadcast("init/" + task, f"{host}:{port}")
-        spec = spec_from_kv(client.kv, "init", num_workers, num_ps)
+        spec = aggregate_from_kv(client.kv, "init", num_workers, num_ps)
 
         # Note that "evaluator" does not need a cluster, and "ps" (!)
         # surprisingly does not follow the same code path as the rest
@@ -80,16 +80,16 @@ def main(
 
     if task_type != "ps":
         thread.join()
-        tf.logging.info(f"Stopped {task_type}:{task_id}")
+        tf.logging.info(f"{task_type}:{task_id} {thread.state}")
 
     # The following (pessimistically) assumes the communication graph
     # between the tasks is complete. This means that each task has to
     # wait for all other tasks before exiting. This might not be true
     # in the presence of ``device_filters``.
     broadcast("stop/" + task)
-    spec_from_kv(client.kv, "stop", num_workers, num_ps)
-    if thread.exception() is not None:
-        raise thread.exception() from None
+    aggregate_from_kv(client.kv, "stop", num_workers, num_ps)
+    if thread.exception is not None:
+        raise thread.exception from None
 
 
 if __name__ == "__main__":

@@ -27,6 +27,13 @@ class MonitoredThread(Thread):
 
         self._exc = None
 
+    @property
+    def state(self):
+        if self.is_alive():
+            return "RUNNING"
+        return "FAILED" if self.exception is not None else "SUCCEEDED"
+
+    @property
     def exception(self) -> typing.Optional[Exception]:
         return self._exc
 
@@ -91,12 +98,14 @@ def zip_inplace(path, replace=False):
     return zip_path
 
 
-def spec_from_kv(
+def aggregate_from_kv(
     kv,
     stage: str,
     num_workers: int,
     num_ps: int
 ) -> typing.Dict[str, list]:
+    """Aggregate values over a TensorFlow cluster for a given stage."""
+
     def get(target):
         return kv.wait(stage + "/" + target).decode()
 

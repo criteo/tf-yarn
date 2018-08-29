@@ -24,7 +24,7 @@ from ._internal import (
 
 __all__ = [
     "Experiment",
-    "run_on_yarn", "TaskFlavor", "TaskSpec",
+    "run_on_yarn", "RunFailed", "TaskFlavor", "TaskSpec",
 ]
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,10 @@ class TaskSpec(typing.NamedTuple):
 
 #: A "dummy" ``TaskSpec``.
 TaskSpec.NONE = TaskSpec(0, 0, 0)
+
+
+class RunFailed(Exception):
+    """``run_on_yarn`` failed."""
 
 
 def run_on_yarn(
@@ -138,6 +142,11 @@ def run_on_yarn(
 
     name_nodes
         A list of namenode URIs to acquire delegation tokens for.
+
+    Raises
+    ------
+    RunFailed
+        If the final status of the YARN application is ``"FAILED"``.
     """
     # TODO: compute num_ps from the model size and the number of
     # executors. See https://stackoverflow.com/a/46080567/262432.
@@ -282,3 +291,6 @@ def _await_termination(
         with suppress(SkeinError):
             client.connect(app_id).shutdown(FinalStatus.FAILED)
         raise
+    else:
+        if report.final_status == "failed":
+            raise RunFailed()

@@ -98,29 +98,6 @@ def zip_inplace(path, replace=False):
     return zip_path
 
 
-def aggregate_from_kv(
-    kv,
-    stage: str,
-    num_workers: int,
-    num_ps: int
-) -> typing.Dict[str, list]:
-    """Aggregate values over a TensorFlow cluster for a given stage."""
-
-    def get(target):
-        return kv.wait(stage + "/" + target).decode()
-
-    spec = {
-        "chief": [get("chief_0")]
-    }
-
-    for idx in range(num_ps):
-        spec.setdefault("ps", []).append(get(f"ps_{idx}"))
-
-    for idx in range(num_workers):
-        spec.setdefault("worker", []).append(get(f"worker_{idx}"))
-
-    return spec
-
 
 class StaticDefaultDict(dict):
     """A ``dict`` with a static default value.

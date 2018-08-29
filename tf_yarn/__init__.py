@@ -3,7 +3,7 @@ import logging
 import os
 import time
 import typing
-from contextlib import suppress
+from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v
 from tempfile import NamedTemporaryFile
@@ -171,9 +171,8 @@ def run_on_yarn(
     pyenvs = _make_pyenvs(python, pip_packages or [])
     services = {}
     for task_type, task_spec in list(task_specs.items()):
-        pyenv = pyenvs[task_spec.flavor]
         task_command = (
-            f"{pyenv.name}/bin/python -m tf_yarn._dispatch_task "
+            f"pyenv/bin/python -m tf_yarn._dispatch_task "
             f"--num-ps={task_specs['ps'].instances} "
             f"--num-workers={task_specs['worker'].instances} "
             "--experiment-fn=experiment_fn.dill"
@@ -185,17 +184,15 @@ def run_on_yarn(
             max_restarts=0,
             instances=task_spec.instances,
             node_label=task_spec.flavor.value,
-            files={**task_files, pyenv.name: zip_inplace(pyenv.create())},
+            files={
+                **task_files,
+                "pyenv": zip_inplace(pyenvs[task_spec.flavor].create())
+            },
             env=task_env)
 
-    spec = skein.ApplicationSpec(
-        services,
-        queue=queue,
-        name_nodes=name_nodes)
+    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=name_nodes)
     with skein.Client() as client:
-        logger.info(f"Submitting experiment to {queue} queue")
-        app_id = client.submit(spec)
-        _await_termination(client, app_id)
+        _submit_and_await_termination(client, spec)
         # TODO: report per-container status via KV.
 
 
@@ -249,7 +246,7 @@ def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
     }
 
 
-def _format_report(report: ApplicationReport) -> str:
+def _format_app_report(report: ApplicationReport) -> str:
     attrs = [
         "queue",
         "start_time",
@@ -262,27 +259,14 @@ def _format_report(report: ApplicationReport) -> str:
         f"{attr:>16}: {getattr(report, attr) or ''}" for attr in attrs)
 
 
-def _await_termination(
-    client: skein.Client,
-    app_id: str,
-    poll_every_secs: int = 10
-):
+@contextmanager
+def _shutdown_on_exception(client: skein.Client, app_id: str):
     # Ensure SIGINT is not masked to enable kill on C-c.
     import signal
     signal.signal(signal.SIGINT, signal.default_int_handler)
 
     try:
-        state = "NEW"
-        while True:
-            report = client.application_report(app_id)
-            logger.info(
-                f"Application report for {app_id} (state: {report.state})")
-            if state != report.state:
-                logger.info(_format_report(report))
-                state = report.state
-            if report.final_status != "undefined":
-                break
-            time.sleep(poll_every_secs)
+        yield
     except (KeyboardInterrupt, SystemExit):
         with suppress(SkeinError):
             client.kill_application(app_id)
@@ -290,7 +274,30 @@ def _await_termination(
     except Exception:
         with suppress(SkeinError):
             client.connect(app_id).shutdown(FinalStatus.FAILED)
+        logger.exception("Application shutdown due to an exception")
         raise
-    else:
-        if report.final_status == "failed":
-            raise RunFailed()
+
+
+def _submit_and_await_termination(
+    client: skein.Client,
+    spec: skein.ApplicationSpec,
+    poll_every_secs: int = 10
+):
+    app_id = client.submit(spec)
+    with _shutdown_on_exception(client, app_id):
+        state = None
+        while True:
+            report = client.application_report(app_id)
+            logger.info(
+                f"Application report for {app_id} (state: {report.state})")
+            if state != report.state:
+                logger.info(_format_app_report(report))
+
+            if report.final_status != "undefined":
+                if report.final_status == "failed":
+                    raise RunFailed
+                else:
+                    break
+
+            time.sleep(poll_every_secs)
+            state = report.state

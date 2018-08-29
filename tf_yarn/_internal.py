@@ -98,7 +98,6 @@ def zip_inplace(path, replace=False):
     return zip_path
 
 
-
 class StaticDefaultDict(dict):
     """A ``dict`` with a static default value.
 

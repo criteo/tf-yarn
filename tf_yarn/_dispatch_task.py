@@ -85,12 +85,12 @@ def main(
         name=f"{task_type}:{task_id}",
         target=tf.estimator.train_and_evaluate,
         args=tuple(experiment),
-        # "ps" tasks do not terminate by themselves. See
-        # https://github.com/tensorflow/tensorflow/issues/4713
-        daemon=task_type == "ps")
+        daemon=True)
     thread.start()
-
     start_event()
+
+    # "ps" tasks do not terminate by themselves. See
+    # https://github.com/tensorflow/tensorflow/issues/4713.
     if task_type != "ps":
         thread.join()
         tf.logging.info(f"{task_type}:{task_id} {thread.state}")

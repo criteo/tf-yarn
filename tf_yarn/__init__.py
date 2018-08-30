@@ -7,6 +7,7 @@ from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v
 from tempfile import NamedTemporaryFile
+from threading import Thread
 
 import dill
 import skein
@@ -17,6 +18,7 @@ from skein.model import FinalStatus, ApplicationReport
 from ._criteo import get_default_env
 from ._internal import (
     dump_fn,
+    iter_tasks,
     zip_inplace,
     PyEnv,
     StaticDefaultDict
@@ -190,10 +192,13 @@ def run_on_yarn(
             },
             env=task_env)
 
+    tasks = list(iter_tasks(
+        task_specs["worker"].instances,
+        task_specs["ps"].instances))
+    tasks.append("evaluator:0")  # Not part of the cluster.
     spec = skein.ApplicationSpec(services, queue=queue, name_nodes=name_nodes)
     with skein.Client() as client:
-        _submit_and_await_termination(client, spec)
-        # TODO: report per-container status via KV.
+        _submit_and_await_termination(client, spec, tasks)
 
 
 def _check_task_specs(task_specs):
@@ -246,6 +251,56 @@ def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
     }
 
 
+@contextmanager
+def _shutdown_on_exception(app: skein.ApplicationClient):
+    # Ensure SIGINT is not masked to enable kill on C-c.
+    import signal
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+    try:
+        yield
+    except (KeyboardInterrupt, SystemExit):
+        with suppress(SkeinError):
+            app.shutdown(FinalStatus.KILLED)
+        logger.error("Application killed on user request")
+    except Exception:
+        with suppress(SkeinError):
+            app.shutdown(FinalStatus.FAILED)
+        logger.exception("Application shutdown due to an exception")
+        raise
+
+
+def _submit_and_await_termination(
+    client: skein.Client,
+    spec: skein.ApplicationSpec,
+    tasks: typing.List[str],
+    poll_every_secs: int = 10
+):
+    app = client.submit_and_connect(spec)
+    events = {task: {} for task in tasks}
+    event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
+    event_listener.start()
+    with _shutdown_on_exception(app):
+        state = None
+        while True:
+            report = client.application_report(app.id)
+            logger.info(
+                f"Application report for {app.id} (state: {report.state})")
+            if state != report.state:
+                logger.info(_format_app_report(report))
+
+            if report.final_status != "undefined":
+                event_listener.join()
+                logger.info(_format_run_summary(events))
+                if report.final_status == "failed":
+                    raise RunFailed
+                else:
+                    break
+
+            time.sleep(poll_every_secs)
+            state = report.state
+
+
 def _format_app_report(report: ApplicationReport) -> str:
     attrs = [
         "queue",
@@ -259,45 +314,48 @@ def _format_app_report(report: ApplicationReport) -> str:
         f"{attr:>16}: {getattr(report, attr) or ''}" for attr in attrs)
 
 
-@contextmanager
-def _shutdown_on_exception(client: skein.Client, app_id: str):
-    # Ensure SIGINT is not masked to enable kill on C-c.
-    import signal
-    signal.signal(signal.SIGINT, signal.default_int_handler)
+def _aggregate_events(
+    kv: skein.kv.KeyValueStore,
+    events: typing.Dict[str, typing.Dict[str, str]]
+) -> None:
+    """
+    Aggregate events from all dispatched tasks.
 
-    try:
-        yield
-    except (KeyboardInterrupt, SystemExit):
-        with suppress(SkeinError):
-            client.kill_application(app_id)
-        logger.error("Application killed on user request")
-    except Exception:
-        with suppress(SkeinError):
-            client.connect(app_id).shutdown(FinalStatus.FAILED)
-        logger.exception("Application shutdown due to an exception")
-        raise
+    The lifecycle of a task consists of three stages:
+    * init which carries the reserved socket address,
+    * start with no payload, and
+    * stop with an optional formatted exception.
+    """
+    # ``ConnectionError`` indicates that the app has finished and
+    # the AM is down.
+    queue = kv.events(event_type="PUT")
+    with suppress(skein.exceptions.ConnectionError), queue:
+        for event in queue:
+            task, stage = event.key.rsplit("/", 1)
+            events[task][stage] = event.result.value.decode()
 
 
-def _submit_and_await_termination(
-    client: skein.Client,
-    spec: skein.ApplicationSpec,
-    poll_every_secs: int = 10
-):
-    app_id = client.submit(spec)
-    with _shutdown_on_exception(client, app_id):
-        state = None
-        while True:
-            report = client.application_report(app_id)
-            logger.info(
-                f"Application report for {app_id} (state: {report.state})")
-            if state != report.state:
-                logger.info(_format_app_report(report))
+def _format_run_summary(
+    events: typing.Dict[str, typing.Dict[str, str]]
+) -> str:
+    header = []
+    details = []
+    for task, stages in sorted(events.items()):
+        if "stop" in stages:
+            status = "FAILED" if stages["stop"] else "SUCCEEDED"
+        elif stages:
+            status = "KILLED"
+        else:
+            # No events -- container was never started.
+            status = "REQUESTED"
 
-            if report.final_status != "undefined":
-                if report.final_status == "failed":
-                    raise RunFailed
-                else:
-                    break
+        sock_addr = stages.get("init", "")
+        exception = stages.get("stop", "")
+        header.append(f"{task:>16}  {sock_addr}  {status}")
+        if exception:
+            details.append(f"Exception in task {task}:")
+            details.append(exception)
+    return (os.linesep + os.linesep.join(header)
+            + os.linesep * (1 + bool(details))
+            + os.linesep.join(details))
 
-            time.sleep(poll_every_secs)
-            state = report.state

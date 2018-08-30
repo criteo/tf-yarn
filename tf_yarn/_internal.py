@@ -59,6 +59,16 @@ def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
         yield (socket.gethostname(), port)
 
 
+def iter_tasks(num_workers, num_ps) -> typing.Iterable[str]:
+    """Iterate the tasks in a TensorFlow cluster.
+
+    Note that ``"evaluator"`` is not part of the cluster.
+    """
+    yield "chief:0"
+    yield from (f"worker:{task_id}" for task_id in range(num_workers))
+    yield from (f"ps:{task_id}" for task_id in range(num_ps))
+
+
 def dump_fn(fn, path: str) -> None:
     """Dump a function to a file in an unspecified binary format."""
     with open(path, "wb") as file:

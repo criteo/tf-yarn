@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import traceback
 import typing
 
 import skein
@@ -10,10 +11,11 @@ import tensorflow as tf
 
 from . import ExperimentFn
 from ._internal import (
-    MonitoredThread,
-    reserve_sock_addr,
+    iter_tasks,
     load_fn,
-    xset_environ
+    xset_environ,
+    reserve_sock_addr,
+    MonitoredThread
 )
 
 
@@ -21,6 +23,15 @@ def main(
     experiment_fn: ExperimentFn,
     all_tasks: typing.List[str]
 ) -> None:
+    def init_event(sock_addr: str) -> None:
+        broadcast(client, f"{task}/init", sock_addr)
+
+    def start_event() -> None:
+        broadcast(client, f"{task}/start")
+
+    def stop_event(e: typing.Optional[Exception]) -> None:
+        broadcast(client, f"{task}/stop", maybe_format_exception(e))
+
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
@@ -39,7 +50,7 @@ def main(
     # preempting the server.
     # See https://github.com/tensorflow/tensorflow/issues/21492
     with reserve_sock_addr() as (host, port):
-        broadcast(client, "init/" + task, f"{host}:{port}")
+        init_event(f"{host}:{port}")
         spec = aggregate_spec(client, all_tasks)
 
         # Note that "evaluator" does not need a cluster, and "ps" (!)
@@ -51,7 +62,13 @@ def main(
             "environment": "google" if fake_google_env else "",
             "task": {"type": task_type, "index": task_id},
         }))
-        experiment = experiment_fn()
+
+        try:
+            experiment = experiment_fn()
+        except Exception as e:
+            stop_event(e)
+            raise
+
         config = experiment.config
         assert config.task_type == task_type and config.task_id == task_id
 
@@ -73,6 +90,7 @@ def main(
         daemon=task_type == "ps")
     thread.start()
 
+    start_event()
     if task_type != "ps":
         thread.join()
         tf.logging.info(f"{task_type}:{task_id} {thread.state}")
@@ -81,7 +99,7 @@ def main(
     # wait for contains all tasks in the cluster, or the ones
     # matching ``device_filters`` if set. The implementation assumes
     # that ``device_filers`` are symmetric.
-    broadcast(client, "stop/" + task)
+    stop_event(thread.exception)
     wait_for_connected_tasks(
         client,
         all_tasks,
@@ -94,7 +112,7 @@ def main(
 def aggregate_spec(client, all_tasks):
     spec = {}
     for task in all_tasks:
-        sock_addr = wait(client, "init/" + task)
+        sock_addr = wait(client, f"{task}/init")
         task_type, _task_id = task.split(":", 1)
         spec.setdefault(task_type, []).append(sock_addr)
     return spec
@@ -103,7 +121,13 @@ def aggregate_spec(client, all_tasks):
 def wait_for_connected_tasks(client, all_tasks, device_filters):
     for task in all_tasks:
         if matches_device_filters(task, device_filters):
-            wait(client, "stop/" + task)
+            wait(client, f"{task}/stop")
+
+
+def maybe_format_exception(e: typing.Optional[Exception]) -> str:
+    if e is None:
+        return ""
+    return "".join(traceback.format_exception(type(e), e, e.__traceback__))
 
 
 def broadcast(
@@ -130,12 +154,6 @@ def matches_device_filters(task: str, device_filters: typing.List[str]):
                 (not filter_id or filter_id == task_id)):
             return True
     return not device_filters
-
-
-def iter_tasks(num_workers, num_ps):
-    yield "chief:0"
-    yield from (f"worker:{task_id}" for task_id in range(num_workers))
-    yield from (f"ps:{task_id}" for task_id in range(num_ps))
 
 
 if __name__ == "__main__":

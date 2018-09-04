@@ -1,3 +1,17 @@
+# Copyright 2018 Criteo
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import hashlib
 import logging
 import os
@@ -26,7 +40,7 @@ from ._internal import (
 
 __all__ = [
     "Experiment",
-    "run_on_yarn", "RunFailed", "TaskFlavor", "TaskSpec",
+    "run_on_yarn", "RunFailed", "NodeLabel", "TaskSpec",
 ]
 
 logger = logging.getLogger(__name__)
@@ -48,12 +62,11 @@ class Experiment(typing.NamedTuple):
 ExperimentFn = typing.Callable[[], Experiment]
 
 
-class TaskFlavor(Enum):
-    """The flavor values are YARN node label expressions.
+class NodeLabel(Enum):
+    """YARN node label expression.
 
-    That is, a task with a CPU flavor can be scheduled on any node,
-    whereas a task with a GPU flavor, only on the one labeled with
-    ``"gpu"``.
+    A task with a CPU label could be scheduled on any node, whereas
+    a task with a GPU label, only on the one labeled with ``"gpu"``.
     """
     CPU = ""     # Default.
     GPU = "gpu"
@@ -63,7 +76,7 @@ class TaskSpec(typing.NamedTuple):
     memory: int
     vcores: int
     instances: int = 1
-    flavor: TaskFlavor = TaskFlavor.CPU
+    label: NodeLabel = NodeLabel.CPU
 
 
 #: A "dummy" ``TaskSpec``.
@@ -83,7 +96,7 @@ def run_on_yarn(
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = None,
     queue: str = "default",
-    name_nodes: typing.List[str] = None
+    file_systems: typing.List[str] = None
 ) -> None:
     """Run an experiment on YARN.
 
@@ -142,8 +155,9 @@ def run_on_yarn(
     queue
         YARN queue to use.
 
-    name_nodes
-        A list of namenode URIs to acquire delegation tokens for.
+    file_systems
+        A list of namenode URIs to acquire delegation tokens for
+        in addition to ``fs.defaultFS``.
 
     Raises
     ------
@@ -185,10 +199,10 @@ def run_on_yarn(
             skein.Resources(task_spec.memory, task_spec.vcores),
             max_restarts=0,
             instances=task_spec.instances,
-            node_label=task_spec.flavor.value,
+            node_label=task_spec.label.value,
             files={
                 **task_files,
-                "pyenv": zip_inplace(pyenvs[task_spec.flavor].create())
+                "pyenv": zip_inplace(pyenvs[task_spec.label].create())
             },
             env=task_env)
 
@@ -196,7 +210,7 @@ def run_on_yarn(
         task_specs["worker"].instances,
         task_specs["ps"].instances))
     tasks.append("evaluator:0")  # Not part of the cluster.
-    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=name_nodes)
+    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=file_systems)
     with skein.Client() as client:
         _submit_and_await_termination(client, spec, tasks)
 
@@ -228,7 +242,7 @@ def _maybe_zip_task_files(files):
     return task_files
 
 
-def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
+def _make_pyenvs(python, pip_packages) -> typing.Dict[NodeLabel, PyEnv]:
     fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
     base_packages = [
         "dill==" + dill.__version__,
@@ -236,12 +250,12 @@ def _make_pyenvs(python, pip_packages) -> typing.Dict[TaskFlavor, PyEnv]:
     ]
     # TODO: use internal PyPI for CPU-optimized TF.
     return {
-        TaskFlavor.CPU: PyEnv(
+        NodeLabel.CPU: PyEnv(
             f"py{python}-{fp}-cpu",
             python,
             pip_packages + base_packages + ["tensorflow==" + tf.__version__]
         ),
-        TaskFlavor.GPU: PyEnv(
+        NodeLabel.GPU: PyEnv(
             f"py{python}-{fp}-gpu",
             python,
             pip_packages + base_packages + [

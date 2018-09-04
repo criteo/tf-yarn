@@ -1,15 +1,17 @@
+import logging
 import os
 import pwd
+import sys
+from functools import partial
 from subprocess import check_output
 
 import tensorflow as tf
 
-from tf_yarn import Experiment
-
 import winequality
+from tf_yarn import Experiment, run_on_yarn, TaskSpec
 
 
-def get(dataset_path: str) -> Experiment:
+def experiment_fn(dataset_path: str) -> Experiment:
     train_data, test_data = winequality.get_train_eval_datasets(dataset_path)
 
     def train_input_fn():
@@ -25,8 +27,6 @@ def get(dataset_path: str) -> Experiment:
                 .make_one_shot_iterator()
                 .get_next())
 
-    # XXX the fs.defaultFS part is to make the examples work inside
-    #     ``hadoop-test-cluster``.
     fs = check_output(
         "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
     user = pwd.getpwuid(os.getuid()).pw_name
@@ -45,3 +45,23 @@ def get(dataset_path: str) -> Experiment:
             steps=10,
             start_delay_secs=0,
             throttle_secs=30))
+
+
+if __name__ == "__main__":
+    try:
+        [dataset_path] = sys.argv[1:]
+    except ValueError:
+        sys.exit(winequality.__doc__)
+
+    logging.basicConfig(level="INFO")
+
+    run_on_yarn(
+        partial(experiment_fn, dataset_path),
+        task_specs={
+            "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
+            "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
+        },
+        files={
+            os.path.basename(winequality.__file__): winequality.__file__,
+        }
+    )

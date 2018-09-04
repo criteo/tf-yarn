@@ -1,12 +1,22 @@
-"""Wine quality dataset from UCI ML repository.
+"""\
+To run the example
 
-https://archive.ics.uci.edu/ml/datasets/Wine+Quality
+1. Download winequality-*.csv from the Wine Quality dataset at UCI
+   ML repository
+   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
+2. Upload it to HDFS.
+3. Pass a full URI to either of the CSV files to the example.
+
+For instance, if you prefer red wine::
+
+    %example.py% hdfs://path/to/winequality-red.csv
+
+You can check the configured ``fs.defaultFS`` value by running::
+
+    $ hdfs getconf -confKey fs.defaultFS
 """
 
-import os
-import pwd
 import typing
-from subprocess import check_output
 
 import tensorflow as tf
 
@@ -18,24 +28,8 @@ FEATURES = [
 LABEL = "quality"
 
 
-def ensure_dataset_on_hdfs():
-    path = get_dataset_hdfs_path()
-    if not tf.gfile.Exists(path):
-        tf.gfile.Copy(
-            os.path.join(os.path.dirname(__file__), "winequality-red.csv"),
-            path)
-
-
-def get_dataset_hdfs_path():
-    # XXX the fs.defaultFS part is to make the examples work inside
-    #     ``hadoop-test-cluster``.
-    fs = check_output(
-        "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
-    user = pwd.getpwuid(os.getuid()).pw_name
-    return fs + f"/user/{user}/winequality-red.csv"
-
-
-def get_dataset(
+def get_train_eval_datasets(
+    path: str,
     train_fraction: float = 0.7
 ) -> typing.Tuple[tf.data.Dataset, tf.data.Dataset]:
     def split_label(*row):
@@ -51,7 +45,7 @@ def get_dataset(
         return ~in_training_set(*row)
 
     data = tf.contrib.data.CsvDataset(
-        get_dataset_hdfs_path(),
+        path,
         [tf.float32] * len(FEATURES) + [tf.int32],
         header=True,
         field_delim=";")
@@ -59,3 +53,11 @@ def get_dataset(
     train = data.filter(in_training_set).map(split_label).cache()
     test = data.filter(in_test_set).map(split_label).cache()
     return train, test
+
+
+def get_feature_columns():
+    return [tf.feature_column.numeric_column(name) for name in FEATURES]
+
+
+def get_n_classes():
+    return 10

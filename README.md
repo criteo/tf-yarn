@@ -1,30 +1,25 @@
 tf-yarnᵝ
-=========
+========
 
-<img src="https://gitlab.criteois.com/s.lebedev/tf-yarn/raw/master/skein.png"
-    width="40%" />
-
+![tf-yarn](skein.png)
 
 Installation
 ------------
 
-Make sure you have Python 3.6+ and Maven (required by Skein) available and then
-run:
+At the moment `tf-yarn` depends on a [custom version][skein-criteo-forks]
+of `skein`. This version includes the PRs submitted but not yet been merged
+into upstream. To install it and the rest of the dependencies run
 
 ```bash
-$ git clone https://gitlab.criteois.com/s.lebedev/tf-yarn.git
+$ git clone https://github.com/criteo/tf-yarn
 $ cd tf-yarn
 $ pip install -r requirements.txt
 $ pip install .
 ```
 
-<!-- Uncomment once upstream PRs to skein are merged.
+Note that `tf-yarn` only supports Python ≥3.6.
 
-```bash
-$ pip install git+https://gitlab.criteois.com/s.lebedev/tf-yarn.git
-```
--->
-
+[skein-criteo-forks]: https://github.com/criteo-forks/skein
 
 Quickstart
 ----------
@@ -34,10 +29,10 @@ a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
 Here is a stripped down `experiment_fn` from
-[`examples/cpu_example.py`](examples/cpu_example.py) to give you an idea of how
-it might look:
+[`examples/linear_classifier_experiment.py`](examples/linear_classifier_experiment.py)
+to give you an idea of how it might look:
 
-``` python
+```python
 from tf_yarn import Experiment
 
 def experiment_fn():
@@ -50,11 +45,12 @@ def experiment_fn():
 ```
 
 The experiment can be scheduled on YARN using the `run_on_yarn` function which
-takes two required arguments: an `experimeng_fn`, and a dictionary specifying
+takes two required arguments: an `experiment_fn`, and a dictionary specifying
 how much resources to allocate for each of the distributed TensorFlow task
-types. The dataset in `examples/cpu_example.py` is tiny and does not need
-multi-node training. Therefore, it can be scheduled using just the `"chief"` and
-`"evaluator"` tasks. Each task will be executed in its own container.
+types. The dataset in `examples/linear_classifier_experiment.py` is tiny and
+does not need multi-node training. Therefore, it can be scheduled using just
+the `"chief"` and `"evaluator"` tasks. Each task will be executed in its own
+container.
 
 ```python
 from tf_yarn import run_on_yarn, TaskSpec
@@ -68,39 +64,33 @@ run_on_yarn(
 )
 ```
 
-The final bit is to forward the Python dependencies of `cpy_example.py` to the
-YARN containers, in order for the tasks to be able to import them:
+The final bit is to forward the `winequality.py` module to the YARN containers,
+in order for the tasks to be able to import them:
 
 ```python
 run_on_yarn(
     ...,
     files={
         os.path.basename(winequality.__file__): winequality.__file__,
-        os.path.basename(experiment_fn.__file__): experiment_fn.__file__,
     }
 )
 ```
 
-The full example can be ran as follows:
-
-```bash
-$ ./run_example.sh examples/cpu_example.py
-```
-
 ### Distributed TensorFlow 101
 
-This is a brief summary of the core distributed TensorFlow concepts. Please
-refer to the [official documentation][distributed-tf] for the full version.
+The following is a brief summary of the core distributed TensorFlow
+concepts relevant to [training estimators][train-and-evaluate]. Please refer
+to the [official documentation][distributed-tf] for the full version.
 
 Distributed TensorFlow operates in terms of tasks. A task has a type which
 defines its purpose in the distributed TensorFlow cluster. ``"worker"`` tasks
-headed by the `"chief"` do model training. The `"chief"` additionally handles
-checkpointing, saving/restoring the model, etc. The model itself is stored
-on one or more `"ps"` tasks. These tasks typically do not compute anything.
-Their sole purpose is serving the variables of the model. Finally, the
-`"evaluator"` task is responsible for periodically evaluating the model.
+headed by the `"chief"` worker do model training. The `"chief"` additionally
+handles checkpointing, saving/restoring the model, etc. The model itself is
+stored on one or more `"ps"` tasks. These tasks typically do not compute
+anything. Their sole purpose is serving the variables of the model. Finally,
+the `"evaluator"` task is responsible for periodically evaluating the model.
 
-At the minimum, the cluster must have a single `"chief"` task. However, it
+At the minimum, a cluster must have a single `"chief"` task. However, it
 is a good idea to complement it by the `"evaluator"` to allow for running
 the evaluation in parallel with the training.
 
@@ -116,11 +106,15 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
+[distributed-tf]: https://www.tensorflow.org/deploy/distributed
+[train-and-evaluate]: https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate
+
 ### Training with multiple workers
 
 Multi-worker clusters require at least a single parameter server aka `"ps"` task
-to store the parameters being optimized. It is generally a good idea to give
-`"ps"` tasks >1 vcores to allow for concurrent I/O processing.
+to store the variables being updated by the `"chief"` and `"worker"` tasks. It is
+generally a good idea to give `"ps"` tasks >1 vcores to allow for concurrent I/O
+processing.
 
 ```python
 run_on_yarn(
@@ -150,44 +144,57 @@ run_on_yarn(
 )
 ```
 
-### Running on GPU@Criteo
+### Running on GPU
 
-By default `run_on_yarn` runs an experiment on CPU-only nodes. To run on GPU
-on the preprod-pa4 cluster:
+YARN does not have first-class support for GPU resoures. A common workaround is
+to use [node labels][node-labels] where CPU-only nodes are unlabelled, while
+the GPU ones have a label. Furthermore, in this setting GPU nodes are
+typically bound to a separate queue which is different from the default one.
 
-1. Set the `"queue"` argument to `run_on_yarn` to `"ml-gpu"`.
-2. Set `TaskSpec.flavor` to `TaskFlavor.GPU` for relevant task types. In
-   general, it is a good idea to run compute heavy `"chief"`, `"worker"`
+Currently, `tf-yarn` assumes that the GPU label is ``"gpu"``. There are no
+assumptions on the name of the queue with GPU nodes, however, for the sake of
+example we wil use the name ``"ml-gpu"``.
+
+The default behaviour of `run_on_yarn` is to run on CPU-only nodes. In order
+to run on the GPU ones:
+
+1. Set the `queue` argument.
+2. Set `TaskSpec.label` to `NodeLabel.GPU` for relevant task types.
+   A good rule of a thumb is to run compute heavy `"chief"` and `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
 
-Relevant part of [`examples/gpu_example.py`](examples/gpu_example.py):
-
 ```python
-from tf_yarn import TaskFlavor
+from tf_yarn import NodeLabel
 
 run_on_yarn(
     experiment_fn,
     task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4, flavor=TaskFlavor.GPU),
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
         "evaluator": TaskSpec(memory=2**10, vcores=1)
     },
     queue="ml-gpu"
 )
 ```
 
-### Accessing prod-pa4 data from preprod-pa4 and vice-versa
+[node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
 
-prod- and preprod- clusters are connected into a single ViewFS. In order to
-access prod- data from the containers in preprod- and vice-versa, tf-yarn has
-to acquire a delegation token for the corresponding namenode. To make this
-happen list the namenode in the `name_nodes` argument to `run_on_yarn`:
+### Accessing HDFS in the presence of [federation][federation]
+
+`skein` the library underlying `tf_yarn` automatically acquires a delegation token
+for ``fs.defaultFS`` on security-enabled clusters. This should be enough for most
+use-cases. However, if your experiment needs to access data on namenodes other than
+the default one, you have to explicitly list them in the `file_systems` argument
+to `run_on_yarn`. This would instruct `skein` to acquire a delegation token for
+these namenodes in addition to ``fs.defaultFS``:
 
 ```python
 run_on_yarn(
     ...,
-    name_nodes=["hdfs://prod-pa4"]
+    file_systems=["hdfs://preprod"]
 )
 ```
+
+[federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
 
 Limitations
 -----------
@@ -208,13 +215,6 @@ different from the one the library is running on.
 `tf-yarn` does not currently integrate with TensorBoard, even though
 the only requirement for doing so, `model_dir`, is already exposed
 via `Experiment.config`.
-
-### TaskFlavor ↔ YARN node label mapping
-
-`tf-yarn` only supports two flavors of nodes: CPU-only and GPU-enabled.
-The latter ones are assumed to be labelled with `"gpu"`. Generalizing
-flavors is possible, but also undesirable this point as it will add an
-extra layer of complexity to the `run_on_yarn` implementation.
 
 [miniconda]: https://conda.io/miniconda.html
 [tf-estimators]: https://www.tensorflow.org/guide/estimators

@@ -1,7 +1,8 @@
 import logging
 import os
+from functools import partial
 
-import dnn_classifier_experiment as experiment_fn
+import linear_classifier_experiment as experiment_fn
 import winequality
 
 from tf_yarn import run_on_yarn, TaskSpec
@@ -9,9 +10,10 @@ from tf_yarn import run_on_yarn, TaskSpec
 if __name__ == "__main__":
     logging.basicConfig(level="INFO")
     winequality.ensure_dataset_on_hdfs()
+    dataset_path = winequality.get_dataset_hdfs_path()
 
     run_on_yarn(
-        experiment_fn.get,
+        partial(experiment_fn.get, dataset_path),
         task_specs={
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "evaluator": TaskSpec(memory=2 ** 10, vcores=1)

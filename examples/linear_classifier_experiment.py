@@ -9,26 +9,21 @@ from tf_yarn import Experiment
 import winequality
 
 
-def get() -> Experiment:
-    train, test = winequality.get_dataset()
+def get(dataset_path: str) -> Experiment:
+    train_data, test_data = winequality.get_train_eval_datasets(dataset_path)
 
     def train_input_fn():
-        return (train.shuffle(1000)
+        return (train_data.shuffle(1000)
                 .batch(128)
                 .repeat()
                 .make_one_shot_iterator()
                 .get_next())
 
     def eval_input_fn():
-        return (test.shuffle(1000)
+        return (test_data.shuffle(1000)
                 .batch(128)
                 .make_one_shot_iterator()
                 .get_next())
-
-    feature_columns = [
-        tf.feature_column.numeric_column(name)
-        for name in winequality.FEATURES
-    ]
 
     # XXX the fs.defaultFS part is to make the examples work inside
     #     ``hadoop-test-cluster``.
@@ -37,10 +32,10 @@ def get() -> Experiment:
     user = pwd.getpwuid(os.getuid()).pw_name
     config = tf.estimator.RunConfig(
         tf_random_seed=42,
-        model_dir=f"{fs}/user/{user}/dnn_classification")
-    estimator = tf.estimator.DNNClassifier(
-        hidden_units=[10, 10],
-        feature_columns=feature_columns, n_classes=10,
+        model_dir=f"{fs}/user/{user}/{__name__}")
+    estimator = tf.estimator.LinearClassifier(
+        winequality.get_feature_columns(),
+        n_classes=winequality.get_n_classes(),
         config=config)
     return Experiment(
         estimator,

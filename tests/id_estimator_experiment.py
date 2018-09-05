@@ -26,7 +26,7 @@ def model_fn(features, labels, mode):
 def experiment_fn() -> Experiment:
     def input_fn():
         x = tf.constant([[1.0], [2.0], [3.0], [4.0]])
-        return {"x": x}, x,
+        return {"x": x}, x
 
     config = tf.estimator.RunConfig()
     estimator = tf.estimator.Estimator(model_fn=model_fn, config=config)

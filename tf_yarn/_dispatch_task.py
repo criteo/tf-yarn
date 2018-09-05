@@ -55,6 +55,11 @@ def main(
     task = os.environ["SKEIN_CONTAINER_ID"].replace("_", ":", 1)
     task_type, task_id = task.split(":", 1)
     task_id = int(task_id)
+    if task_type == "ps" and tf.test.is_gpu_available():
+        tf.logging.warn(
+            f"{task} is running on a GPU-enabled node. Consider setting "
+            "label=NodeLabel.CPU in the corresponding TaskSpec.")
+
     client = skein.ApplicationClient.from_current()
 
     # There is a race condition between acquiring a TCP port for

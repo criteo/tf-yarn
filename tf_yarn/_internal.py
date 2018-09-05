@@ -18,6 +18,7 @@ import os
 import shutil
 import socket
 import sys
+import tempfile
 import typing
 import warnings
 from contextlib import contextmanager
@@ -160,7 +161,7 @@ class PyEnv(typing.NamedTuple):
     python: str
     pip_packages: typing.List[str]
 
-    def create(self, root: str = here) -> str:
+    def create(self, root: str = tempfile.tempdir) -> str:
         """
         The environment is created via ``conda``. However, all the
         packages other than the Python interpreter are installed via

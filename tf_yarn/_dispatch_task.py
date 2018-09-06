@@ -26,6 +26,7 @@ import tensorflow as tf
 from . import ExperimentFn
 from ._internal import (
     iter_tasks,
+    expand_wildcards_in_classpath,
     load_fn,
     xset_environ,
     reserve_sock_addr,
@@ -49,6 +50,17 @@ def main(
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
+
+    try:
+        classpath = os.environ["CLASSPATH"]
+    except KeyError:
+        tf.logging.warn(
+            "$CLASSPATH is not defined. HDFS access will surely fail.")
+    else:
+        tf.logging.info("Attempting to expand wildcards in $CLASSPATH")
+        os.environ["CLASSPATH"] = expand_wildcards_in_classpath(classpath)
+        del classpath
+        tf.logging.info(os.environ["CLASSPATH"])
 
     # XXX this assumes no service restarts, because after a restart
     #     the task_id might exceed ``num_workers`` or ``num_ps``.

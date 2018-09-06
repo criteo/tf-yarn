@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import glob
 import json
 import logging
 import os
@@ -121,6 +121,26 @@ def zip_inplace(path, replace=False):
             os.remove(created)  # Cleanup on failure.
             raise e from None
     return zip_path
+
+
+def expand_wildcards_in_classpath(classpath: str) -> str:
+    """Expand wildcard entries in the $CLASSPATH.
+
+    JNI-invoked JVM does not support wildcards in the classpath. This
+    function replaces all classpath entries of the form ``foo/bar/*``
+    with the JARs in the ``foo/bar`` directory.
+
+    See "Common Problems" section in the libhdfs docs
+    https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/LibHdfs.html
+    """
+    def maybe_glob(path):
+        if path.endswith("*"):
+            yield from glob.iglob(path + ".jar")
+        else:
+            yield path
+
+    return ":".join(entry for path in classpath.split(":")
+                    for entry in maybe_glob(path))
 
 
 class StaticDefaultDict(dict):

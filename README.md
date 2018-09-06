@@ -146,7 +146,7 @@ run_on_yarn(
 
 ### Running on GPU
 
-YARN does not have first-class support for GPU resoures. A common workaround is
+YARN does not have first-class support for GPU resources. A common workaround is
 to use [node labels][node-labels] where CPU-only nodes are unlabelled, while
 the GPU ones have a label. Furthermore, in this setting GPU nodes are
 typically bound to a separate queue which is different from the default one.
@@ -195,29 +195,3 @@ run_on_yarn(
 ```
 
 [federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
-
-Limitations
------------
-
-### `tf-yarn` on Windows/macOS
-
-`tf-yarn` uses [Miniconda][miniconda] for creating relocatable
-Python environments. The package management, however, is done by
-pip to allow for more flexibility. The downside to that is that
-it is impossible to create an environment for an OS/architecture
-different from the one the library is running on.
-
-<!-- TODO: impossible to submit from Windows with a Linux env. -->
-<!-- TODO: assume Python is installed and use PEX? -->
-
-### TensorBoard
-
-`tf-yarn` does not currently integrate with TensorBoard, even though
-the only requirement for doing so, `model_dir`, is already exposed
-via `Experiment.config`.
-
-[miniconda]: https://conda.io/miniconda.html
-[tf-estimators]: https://www.tensorflow.org/guide/estimators
-[distributed-tf]: https://www.tensorflow.org/deploy/distributed
-[skein]: https://jcrist.github.io/skein
-[skein-tutorial]: https://jcrist.github.io/skein/quickstart.html

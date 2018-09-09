@@ -34,8 +34,8 @@ from ._internal import (
     dump_fn,
     iter_tasks,
     zip_inplace,
-    PyEnv,
-    StaticDefaultDict
+    StaticDefaultDict,
+    create_conda_env
 )
 
 __all__ = [
@@ -184,7 +184,7 @@ def run_on_yarn(
         "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
     }
 
-    pyenvs = _make_pyenvs(python, pip_packages or [])
+    pyenvs = _make_conda_envs(python, pip_packages or [])
     services = {}
     for task_type, task_spec in list(task_specs.items()):
         task_command = (
@@ -202,7 +202,7 @@ def run_on_yarn(
             node_label=task_spec.label.value,
             files={
                 **task_files,
-                "pyenv": zip_inplace(pyenvs[task_spec.label].create())
+                "pyenv": zip_inplace(pyenvs[task_spec.label])
             },
             env=task_env)
 
@@ -243,20 +243,21 @@ def _maybe_zip_task_files(files):
     return task_files
 
 
-def _make_pyenvs(python, pip_packages) -> typing.Dict[NodeLabel, PyEnv]:
+def _make_conda_envs(python, pip_packages) -> typing.Dict[NodeLabel, str]:
     fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
     base_packages = [
         "dill==" + dill.__version__,
         "git+http://github.com/criteo-forks/skein"
     ]
     # TODO: use internal PyPI for CPU-optimized TF.
+    # TODO: make the user responsible for constructing this mapping.
     return {
-        NodeLabel.CPU: PyEnv(
+        NodeLabel.CPU: create_conda_env(
             f"py{python}-{fp}-cpu",
             python,
             pip_packages + base_packages + ["tensorflow==" + tf.__version__]
         ),
-        NodeLabel.GPU: PyEnv(
+        NodeLabel.GPU: create_conda_env(
             f"py{python}-{fp}-gpu",
             python,
             pip_packages + base_packages + [

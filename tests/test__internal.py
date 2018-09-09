@@ -1,6 +1,7 @@
 import errno
 import os
 import socket
+import subprocess
 import sys
 from subprocess import check_output
 from zipfile import ZipFile, is_zipfile
@@ -15,7 +16,7 @@ from tf_yarn._internal import (
     xset_environ,
     zip_inplace,
     StaticDefaultDict,
-    PyEnv,
+    create_conda_env,
 )
 
 
@@ -103,12 +104,21 @@ def test_static_default_dict():
     assert "bar" not in d
 
 
-def test_env_create(tmpdir):
-    env = PyEnv(
+def conda_is_available():
+    p = subprocess.run(
+        ["conda"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True)
+    return p.returncode == 0
+
+
+@pytest.mark.skipif(not conda_is_available(), reason="conda is not available")
+def test_create_conda_environment():
+    env_path = create_conda_env(
         name="test",
         python="{0.major}.{0.minor}".format(sys.version_info),
         pip_packages=["pycodestyle"])
-    env_path = env.create(root=tmpdir)
     assert os.path.exists(env_path)
     assert os.path.isdir(env_path)
 

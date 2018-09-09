@@ -28,8 +28,8 @@ def test_monitored_thread():
     thread.start()
     thread.join()
 
-    assert isinstance(thread.exception(), RuntimeError)
-    assert thread.exception().args == (42, )
+    assert isinstance(thread.exception, RuntimeError)
+    assert thread.exception.args == (42, )
 
 
 def test_reserve_sock_addr():

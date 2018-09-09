@@ -44,13 +44,14 @@ def experiment_fn():
         tf.estimator.EvalSpec(eval_input_fn)
 ```
 
-The experiment can be scheduled on YARN using the `run_on_yarn` function which
+An experiment can be scheduled on YARN using the `run_on_yarn` function which
 takes two required arguments: an `experiment_fn`, and a dictionary specifying
 how much resources to allocate for each of the distributed TensorFlow task
-types. The dataset in `examples/linear_classifier_experiment.py` is tiny and
-does not need multi-node training. Therefore, it can be scheduled using just
-the `"chief"` and `"evaluator"` tasks. Each task will be executed in its own
-container.
+types. The example uses the [Wine Quality][wine-quality] dataset from UCI ML
+repository. With just under 5000 training instances available, there is no need
+for multi-node training, meaning that a `"chief"` task complemented by an
+`"evaluator"` would manage just fine. Note that each task will be executed
+in its own YARN container.
 
 ```python
 from tf_yarn import run_on_yarn, TaskSpec
@@ -75,6 +76,8 @@ run_on_yarn(
     }
 )
 ```
+
+[wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
 
 ### Distributed TensorFlow 101
 

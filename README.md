@@ -197,4 +197,14 @@ run_on_yarn(
 )
 ```
 
+Depending on the cluster configuration, you might need to point libhdfs to a
+different configuration folder. For instance:
+
+```python
+run_on_yarn(
+    ...,
+    env={"HADOOP_CONF_DIR": "/etc/hadoop/conf.all"}
+)
+```
+
 [federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html

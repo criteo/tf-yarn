@@ -7,7 +7,7 @@ Installation
 ------------
 
 At the moment `tf-yarn` depends on a [custom version][skein-criteo-forks]
-of `skein`. This version includes the PRs submitted but not yet been merged
+of `skein`. This version includes the PRs submitted but not yet merged
 into upstream. To install it and the rest of the dependencies run
 
 ```bash

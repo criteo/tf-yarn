@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import glob
-import json
 import logging
 import os
 import shutil
@@ -21,10 +20,11 @@ import socket
 import tempfile
 import typing
 from contextlib import contextmanager
-from subprocess import Popen, CalledProcessError, PIPE, check_output
+from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
 
 import dill
+import setuptools
 
 logger = logging.getLogger(__name__)
 
@@ -161,10 +161,11 @@ class StaticDefaultDict(dict):
         return self.default
 
 
-def create_conda_env(
+def create_and_pack_conda_env(
     name: str,
     python: str,
-    pip_packages: typing.List[str]
+    pip_packages: typing.List[str],
+    root: typing.Optional[str] = tempfile.tempdir
 ) -> str:
     """Create a Conda environment.
 
@@ -183,26 +184,30 @@ def create_conda_env(
     pip_packages : list
         PyPI packages to install in the environment.
 
+    root : list
+        Path to the root directory with Conda environments. If ``None``,
+        system temporary directory will be used with a fallback to the
+        current directory.
+
     Returns
     -------
     env_path : str
-        Path to the environment root.
+        Path to the packed environment.
     """
     try:
-        conda_info = json.loads(
-            check_output("conda info --json".split()).decode())
-        conda_root = conda_info["conda_prefix"]
-    except (OSError, IOError):
+        _call(["conda"])
+    except CalledProcessError:
         raise RuntimeError("conda is not available in $PATH")
 
-    conda_bin = os.path.join(conda_root, "bin", "conda")
-    conda_envs = os.path.join(conda_root, "envs")
-    env_path = os.path.join(conda_envs, name)
+    env_path = os.path.join(root or os.getcwd(), name)
     if not os.path.exists(env_path):
         logger.info("Creating new env " + name)
         _call([
-            conda_bin, "create", "-p", env_path, "-y", "-q", "--copy",
-            "python=" + python
+            "conda", "create", "-p", env_path, "-y", "-q", "--copy",
+            "python=" + python,
+            # TensorFlow enforces an upper bound on setuptools which
+            # conflicts with the version installed by Conda by default.
+            "setuptools=" + setuptools.__version__
         ], env=dict(os.environ))
 
         env_python_bin = os.path.join(env_path, "bin", "python")
@@ -219,7 +224,11 @@ def create_conda_env(
             with open(requirements_path, "w") as f:
                 print(*pip_packages, sep=os.linesep, file=f)
 
-        return env_path
+    env_zip_path = env_path + ".zip"
+    if not os.path.exists(env_zip_path):
+        import conda_pack
+        conda_pack.pack(prefix=env_path, output=env_zip_path)
+    return env_zip_path
 
 
 def _call(cmd, **kwargs):

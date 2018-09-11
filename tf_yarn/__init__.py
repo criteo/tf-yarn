@@ -35,7 +35,7 @@ from ._internal import (
     iter_tasks,
     zip_inplace,
     StaticDefaultDict,
-    create_conda_env
+    create_and_pack_conda_env
 )
 
 __all__ = [
@@ -200,10 +200,7 @@ def run_on_yarn(
             max_restarts=0,
             instances=task_spec.instances,
             node_label=task_spec.label.value,
-            files={
-                **task_files,
-                "pyenv": zip_inplace(pyenvs[task_spec.label])
-            },
+            files={**task_files, "pyenv": pyenvs[task_spec.label]},
             env=task_env)
 
     tasks = list(iter_tasks(
@@ -252,12 +249,12 @@ def _make_conda_envs(python, pip_packages) -> typing.Dict[NodeLabel, str]:
     # TODO: use internal PyPI for CPU-optimized TF.
     # TODO: make the user responsible for constructing this mapping.
     return {
-        NodeLabel.CPU: create_conda_env(
+        NodeLabel.CPU: create_and_pack_conda_env(
             f"py{python}-{fp}-cpu",
             python,
             pip_packages + base_packages + ["tensorflow==" + tf.__version__]
         ),
-        NodeLabel.GPU: create_conda_env(
+        NodeLabel.GPU: create_and_pack_conda_env(
             f"py{python}-{fp}-gpu",
             python,
             pip_packages + base_packages + [

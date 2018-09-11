@@ -3,6 +3,8 @@ import os
 import socket
 import subprocess
 import sys
+import tarfile
+import zipfile
 from subprocess import check_output
 from zipfile import ZipFile, is_zipfile
 
@@ -16,7 +18,7 @@ from tf_yarn._internal import (
     xset_environ,
     zip_inplace,
     StaticDefaultDict,
-    create_conda_env,
+    create_and_pack_conda_env,
 )
 
 
@@ -114,13 +116,20 @@ def conda_is_available():
 
 
 @pytest.mark.skipif(not conda_is_available(), reason="conda is not available")
-def test_create_conda_environment():
-    env_path = create_conda_env(
+def test_create_conda_env(tmpdir):
+    env_zip_path = create_and_pack_conda_env(
         name="test",
         python="{0.major}.{0.minor}".format(sys.version_info),
-        pip_packages=["pycodestyle"])
-    assert os.path.exists(env_path)
+        pip_packages=["pycodestyle"],
+        root=str(tmpdir))
+    assert os.path.isfile(env_zip_path)
+    env_path, _zip = os.path.splitext(env_zip_path)
     assert os.path.isdir(env_path)
 
-    env_python_bin = os.path.join(env_path, "bin", "python")
+    env_unzipped_path = tmpdir.join("unzipped")
+    with zipfile.ZipFile(env_zip_path) as zf:
+        zf.extractall(env_unzipped_path)
+
+    env_python_bin = os.path.join(env_unzipped_path, "bin", "python")
+    os.chmod(env_python_bin, 0o755)
     check_output([env_python_bin, "-m", "pycodestyle", "--version"])

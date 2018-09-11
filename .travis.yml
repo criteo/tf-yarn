@@ -1,0 +1,31 @@
+language: python
+sudo: required
+dist: trusty
+os: linux
+python:
+  - "3.6"
+
+services:
+  - docker
+
+env:
+  - DOCKER_COMPOSE_VERSION=1.19.0
+
+before_install:
+  # Upgrade docker-compose.
+  - sudo rm /usr/local/bin/docker-compose
+  - curl -L https://github.com/docker/compose/releases/download/$DOCKER_COMPOSE_VERSION/docker-compose-`uname -s`-`uname -m` > docker-compose
+  - chmod +x docker-compose
+  - sudo mv docker-compose /usr/local/bin
+  # Install and start htcluster
+  - pip install git+https://github.com/jcrist/hadoop-test-cluster.git
+  - htcluster startup --mount .:tf-yarn
+
+install:
+  - htcluster exec -- tf-yarn/continuous_integration/travis/docker_install.sh
+
+script:
+  - htcluster exec -- "pytest tf-yarn/tests -vv"
+
+notifications:
+  email: false

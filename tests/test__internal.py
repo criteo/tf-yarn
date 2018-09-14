@@ -92,11 +92,10 @@ def test_zip_inplace(tmpdir):
 
 def test_zip_inplace_replace(tmpdir):
     zip_path = zip_inplace(str(tmpdir))
-    stat = os.stat(zip_path)
-    zip_inplace(str(tmpdir))
-    assert os.stat(zip_path).st_mtime == stat.st_mtime
+    os.truncate(zip_path, 0)
+    assert os.path.getsize(zip_path) == 0
     zip_inplace(str(tmpdir), replace=True)
-    assert os.stat(zip_path).st_mtime > stat.st_mtime
+    assert os.path.getsize(zip_path) > 0
 
 
 def test_static_default_dict():

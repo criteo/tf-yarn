@@ -179,7 +179,7 @@ def matches_device_filters(task: str, device_filters: typing.List[str]):
     task_type, task_id = task.split(":", 1)
     for device_filter in device_filters:
         [(filter_type, filter_id)] = re.findall(
-            "^/job:([a-z]+)(?:/task:(\d+))?$",
+            r"^/job:([a-z]+)(?:/task:(\d+))?$",
             device_filter)
         if (filter_type == task_type and
                 (not filter_id or filter_id == task_id)):

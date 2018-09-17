@@ -15,6 +15,7 @@
 import glob
 import logging
 import os
+import platform
 import shutil
 import socket
 import tempfile
@@ -61,13 +62,21 @@ class MonitoredThread(Thread):
 def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
     """Reserve an available TCP port to listen on.
 
-    The acquired TCP socket is hold open until the generator is
-    closed. This does not eliminate the chance of collision between
-    multiple concurrent Python processes, but it makes it slightly
-    less likely.
+    The acquired TCP socket is created with ``SO_REUSEPORT`` flag set
+    and is kept open until the generator is closed.
     """
+    try:
+        so_reuseport = socket.SO_REUSEPORT
+    except AttributeError:
+        if platform.system() == "Linux" and platform.release() >= "3.9":
+            # The interpreter must have been compiled on Linux <3.9.
+            so_reuseport = 15
+        else:
+            raise RuntimeError(
+                "SO_REUSEPORT is not supported by the operating system")
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock.setsockopt(socket.SOL_SOCKET, so_reuseport, 1)
         sock.bind(("", 0))
         _ipaddr, port = sock.getsockname()
         yield (socket.gethostname(), port)

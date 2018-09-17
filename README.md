@@ -6,7 +6,7 @@ tf-yarnᵝ
 Installation
 ------------
 
-At the moment `tf-yarn` depends on a [custom version][skein-criteo-forks]
+At the moment tf-yarn depends on a [custom version][skein-criteo-forks]
 of `skein`. This version includes the PRs submitted but not yet merged
 into upstream. To install it and the rest of the dependencies run
 
@@ -17,14 +17,14 @@ $ pip install -r requirements.txt
 $ pip install .
 ```
 
-Note that `tf-yarn` only supports Python ≥3.6.
+Note that tf-yarn only supports Python ≥3.6.
 
 [skein-criteo-forks]: https://github.com/criteo-forks/skein
 
 Quickstart
 ----------
 
-The core abstraction in `tf-yarn` is called an `ExperimentFn`. It is
+The core abstraction in tf-yarn is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
@@ -133,8 +133,8 @@ run_on_yarn(
 
 ### Configuring the Python interpreter and packages
 
-`tf-yarn` ships an isolated Python environment to the containers. By default
-it comes with a Python interpreter, TensorFlow, and a few of the `tf-yarn`
+tf-yarn ships an isolated Python environment to the containers. By default
+it comes with a Python interpreter, TensorFlow, and a few of the tf-yarn
 dependencies (see `requirements.txt` for the full list).
 
 Additional pip-installable packages can be added via the `pip_packages` argument
@@ -154,7 +154,7 @@ to use [node labels][node-labels] where CPU-only nodes are unlabelled, while
 the GPU ones have a label. Furthermore, in this setting GPU nodes are
 typically bound to a separate queue which is different from the default one.
 
-Currently, `tf-yarn` assumes that the GPU label is ``"gpu"``. There are no
+Currently, tf-yarn assumes that the GPU label is ``"gpu"``. There are no
 assumptions on the name of the queue with GPU nodes, however, for the sake of
 example we wil use the name ``"ml-gpu"``.
 

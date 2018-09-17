@@ -67,6 +67,7 @@ def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
     less likely.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         sock.bind(("", 0))
         _ipaddr, port = sock.getsockname()
         yield (socket.gethostname(), port)

@@ -98,9 +98,9 @@ is a good idea to complement it by the `"evaluator"` to allow for running
 the evaluation in parallel with the training.
 
 ```
-+-----------+              +-------+   +----------+   +----------+
-| evaluator |        +-----+ chief |   | worker:0 |   | worker:1 |
-+-----+-----+        |     +----^--+   +-----^----+   +-----^----+
++-----------+              +---------+   +----------+   +----------+
+| evaluator |        +-----+ chief:0 |   | worker:0 |   | worker:1 |
++-----+-----+        |     +----^----+   +-----^----+   +-----^----+
       ^              |          |            |              |
       |              v          |            |              |
       |        +-----+---+      |            |              |

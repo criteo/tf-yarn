@@ -27,6 +27,15 @@ except IOError:
     LONG_DESCRIPTION = ""
 
 
+def _read_reqs(relpath):
+    fullpath = os.path.join(os.path.dirname(__file__), relpath)
+    with open(fullpath) as f:
+        return [s.strip() for s in f.readlines()
+                if (s.strip() and not s.startswith("#"))]
+
+
+REQUIREMENTS = _read_reqs("requirements.txt")
+
 CLASSIFIERS = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -44,12 +53,7 @@ setup(
     name="tf_yarn",
     packages=["tf_yarn"],
     version="0.1.0-dev",
-    install_requires=[
-        "tensorflow==1.10",
-        "dill==0.2.8",
-        "conda-pack==0.2.0",
-        "skein"
-    ],
+    install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",
 
@@ -62,4 +66,3 @@ setup(
     keywords="tensorflow yarn",
     url="https://github.com/criteo/tf-yarn"
 )
-

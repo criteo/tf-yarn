@@ -10,6 +10,7 @@ from zipfile import ZipFile, is_zipfile
 
 import pytest
 
+from tf_yarn import TaskSpec, generate_services_using_pex
 from tf_yarn._internal import (
     MonitoredThread,
     reserve_sock_addr,
@@ -132,3 +133,31 @@ def test_create_conda_env(tmpdir):
     env_python_bin = os.path.join(env_unzipped_path, "bin", "python")
     os.chmod(env_python_bin, 0o755)
     check_output([env_python_bin, "-m", "pycodestyle", "--version"])
+
+
+def test_generate_services_pex():
+    pex_filename="mypex.pex"
+    pex_folder='/some/where/'
+    env = {"VAR0": "VALUE0", "VAR1": "VALUE1"}
+    files = {"hello.py": "file:///tmp/hello.py"}
+    task_name = "task0"
+    task_specs = {task_name: TaskSpec(memory=2, vcores=3),
+                  'ps': TaskSpec(memory=1, vcores=2),
+                  'worker': TaskSpec(memory=1, vcores=1)}
+    services = generate_services_using_pex(pex_folder + pex_filename, env, files, task_specs)
+
+    assert len(services) == 3, f"services size is {len(services)}. Expected 3"
+    assert task_name in services
+
+    service = services[task_name]
+    # Env variable are forwarded
+    assert all(item in service.env.items() for item in env.items()), f"{env.items()} must be included in {service.env.items()}"
+    # Pex env variable are set
+    assert service.env["PEX_ROOT"].startswith('/tmp/.pex')
+    assert service.env["PEX_MODULE"] == "tf_yarn._dispatch_task"
+    # it calls pex
+    assert service.commands[0].startswith('./'+pex_filename)
+    # pex is uploaded with files
+    files_in_services = {key: value.source for key, value in service.files.items()}
+    assert all(item in files_in_services.items() for item in files.items()), f"{files.items()} must be included in {files_in_services.items()}"
+    assert files_in_services[pex_filename] == 'file://' + pex_folder + pex_filename

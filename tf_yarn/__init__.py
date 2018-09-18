@@ -17,15 +17,18 @@ import logging
 import os
 import time
 import typing
+import uuid
 from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v
 from tempfile import NamedTemporaryFile
 from threading import Thread
+from typing import Dict, Any
 
 import dill
 import skein
 import tensorflow as tf
+from skein import Service
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport
 
@@ -96,7 +99,8 @@ def run_on_yarn(
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = None,
     queue: str = "default",
-    file_systems: typing.List[str] = None
+    file_systems: typing.List[str] = None,
+    pex_archive: str = None
 ) -> None:
     """Run an experiment on YARN.
 
@@ -159,6 +163,10 @@ def run_on_yarn(
         A list of namenode URIs to acquire delegation tokens for
         in addition to ``fs.defaultFS``.
 
+    pex_archive
+        A path to a pex archive to execute
+        Cannot set python and pip_packages at the same time
+
     Raises
     ------
     RunFailed
@@ -184,6 +192,42 @@ def run_on_yarn(
         "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
     }
 
+    if pex_archive:
+        if pip_packages:
+            logger.warn("PEX archive mode: adding new packages is not supported")
+        if python:
+            logger.warn("PEX archive mode: selection of python version is not supported")
+        services = generate_services_using_pex(pex_archive, task_env, task_files, task_specs)
+    else:
+        services = generate_services_using_conda(pip_packages, python, task_env, task_files, task_specs)
+
+    tasks = list(iter_tasks(
+        task_specs["worker"].instances,
+        task_specs["ps"].instances))
+    if "evaluator" in task_specs:
+        tasks.append("evaluator:0")  # Not part of the cluster.
+    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=file_systems)
+    with skein.Client() as client:
+        _submit_and_await_termination(client, spec, tasks)
+
+
+def generate_services_using_conda(
+        pip_packages: typing.List[str],
+        python: str,
+        task_env: typing.Dict[str, str],
+        task_files: typing.Dict[str, str],
+        task_specs: typing.Dict[str, TaskSpec]
+) -> typing.Dict[str, skein.Service]:
+    """
+    Generate skein services based on a virtual env generated on executors
+
+    :param pip_packages: pip package to add
+    :param python: python version to use
+    :param task_env: task environment variables
+    :param task_files: files to uploads
+    :param task_specs: task configuration
+    :return: dict of skein services
+    """
     pyenvs = _make_conda_envs(python, pip_packages or [])
     services = {}
     for task_type, task_spec in list(task_specs.items()):
@@ -202,15 +246,49 @@ def run_on_yarn(
             node_label=task_spec.label.value,
             files={**task_files, "pyenv": pyenvs[task_spec.label]},
             env=task_env)
+    return services
 
-    tasks = list(iter_tasks(
-        task_specs["worker"].instances,
-        task_specs["ps"].instances))
-    if "evaluator" in task_specs:
-        tasks.append("evaluator:0")  # Not part of the cluster.
-    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=file_systems)
-    with skein.Client() as client:
-        _submit_and_await_termination(client, spec, tasks)
+
+def generate_services_using_pex(
+        pex_archive_path: str,
+        task_env: typing.Dict[str, str],
+        task_files: typing.Dict[str, str],
+        task_specs: typing.Dict[str, TaskSpec]
+) -> typing.Dict[str, skein.Service]:
+    """
+    Generate skein services based on a pex archive
+
+    :param pex_archive_path: path to the pex archive to ship
+    :param task_env: task environment variables
+    :param task_files: files to uploads
+    :param task_specs: task configuration
+    :return: set of services
+    """
+    task_env['PEX_ROOT'] = f'/tmp/.pex_{uuid.uuid4()}/'
+    task_env['PEX_MODULE'] = 'tf_yarn._dispatch_task'
+
+    pex_basename = os.path.basename(pex_archive_path)
+    services = {}
+    for task_type, task_spec in list(task_specs.items()):
+        task_command = (' '.join([
+            f"./{pex_basename}",
+            f"--num-ps={task_specs['ps'].instances}",
+            f"--num-workers={task_specs['worker'].instances}",
+            "--experiment-fn=experiment_fn.dill"])
+        )
+
+        services[task_type] = skein.Service(
+            [task_command],
+            skein.Resources(task_spec.memory, task_spec.vcores),
+            max_restarts=0,
+            instances=task_spec.instances,
+            node_label=task_spec.label.value,
+            files={
+                **task_files,
+                pex_basename: pex_archive_path,
+            },
+            env=task_env)
+    return services
 
 
 def _check_task_specs(task_specs):

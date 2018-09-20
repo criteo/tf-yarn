@@ -43,12 +43,12 @@ CLASSIFIERS = [
 setup(
     name="tf_yarn",
     packages=["tf_yarn"],
-    version="0.1.0-dev",
+    version="0.1.0.criteo",
     install_requires=[
         "tensorflow==1.10",
         "dill==0.2.8",
         "conda-pack==0.2.0",
-        "skein"
+        "skein==0.1.1.criteo"
     ],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

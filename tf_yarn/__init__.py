@@ -247,7 +247,7 @@ def _make_conda_envs(python, pip_packages) -> typing.Dict[NodeLabel, str]:
     fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
     base_packages = [
         "dill==" + dill.__version__,
-        "git+http://github.com/criteo-forks/skein"
+        "skein==" + skein.__version__
     ]
     # TODO: use internal PyPI for CPU-optimized TF.
     # TODO: make the user responsible for constructing this mapping.

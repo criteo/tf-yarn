@@ -1,4 +1,4 @@
 tensorflow==1.10
 conda-pack==0.2.0
 dill==0.2.8
--e git+https://github.com/criteo-forks/skein#egg=criteo-forks-skein
+skein==0.1.1.criteo

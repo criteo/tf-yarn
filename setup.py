@@ -62,4 +62,3 @@ setup(
     keywords="tensorflow yarn",
     url="https://github.com/criteo/tf-yarn"
 )
-

@@ -65,8 +65,8 @@ def main(
     # XXX this assumes no service restarts, because after a restart
     #     the task_id might exceed ``num_workers`` or ``num_ps``.
     task = os.environ["SKEIN_CONTAINER_ID"].replace("_", ":", 1)
-    task_type, task_id = task.split(":", 1)
-    task_id = int(task_id)
+    task_type, task_str = task.split(":", 1)
+    task_id: int = int(task_str)
     if task_type == "ps" and tf.test.is_gpu_available():
         tf.logging.warn(
             f"{task} is running on a GPU-enabled node. Consider setting "

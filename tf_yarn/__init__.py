@@ -52,6 +52,7 @@ class Experiment(typing.NamedTuple):
     estimator: tf.estimator.Estimator
     train_spec: tf.estimator.TrainSpec
     eval_spec: tf.estimator.EvalSpec
+
     # TODO: experiment name?
 
     @property
@@ -68,7 +69,7 @@ class NodeLabel(Enum):
     A task with a CPU label could be scheduled on any node, whereas
     a task with a GPU label, only on the one labeled with ``"gpu"``.
     """
-    CPU = ""     # Default.
+    CPU = ""  # Default.
     GPU = "gpu"
 
 
@@ -79,8 +80,7 @@ class TaskSpec(typing.NamedTuple):
     label: NodeLabel = NodeLabel.CPU
 
 
-#: A "dummy" ``TaskSpec``.
-TaskSpec.NONE = TaskSpec(0, 0, 0)
+TASK_SPEC_NONE = TaskSpec(0, 0, 0)
 
 
 class RunFailed(Exception):
@@ -166,7 +166,7 @@ def run_on_yarn(
     """
     # TODO: compute num_ps from the model size and the number of
     # executors. See https://stackoverflow.com/a/46080567/262432.
-    task_specs = StaticDefaultDict(task_specs, default=TaskSpec.NONE)
+    task_specs = StaticDefaultDict(task_specs, default=TASK_SPEC_NONE)
     _check_task_specs(task_specs)
 
     task_files = _maybe_zip_task_files(files or {})
@@ -293,7 +293,7 @@ def _submit_and_await_termination(
     poll_every_secs: int = 10
 ):
     app = client.submit_and_connect(spec)
-    events = {task: {} for task in tasks}
+    events: typing.Dict[str, typing.Dict[str, str]] = {task: {} for task in tasks}
     event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
     event_listener.start()
     with _shutdown_on_exception(app):
@@ -374,4 +374,3 @@ def _format_run_summary(
     return (os.linesep + os.linesep.join(header)
             + os.linesep * (1 + bool(details))
             + os.linesep.join(details))
-

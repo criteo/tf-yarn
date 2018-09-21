@@ -73,7 +73,8 @@ def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
             so_reuseport = 15
         else:
             raise RuntimeError(
-                "SO_REUSEPORT is not supported by the operating system")
+                "SO_REUSEPORT is not supported by the operating system"
+            ) from None
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, so_reuseport, 1)

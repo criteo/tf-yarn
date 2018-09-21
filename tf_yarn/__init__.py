@@ -208,7 +208,10 @@ def run_on_yarn(
         task_specs["ps"].instances))
     if "evaluator" in task_specs:
         tasks.append("evaluator:0")  # Not part of the cluster.
-    spec = skein.ApplicationSpec(services, queue=queue, name_nodes=file_systems)
+    spec = skein.ApplicationSpec(
+        services,
+        queue=queue,
+        file_systems=file_systems)
     with skein.Client() as client:
         _submit_and_await_termination(client, spec, tasks)
 

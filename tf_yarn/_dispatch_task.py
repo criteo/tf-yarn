@@ -38,6 +38,10 @@ def main(
     experiment_fn: ExperimentFn,
     all_tasks: typing.List[str]
 ) -> None:
+
+    def logs_event(logs: str) -> None:
+        broadcast(client, f"{task}/logs", logs)
+
     def init_event(sock_addr: str) -> None:
         broadcast(client, f"{task}/init", sock_addr)
 
@@ -73,6 +77,13 @@ def main(
             "label=NodeLabel.CPU in the corresponding TaskSpec.")
 
     client = skein.ApplicationClient.from_current()
+
+    container = next(c for c in client.get_containers()
+                     if c.yarn_container_id == os.environ["CONTAINER_ID"])
+    logs = container.yarn_container_logs
+    if logs is not None and not logs.startswith("http://"):
+        logs = "http://" + logs
+    logs_event(logs)
 
     # There is a race condition between acquiring a TCP port for
     # ``tf.train.Server``, and calling ``train_and_evaluate``.

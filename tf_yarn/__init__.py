@@ -367,7 +367,8 @@ def _format_run_summary(
 
         sock_addr = stages.get("init", "")
         exception = stages.get("stop", "")
-        header.append(f"{task:>16}  {sock_addr}  {status}")
+        logs = stages.get("logs", "")
+        header.append(f"{task:>16}  {sock_addr}  {status}  {logs}")
         if exception:
             details.append(f"Exception in task {task}:")
             details.append(exception)

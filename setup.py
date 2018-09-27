@@ -45,7 +45,7 @@ setup(
     packages=["tf_yarn"],
     version="0.1.0.criteo",
     install_requires=[
-        "tensorflow==1.10.criteo",
+        "tensorflow==1.10.1.criteo",
         "dill==0.2.8",
         "conda-pack==0.2.0",
         "skein==0.1.1.criteo"

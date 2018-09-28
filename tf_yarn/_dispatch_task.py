@@ -191,7 +191,8 @@ def matches_device_filters(task: str, device_filters: typing.List[str]):
     for device_filter in device_filters:
         [(filter_type, filter_id)] = re.findall(
             r"^/job:([a-z]+)(?:/task:(\d+))?$",
-            device_filter)
+            # Remove once https://github.com/tensorflow/tensorflow/pull/22566 is released
+            device_filter.replace("master", "chief"))
         if (filter_type == task_type and
                 (not filter_id or filter_id == task_id)):
             return True

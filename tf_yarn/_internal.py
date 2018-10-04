@@ -121,21 +121,26 @@ def xset_environ(**kwargs):
     os.environ.update(kwargs)
 
 
-def zip_inplace(path, replace=False):
+def zip_inplace(path):
+    """
+    Create a zip archive out of an existing directory path
+    :param path: the path to a an existing directory
+    :return: the path of the created archive
+    """
     assert os.path.exists(path) and os.path.isdir(path)
 
-    zip_path = path + ".zip"
-    if not os.path.exists(zip_path) or replace:
-        created = shutil.make_archive(
-            os.path.basename(path),
-            "zip",
-            root_dir=path)
+    created = shutil.make_archive(
+        os.path.basename(path),
+        "zip",
+        root_dir=path)
 
-        try:
-            shutil.move(created, zip_path)
-        except OSError as e:
-            os.remove(created)  # Cleanup on failure.
-            raise e from None
+    try:
+        zip_path = shutil.move(
+            created,
+            tempfile.mkstemp(suffix=".zip")[1])
+    except OSError as e:
+        os.remove(created)  # Cleanup on failure.
+        raise e from None
     return zip_path
 
 

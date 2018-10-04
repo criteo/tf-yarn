@@ -169,8 +169,11 @@ def run_on_yarn(
     task_specs = StaticDefaultDict(task_specs, default=TaskSpec.NONE)
     _check_task_specs(task_specs)
 
-    task_files = _maybe_zip_task_files(files or {})
-    task_files[__package__] = zip_inplace(here, replace=True)
+    task_files, assets_to_clean = _maybe_zip_task_files(files or {})
+    here_zipped = zip_inplace(here)
+    assets_to_clean.append(here_zipped)
+
+    task_files[__package__] = here_zipped
     with NamedTemporaryFile(suffix=".dill", delete=False) as file:
         dump_fn(experiment_fn, file.name)
         task_files["experiment_fn.dill"] = file.name
@@ -213,7 +216,7 @@ def run_on_yarn(
         queue=queue,
         file_systems=file_systems)
     with skein.Client() as client:
-        _submit_and_await_termination(client, spec, tasks)
+        _submit_and_await_termination(client, spec, tasks, assets_to_clean)
 
 
 def _check_task_specs(task_specs):
@@ -233,14 +236,16 @@ def _check_task_specs(task_specs):
 
 
 def _maybe_zip_task_files(files):
-    task_files = {}
+    task_files = dict()
+    assets_to_clean = list()
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = zip_inplace(source, replace=True)
+            source = zip_inplace(source)
+            assets_to_clean.append(source)
 
         task_files[target] = source
-    return task_files
+    return task_files, assets_to_clean
 
 
 def _make_conda_envs(python, pip_packages) -> typing.Dict[NodeLabel, str]:
@@ -290,6 +295,7 @@ def _submit_and_await_termination(
     client: skein.Client,
     spec: skein.ApplicationSpec,
     tasks: typing.List[str],
+    assets_to_clean: typing.List[str],
     poll_every_secs: int = 10
 ):
     app = client.submit_and_connect(spec)
@@ -304,6 +310,10 @@ def _submit_and_await_termination(
                 f"Application report for {app.id} (state: {report.state})")
             if state != report.state:
                 logger.info(_format_app_report(report))
+                if report.state == "accepted":
+                    #  Application has been accepted, we can clean the local assets
+                    for asset in assets_to_clean:
+                        os.remove(asset)
 
             if report.final_status != "undefined":
                 event_listener.join()

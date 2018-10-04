@@ -90,14 +90,6 @@ def test_zip_inplace(tmpdir):
         assert zf.read("boo.bin") == b
 
 
-def test_zip_inplace_replace(tmpdir):
-    zip_path = zip_inplace(str(tmpdir))
-    os.truncate(zip_path, 0)
-    assert os.path.getsize(zip_path) == 0
-    zip_inplace(str(tmpdir), replace=True)
-    assert os.path.getsize(zip_path) > 0
-
-
 def test_static_default_dict():
     d = StaticDefaultDict({"foo": 42}, default=100500)
     assert d["foo"] == 42

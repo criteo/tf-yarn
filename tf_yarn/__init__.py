@@ -33,7 +33,7 @@ from ._criteo import get_default_env
 from ._internal import (
     dump_fn,
     iter_tasks,
-    zip_inplace,
+    zip_path,
     StaticDefaultDict,
     create_and_pack_conda_env
 )
@@ -170,7 +170,7 @@ def run_on_yarn(
     _check_task_specs(task_specs)
 
     task_files = _maybe_zip_task_files(files or {})
-    task_files[__package__] = zip_inplace(here, replace=True)
+    task_files[__package__] = zip_path(here, replace=True)
     with NamedTemporaryFile(suffix=".dill", delete=False) as file:
         dump_fn(experiment_fn, file.name)
         task_files["experiment_fn.dill"] = file.name
@@ -237,7 +237,7 @@ def _maybe_zip_task_files(files):
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = zip_inplace(source, replace=True)
+            source = zip_path(source, replace=True)
 
         task_files[target] = source
     return task_files

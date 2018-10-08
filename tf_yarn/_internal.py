@@ -121,13 +121,13 @@ def xset_environ(**kwargs):
     os.environ.update(kwargs)
 
 
-def zip_inplace(path, replace=False):
+def zip_path(path, replace=False):
     assert os.path.exists(path) and os.path.isdir(path)
 
-    zip_path = path + ".zip"
+    zip_path = os.path.join(tempfile.gettempdir(), os.path.basename(path) + ".zip")
     if not os.path.exists(zip_path) or replace:
         created = shutil.make_archive(
-            os.path.basename(path),
+            zip_path,
             "zip",
             root_dir=path)
 

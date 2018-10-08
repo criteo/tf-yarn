@@ -3,7 +3,6 @@ import os
 import socket
 import subprocess
 import sys
-import tarfile
 import zipfile
 from subprocess import check_output
 from zipfile import ZipFile, is_zipfile
@@ -16,7 +15,7 @@ from tf_yarn._internal import (
     dump_fn,
     load_fn,
     xset_environ,
-    zip_inplace,
+    zip_path,
     StaticDefaultDict,
     create_and_pack_conda_env,
 )
@@ -70,17 +69,17 @@ def test_encode_fn_decode_fn(tmpdir):
     assert load_fn(path)() == f()
 
 
-def test_zip_inplace(tmpdir):
+def test_zip_path(tmpdir):
     s = "Hello, world!"
     tmpdir.mkdir("foo").join("bar.txt").write_text(s, encoding="utf-8")
     b = 0xffff.to_bytes(4, "little")
     tmpdir.join("boo.bin").write_binary(b)
 
-    zip_path = zip_inplace(str(tmpdir))
-    assert os.path.isfile(zip_path)
-    assert zip_path.endswith(".zip")
-    assert is_zipfile(zip_path)
-    with ZipFile(zip_path) as zf:
+    zipped_path = zip_path(str(tmpdir))
+    assert os.path.isfile(zipped_path)
+    assert zipped_path.endswith(".zip")
+    assert is_zipfile(zipped_path)
+    with ZipFile(zipped_path) as zf:
         zipped = {zi.filename for zi in zf.filelist}
         assert "foo/" in zipped
         assert "foo/bar.txt" in zipped
@@ -90,12 +89,12 @@ def test_zip_inplace(tmpdir):
         assert zf.read("boo.bin") == b
 
 
-def test_zip_inplace_replace(tmpdir):
-    zip_path = zip_inplace(str(tmpdir))
-    os.truncate(zip_path, 0)
-    assert os.path.getsize(zip_path) == 0
-    zip_inplace(str(tmpdir), replace=True)
-    assert os.path.getsize(zip_path) > 0
+def test_zip_path_replace(tmpdir):
+    zipped_path = zip_path(str(tmpdir))
+    os.truncate(zipped_path, 0)
+    assert os.path.getsize(zipped_path) == 0
+    zip_path(str(tmpdir), replace=True)
+    assert os.path.getsize(zipped_path) > 0
 
 
 def test_static_default_dict():

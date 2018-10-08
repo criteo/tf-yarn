@@ -14,13 +14,15 @@
 
 import hashlib
 import logging
+import uuid
 import os
 import time
 import typing
+import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, gettempdir
 from threading import Thread
 
 import dill
@@ -37,6 +39,11 @@ from ._internal import (
     StaticDefaultDict,
     create_and_pack_conda_env
 )
+from ._env import (
+   gen_pyenv_from_existing_archive,
+   gen_task_cmd
+)
+
 
 __all__ = [
     "Experiment",
@@ -91,6 +98,7 @@ def run_on_yarn(
     experiment_fn: ExperimentFn,
     task_specs: typing.Dict[str, TaskSpec],
     *,
+    pyenv_zip_path: typing.Union[str, typing.Dict[NodeLabel, str]] = None,
     python: str = f"{v.major}.{v.minor}.{v.micro}",
     pip_packages: typing.List[str] = None,
     files: typing.Dict[str, str] = None,
@@ -123,6 +131,12 @@ def run_on_yarn(
         must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
         ``"evaluator"``. The minimal spec must contain at least
         ``"chief"``.
+
+    pyenv_zip_path
+        Path to an archive of a python environment to be deployed
+        It can be a zip conda env or a pex archive
+        In case of GPU/CPU cluster, provide a dictionnary with both
+        environments.
 
     python
         Python version in the MAJOR.MINOR.MICRO format. Defaults to the
@@ -164,6 +178,20 @@ def run_on_yarn(
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
+    if not pyenv_zip_path:
+        warnings.warn(
+            "Auto generation of conda environment is deprecated and will be removed in "
+            "version 0.2.0, consider creating to pack yourself your environment and "
+            "use the pyenv_zip_path argument")
+        conda_envs = _make_conda_envs(python, pip_packages or [])
+        pyenvs = {node_label: gen_pyenv_from_existing_archive(zipped_path)
+                  for node_label, zipped_path in conda_envs.items()}
+    elif isinstance(pyenv_zip_path, str):
+        pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(pyenv_zip_path)}
+    else:
+        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path)
+                  for label, env_zip_path in pyenv_zip_path.items()}
+
     # TODO: compute num_ps from the model size and the number of
     # executors. See https://stackoverflow.com/a/46080567/262432.
     task_specs = StaticDefaultDict(task_specs, default=TASK_SPEC_NONE)
@@ -181,31 +209,28 @@ def run_on_yarn(
         **get_default_env(),
         **(env or {}),
         # Make Python modules/packages passed via ``files`` importable.
-        "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
+        "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", "",),
+        "PEX_ROOT": os.path.join(gettempdir(), str(uuid.uuid4()))
     }
 
-    pyenvs = _make_conda_envs(python, pip_packages or [])
+    num_ps = task_specs["ps"].instances
+    num_workers = task_specs["worker"].instances
     services = {}
     for task_type, task_spec in list(task_specs.items()):
-        task_command = (
-            f"pyenv/bin/python -m tf_yarn._dispatch_task "
-            f"--num-ps={task_specs['ps'].instances} "
-            f"--num-workers={task_specs['worker'].instances} "
-            "--experiment-fn=experiment_fn.dill"
-        )
-
+        pyenv = pyenvs[task_spec.label]
         services[task_type] = skein.Service(
-            [task_command],
+            [gen_task_cmd(pyenv, num_ps, num_workers)],
             skein.Resources(task_spec.memory, task_spec.vcores),
             max_restarts=0,
             instances=task_spec.instances,
             node_label=task_spec.label.value,
-            files={**task_files, "pyenv": pyenvs[task_spec.label]},
+            files={
+                **task_files,
+                pyenv.dest_path: pyenv.path_to_archive
+            },
             env=task_env)
 
-    tasks = list(iter_tasks(
-        task_specs["worker"].instances,
-        task_specs["ps"].instances))
+    tasks = list(iter_tasks(num_workers, num_ps))
     if "evaluator" in task_specs:
         tasks.append("evaluator:0")  # Not part of the cluster.
     spec = skein.ApplicationSpec(

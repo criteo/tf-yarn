@@ -50,7 +50,7 @@ def _check_add_criteo_environment(package_name):
 setup(
     name="tf_yarn",
     packages=["tf_yarn"],
-    version=_check_add_criteo_environment("0.1.0"),
+    version=_check_add_criteo_environment("0.1.1"),
     install_requires=[
         "tensorflow==" + _check_add_criteo_environment("1.10.1"),
         "dill==0.2.8",

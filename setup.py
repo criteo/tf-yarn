@@ -26,7 +26,6 @@ try:
 except IOError:
     LONG_DESCRIPTION = ""
 
-
 CLASSIFIERS = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -40,15 +39,23 @@ CLASSIFIERS = [
     "Topic :: Software Development :: Libraries"
 ]
 
+
+def _check_add_criteo_environment(package_name):
+    if "CRITEO_ENV" in os.environ:
+        return package_name + ".criteo"
+
+    return package_name
+
+
 setup(
     name="tf_yarn",
     packages=["tf_yarn"],
-    version="0.1.0.criteo",
+    version=_check_add_criteo_environment("0.1.0"),
     install_requires=[
-        "tensorflow==1.10.1.criteo",
+        "tensorflow==" + _check_add_criteo_environment("1.10.1"),
         "dill==0.2.8",
         "conda-pack==0.2.0",
-        "skein==0.1.1.criteo"
+        "skein==" + _check_add_criteo_environment('0.1.1')
     ],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

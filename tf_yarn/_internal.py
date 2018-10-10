@@ -23,6 +23,7 @@ import typing
 from contextlib import contextmanager
 from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
+from ._criteo import get_requirements_file
 
 import dill
 import setuptools
@@ -238,7 +239,7 @@ def create_and_pack_conda_env(
             _call([env_python_bin, "-m", "pip", "install"] +
                   pip_packages)
 
-            requirements_path = os.path.join(env_path, "requirements.txt")
+            requirements_path = os.path.join(env_path, get_requirements_file())
             with open(requirements_path, "w") as f:
                 print(*pip_packages, sep=os.linesep, file=f)
 

@@ -1,4 +1,4 @@
-tensorflow==1.10.1.criteo
+tensorflow==1.10.1
 conda-pack==0.2.0
 dill==0.2.8
-skein==0.1.1.criteo
+skein==0.1.1

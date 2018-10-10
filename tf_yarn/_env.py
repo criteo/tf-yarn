@@ -29,7 +29,12 @@ def gen_pyenv_from_existing_archive(path_to_archive: str
 
 def gen_task_cmd(pyenv: PythonEnvDescription,
                  num_ps: int,
-                 num_workers: int) -> str:
+                 num_workers: int,
+                 log_conf_file: typing.Optional[str]) -> str:
+
+    conf_args = f"--log-conf-file={log_conf_file}" if log_conf_file is not None else ""
+
     return (f"{pyenv.dispatch_task_cmd} "
             f"--num-ps={num_ps} --num-workers={num_workers} "
-            f"--experiment-fn=experiment_fn.dill")
+            f"--experiment-fn=experiment_fn.dill " + conf_args
+            )

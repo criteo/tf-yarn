@@ -21,7 +21,7 @@ import typing
 import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
-from sys import version_info as v
+from sys import version_info as v, modules
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Thread
 
@@ -104,7 +104,8 @@ def run_on_yarn(
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = None,
     queue: str = "default",
-    file_systems: typing.List[str] = None
+    file_systems: typing.List[str] = None,
+    log_conf_file: str = None
 ) -> None:
     """Run an experiment on YARN.
 
@@ -173,6 +174,10 @@ def run_on_yarn(
         A list of namenode URIs to acquire delegation tokens for
         in addition to ``fs.defaultFS``.
 
+    log_conf_file
+        optional file with log config, setups logging by default with INFO verbosity,
+        if you specify a file here don't forget to also ship it to the containers via files arg
+
     Raises
     ------
     RunFailed
@@ -219,7 +224,7 @@ def run_on_yarn(
     for task_type, task_spec in list(task_specs.items()):
         pyenv = pyenvs[task_spec.label]
         services[task_type] = skein.Service(
-            [gen_task_cmd(pyenv, num_ps, num_workers)],
+            [gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
             skein.Resources(task_spec.memory, task_spec.vcores),
             max_restarts=0,
             instances=task_spec.instances,

@@ -22,6 +22,8 @@ import typing
 
 import skein
 import tensorflow as tf
+import logging
+import logging.config
 
 from . import ExperimentFn
 from ._internal import (
@@ -199,12 +201,22 @@ def matches_device_filters(task: str, device_filters: typing.List[str]):
     return not device_filters
 
 
-if __name__ == "__main__":
-    tf.logging.set_verbosity("INFO")
+def _setup_logging(log_conf_file):
+    if log_conf_file is None:
+        base_dir = os.path.dirname(sys.modules["tf_yarn"].__file__)
+        log_conf_file = os.path.join(base_dir, "default.log.conf")
 
+    logging.config.fileConfig(log_conf_file, disable_existing_loggers=True)
+    tf.logging.info(f"using log file {log_conf_file}")
+
+
+if __name__ == "__main__":
+    print(f"start", file=sys.stderr)
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)
     parser.add_argument("--experiment-fn", type=load_fn)
+    parser.add_argument("--log-conf-file", type=str)
     args = parser.parse_args()
+    _setup_logging(args.log_conf_file)
     main(args.experiment_fn, list(iter_tasks(args.num_workers, args.num_ps)))

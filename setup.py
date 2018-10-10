@@ -50,6 +50,8 @@ def _check_add_criteo_environment(package_name):
 setup(
     name="tf_yarn",
     packages=["tf_yarn"],
+    include_package_data=True,
+    package_data={"tf_yarn": ["default.log.conf"]},
     version=_check_add_criteo_environment("0.1.1"),
     install_requires=[
         "tensorflow==" + _check_add_criteo_environment("1.10.1"),

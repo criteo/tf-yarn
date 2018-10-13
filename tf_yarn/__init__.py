@@ -29,7 +29,6 @@ import tensorflow as tf
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport
 
-from ._criteo import get_default_env
 from ._internal import (
     dump_fn,
     iter_tasks,
@@ -176,9 +175,6 @@ def run_on_yarn(
         task_files["experiment_fn.dill"] = file.name
 
     task_env = {
-        # XXX this is Criteo-specific. Remove once Lake updates the
-        #     container environment. See LAKE-709.
-        **get_default_env(),
         **(env or {}),
         # Make Python modules/packages passed via ``files`` importable.
         "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),

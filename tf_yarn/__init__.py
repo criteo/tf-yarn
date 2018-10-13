@@ -94,7 +94,7 @@ def run_on_yarn(
     python: str = f"{v.major}.{v.minor}.{v.micro}",
     pip_packages: typing.List[str] = None,
     files: typing.Dict[str, str] = None,
-    env: typing.Dict[str, str] = None,
+    env: typing.Dict[str, str] = {},
     queue: str = "default",
     file_systems: typing.List[str] = None
 ) -> None:
@@ -179,9 +179,10 @@ def run_on_yarn(
         # XXX this is Criteo-specific. Remove once Lake updates the
         #     container environment. See LAKE-709.
         **get_default_env(),
-        **(env or {}),
+        **env,
+        "LIBHDFS_OPTS": "{default} {env}".format(default="-Xms64m -Xmx256m", env=env.get("LIBHDFS_OPTS")) if "LIBHDFS_OPTS" else "-Xms64m -Xmx256m",
         # Make Python modules/packages passed via ``files`` importable.
-        "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", ""),
+        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
     }
 
     pyenvs = _make_conda_envs(python, pip_packages or [])

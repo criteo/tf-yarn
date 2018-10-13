@@ -11,3 +11,5 @@ sdist
 dist
 target
 *egg-info
+.eggs/
+venv/

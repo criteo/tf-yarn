@@ -43,7 +43,6 @@ from ._env import (
    gen_task_cmd
 )
 
-
 __all__ = [
     "Experiment",
     "run_on_yarn", "RunFailed", "NodeLabel", "TaskSpec",
@@ -101,7 +100,7 @@ def run_on_yarn(
     python: str = f"{v.major}.{v.minor}.{v.micro}",
     pip_packages: typing.List[str] = None,
     files: typing.Dict[str, str] = None,
-    env: typing.Dict[str, str] = None,
+    env: typing.Dict[str, str] = {},
     queue: str = "default",
     file_systems: typing.List[str] = None,
     log_conf_file: str = None
@@ -207,10 +206,15 @@ def run_on_yarn(
         dump_fn(experiment_fn, file.name)
         task_files["experiment_fn.dill"] = file.name
 
+    libhdfs_opts = "-Xms64m -Xmx512m"
+    if "LIBHDFS_OPTS" in env:
+        libhdfs_opts = "{default} {env}".format(default=libhdfs_opts, env=env.get("LIBHDFS_OPTS"))
+
     task_env = {
-        **(env or {}),
+        **env,
+        "LIBHDFS_OPTS": libhdfs_opts,
         # Make Python modules/packages passed via ``files`` importable.
-        "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", "",),
+        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
         "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
     }
 

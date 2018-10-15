@@ -41,7 +41,7 @@ CLASSIFIERS = [
 
 
 def _check_add_criteo_environment(package_name):
-    if "CRITEO_ENV" in os.environ:
+    if "CRITEO_ENV" or "TARGET_ENVIRONMENT" in os.environ:
         return package_name + ".criteo"
 
     return package_name

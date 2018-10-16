@@ -22,7 +22,7 @@ import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v, modules
-from tempfile import NamedTemporaryFile, gettempdir
+from tempfile import NamedTemporaryFile
 from threading import Thread
 
 import dill
@@ -211,7 +211,7 @@ def run_on_yarn(
         **(env or {}),
         # Make Python modules/packages passed via ``files`` importable.
         "PYTHONPATH": ".:" + (env or {}).get("PYTHONPATH", "",),
-        "PEX_ROOT": os.path.join(gettempdir(), str(uuid.uuid4()))
+        "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
     }
 
     num_ps = task_specs["ps"].instances

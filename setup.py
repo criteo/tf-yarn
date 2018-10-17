@@ -52,9 +52,9 @@ setup(
     packages=["tf_yarn"],
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.1.1"),
+    version=_check_add_criteo_environment("0.1.2"),
     install_requires=[
-        "tensorflow==" + _check_add_criteo_environment("1.10.1"),
+        "tensorflow==" + _check_add_criteo_environment("1.11.0"),
         "dill==0.2.8",
         "conda-pack==0.2.0",
         "skein==" + _check_add_criteo_environment('0.1.1')

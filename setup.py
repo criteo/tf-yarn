@@ -42,7 +42,7 @@ CLASSIFIERS = [
 
 def _check_add_criteo_environment(package_name):
     if "CRITEO_ENV" or "TARGET_ENVIRONMENT" in os.environ:
-        return package_name + ".criteo"
+        return package_name + "+criteo"
 
     return package_name
 
@@ -52,12 +52,12 @@ setup(
     packages=["tf_yarn"],
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.1.2"),
+    version=_check_add_criteo_environment("0.1.3"),
     install_requires=[
-        "tensorflow==" + _check_add_criteo_environment("1.11.0"),
+        "tensorflow==1.11.0",
         "dill==0.2.8",
         "conda-pack==0.2.0",
-        "skein==" + _check_add_criteo_environment('0.1.1')
+        "skein==" + _check_add_criteo_environment('0.2')
     ],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

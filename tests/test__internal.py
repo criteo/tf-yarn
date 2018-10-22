@@ -3,6 +3,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import zipfile
 from subprocess import check_output
 from zipfile import ZipFile, is_zipfile
@@ -75,26 +76,19 @@ def test_zip_path(tmpdir):
     b = 0xffff.to_bytes(4, "little")
     tmpdir.join("boo.bin").write_binary(b)
 
-    zipped_path = zip_path(str(tmpdir))
-    assert os.path.isfile(zipped_path)
-    assert zipped_path.endswith(".zip")
-    assert is_zipfile(zipped_path)
-    with ZipFile(zipped_path) as zf:
-        zipped = {zi.filename for zi in zf.filelist}
-        assert "foo/" in zipped
-        assert "foo/bar.txt" in zipped
-        assert "boo.bin" in zipped
+    with tempfile.TemporaryDirectory() as tempdirpath:
+        zipped_path = zip_path(str(tmpdir), tempdirpath)
+        assert os.path.isfile(zipped_path)
+        assert zipped_path.endswith(".zip")
+        assert is_zipfile(zipped_path)
+        with ZipFile(zipped_path) as zf:
+            zipped = {zi.filename for zi in zf.filelist}
+            assert "foo/" in zipped
+            assert "foo/bar.txt" in zipped
+            assert "boo.bin" in zipped
 
-        assert zf.read("foo/bar.txt") == s.encode()
-        assert zf.read("boo.bin") == b
-
-
-def test_zip_path_replace(tmpdir):
-    zipped_path = zip_path(str(tmpdir))
-    os.truncate(zipped_path, 0)
-    assert os.path.getsize(zipped_path) == 0
-    zip_path(str(tmpdir), replace=True)
-    assert os.path.getsize(zipped_path) > 0
+            assert zf.read("foo/bar.txt") == s.encode()
+            assert zf.read("boo.bin") == b
 
 
 def test_static_default_dict():

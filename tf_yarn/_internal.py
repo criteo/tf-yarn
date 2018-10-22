@@ -20,6 +20,7 @@ import shutil
 import socket
 import tempfile
 import typing
+import uuid
 from contextlib import contextmanager
 from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
@@ -122,21 +123,20 @@ def xset_environ(**kwargs):
     os.environ.update(kwargs)
 
 
-def zip_path(path, replace=False):
+def zip_path(path: str, tempdir: str):
     assert os.path.exists(path) and os.path.isdir(path)
 
-    zip_path = os.path.join("/tmp", os.path.basename(path) + ".zip")
-    if not os.path.exists(zip_path) or replace:
-        created = shutil.make_archive(
-            zip_path,
-            "zip",
-            root_dir=path)
+    zip_path = os.path.join(tempdir, os.path.basename(path) + ".zip")
+    created = shutil.make_archive(
+        zip_path,
+        "zip",
+        root_dir=path)
 
-        try:
-            shutil.move(created, zip_path)
-        except OSError as e:
-            os.remove(created)  # Cleanup on failure.
-            raise e from None
+    try:
+        shutil.move(created, zip_path)
+    except OSError as e:
+        os.remove(created)  # Cleanup on failure.
+        raise e from None
     return zip_path
 
 

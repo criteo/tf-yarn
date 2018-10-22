@@ -22,7 +22,7 @@ import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v, modules
-from tempfile import NamedTemporaryFile
+import tempfile
 from threading import Thread
 
 import dill
@@ -200,50 +200,51 @@ def run_on_yarn(
     task_specs = StaticDefaultDict(task_specs, default=TASK_SPEC_NONE)
     _check_task_specs(task_specs)
 
-    task_files = _maybe_zip_task_files(files or {})
-    task_files[__package__] = zip_path(here, replace=True)
-    with NamedTemporaryFile(suffix=".dill", delete=False) as file:
-        dump_fn(experiment_fn, file.name)
-        task_files["experiment_fn.dill"] = file.name
+    with tempfile.TemporaryDirectory() as tempdir:
+        task_files = _maybe_zip_task_files(files or {}, tempdir)
+        task_files[__package__] = zip_path(here, tempdir)
+        with tempfile.NamedTemporaryFile(suffix=".dill", delete=False) as file:
+            dump_fn(experiment_fn, file.name)
+            task_files["experiment_fn.dill"] = file.name
 
     libhdfs_opts = "-Xms64m -Xmx512m"
     if "LIBHDFS_OPTS" in env:
         libhdfs_opts = "{default} {env}".format(default=libhdfs_opts, env=env.get("LIBHDFS_OPTS"))
 
-    task_env = {
-        **env,
-        "LIBHDFS_OPTS": libhdfs_opts,
-        # Make Python modules/packages passed via ``files`` importable.
-        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
-        "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
-    }
+        task_env = {
+            **env,
+            "LIBHDFS_OPTS": libhdfs_opts,
+            # Make Python modules/packages passed via ``files`` importable.
+            "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
+            "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
+        }
 
-    num_ps = task_specs["ps"].instances
-    num_workers = task_specs["worker"].instances
-    services = {}
-    for task_type, task_spec in list(task_specs.items()):
-        pyenv = pyenvs[task_spec.label]
-        services[task_type] = skein.Service(
-            [gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
-            skein.Resources(task_spec.memory, task_spec.vcores),
-            max_restarts=0,
-            instances=task_spec.instances,
-            node_label=task_spec.label.value,
-            files={
-                **task_files,
-                pyenv.dest_path: pyenv.path_to_archive
-            },
-            env=task_env)
+        num_ps = task_specs["ps"].instances
+        num_workers = task_specs["worker"].instances
+        services = {}
+        for task_type, task_spec in list(task_specs.items()):
+            pyenv = pyenvs[task_spec.label]
+            services[task_type] = skein.Service(
+                [gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
+                skein.Resources(task_spec.memory, task_spec.vcores),
+                max_restarts=0,
+                instances=task_spec.instances,
+                node_label=task_spec.label.value,
+                files={
+                    **task_files,
+                    pyenv.dest_path: pyenv.path_to_archive
+                },
+                env=task_env)
 
-    tasks = list(iter_tasks(num_workers, num_ps))
-    if "evaluator" in task_specs:
-        tasks.append("evaluator:0")  # Not part of the cluster.
-    spec = skein.ApplicationSpec(
-        services,
-        queue=queue,
-        file_systems=file_systems)
-    with skein.Client() as client:
-        _submit_and_await_termination(client, spec, tasks)
+        tasks = list(iter_tasks(num_workers, num_ps))
+        if "evaluator" in task_specs:
+            tasks.append("evaluator:0")  # Not part of the cluster.
+        spec = skein.ApplicationSpec(
+            services,
+            queue=queue,
+            file_systems=file_systems)
+        with skein.Client() as client:
+            _submit_and_await_termination(client, spec, tasks)
 
 
 def _check_task_specs(task_specs):
@@ -262,12 +263,12 @@ def _check_task_specs(task_specs):
             "multi-worker training")
 
 
-def _maybe_zip_task_files(files):
+def _maybe_zip_task_files(files, tempdir):
     task_files = {}
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = zip_path(source, replace=True)
+            source = zip_path(source, tempdir)
 
         task_files[target] = source
     return task_files

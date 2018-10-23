@@ -207,9 +207,10 @@ def run_on_yarn(
             dump_fn(experiment_fn, file.name)
             task_files["experiment_fn.dill"] = file.name
 
-    libhdfs_opts = "-Xms64m -Xmx512m"
-    if "LIBHDFS_OPTS" in env:
-        libhdfs_opts = "{default} {env}".format(default=libhdfs_opts, env=env.get("LIBHDFS_OPTS"))
+        libhdfs_opts = "-Xms64m -Xmx512m"
+        if "LIBHDFS_OPTS" in env:
+            libhdfs_opts = "{default} {env}".format(default=libhdfs_opts,
+                                                    env=env.get("LIBHDFS_OPTS"))
 
         task_env = {
             **env,

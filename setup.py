@@ -52,11 +52,11 @@ setup(
     packages=["tf_yarn"],
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.1.5"),
+    version=_check_add_criteo_environment("0.1.6"),
     install_requires=[
         "tensorflow==1.11.0",
         "dill==0.2.8",
-        "conda-pack==0.2.0",
+        "conda-pack",
         "skein==" + _check_add_criteo_environment('0.2')
     ],
     tests_require=["pytest", "hadoop-test-cluster"],

@@ -19,7 +19,7 @@ def gen_pyenv_from_existing_archive(path_to_archive: str
     if path_to_archive.endswith('.pex'):
         return PythonEnvDescription(
             path_to_archive,
-            f"./{archive_filename} {DISPATCH_MODULE} --",
+            f"./{archive_filename} --colors=NoColor {DISPATCH_MODULE} --",
             archive_filename)
     elif path_to_archive.endswith(".zip"):
         return PythonEnvDescription(path_to_archive, CONDA_CMD, CONDA_ENV_NAME)

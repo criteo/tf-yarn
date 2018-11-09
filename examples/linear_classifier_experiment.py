@@ -2,6 +2,8 @@ import logging
 import os
 import pwd
 import sys
+import time
+from datetime import datetime
 from functools import partial
 from subprocess import check_output
 
@@ -10,6 +12,7 @@ import tensorflow as tf
 import winequality
 from tf_yarn import Experiment, run_on_yarn, TaskSpec
 
+run_id = int(time.mktime(datetime.now().timetuple()))
 
 def experiment_fn(dataset_path: str) -> Experiment:
     train_data, test_data = winequality.get_train_eval_datasets(dataset_path)
@@ -32,7 +35,7 @@ def experiment_fn(dataset_path: str) -> Experiment:
     user = pwd.getpwuid(os.getuid()).pw_name
     config = tf.estimator.RunConfig(
         tf_random_seed=42,
-        model_dir=f"{fs}/user/{user}/{__name__}")
+        model_dir=f"{fs}/user/{user}/examples/{run_id}")
     estimator = tf.estimator.LinearClassifier(
         winequality.get_feature_columns(),
         n_classes=winequality.get_n_classes(),
@@ -54,14 +57,13 @@ if __name__ == "__main__":
         sys.exit(winequality.__doc__)
 
     logging.basicConfig(level="INFO")
-
+    
+   
     run_on_yarn(
         partial(experiment_fn, dataset_path),
         task_specs={
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
         },
-        files={
-            os.path.basename(winequality.__file__): winequality.__file__,
-        }
-    )
+        files={os.path.basename(winequality.__file__): winequality.__file__}
+        )

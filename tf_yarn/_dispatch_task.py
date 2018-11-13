@@ -19,6 +19,7 @@ import re
 import sys
 import traceback
 import typing
+import time
 
 import skein
 import tensorflow as tf
@@ -53,6 +54,31 @@ def main(
     def stop_event(e: typing.Optional[Exception]) -> None:
         broadcast(client, f"{task}/stop", maybe_format_exception(e))
 
+    def broadcast_train_eval_start_timer() -> None:
+        broadcast(client, f'{task}/train_eval_start_time', str(time.time()))
+
+    def broadcast_train_eval_stop_timer() -> None:
+        broadcast(client, f'{task}/train_eval_stop_time', str(time.time()))
+
+    def broadcast_container_start_time() -> None:
+        broadcast(client, f'{task}/container_start_time', str(time.time()))
+
+    def broadcast_container_stop_time() -> None:
+        broadcast(client, f'{task}/container_stop_time', str(time.time()))
+
+    def train_and_evaluate(
+        estimator: tf.estimator,
+        train_spec: tf.estimator.TrainSpec,
+        eval_spec: tf.estimator.EvalSpec
+    ):
+        broadcast_train_eval_start_timer()
+        tf.estimator.train_and_evaluate(
+            estimator,
+            train_spec,
+            eval_spec
+        )
+        broadcast_train_eval_stop_timer()
+
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
@@ -79,6 +105,8 @@ def main(
             "label=NodeLabel.CPU in the corresponding TaskSpec.")
 
     client = skein.ApplicationClient.from_current()
+
+    broadcast_container_start_time()
 
     container = next(c for c in client.get_containers()
                      if c.yarn_container_id == os.environ["CONTAINER_ID"])
@@ -127,9 +155,10 @@ def main(
     tf.logging.info(f"Starting {task_type}:{task_id}")
     thread = MonitoredThread(
         name=f"{task_type}:{task_id}",
-        target=tf.estimator.train_and_evaluate,
+        target=train_and_evaluate,
         args=tuple(experiment),
         daemon=True)
+
     thread.start()
     start_event()
 
@@ -148,6 +177,8 @@ def main(
         client,
         all_tasks,
         getattr(config.session_config, "device_filters", []))
+
+    broadcast_container_stop_time()
 
     if thread.exception is not None:
         raise thread.exception from None

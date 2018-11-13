@@ -17,13 +17,22 @@ import logging
 import uuid
 import os
 import time
-import typing
+from typing import (
+    Dict,
+    Optional,
+    Tuple,
+    NamedTuple,
+    Callable,
+    Union,
+    List
+)
 import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
 from sys import version_info as v, modules
 import tempfile
 from threading import Thread
+from datetime import timedelta
 
 import dill
 import skein
@@ -53,7 +62,7 @@ logger = logging.getLogger(__name__)
 here = os.path.dirname(__file__)
 
 
-class Experiment(typing.NamedTuple):
+class Experiment(NamedTuple):
     estimator: tf.estimator.Estimator
     train_spec: tf.estimator.TrainSpec
     eval_spec: tf.estimator.EvalSpec
@@ -65,7 +74,7 @@ class Experiment(typing.NamedTuple):
         return self.estimator.config
 
 
-ExperimentFn = typing.Callable[[], Experiment]
+ExperimentFn = Callable[[], Experiment]
 
 
 class NodeLabel(Enum):
@@ -78,7 +87,7 @@ class NodeLabel(Enum):
     GPU = "gpu"
 
 
-class TaskSpec(typing.NamedTuple):
+class TaskSpec(NamedTuple):
     memory: int
     vcores: int
     instances: int = 1
@@ -92,17 +101,24 @@ class RunFailed(Exception):
     """``run_on_yarn`` failed."""
 
 
+class Metrics(NamedTuple):
+    total_training_time: Optional[timedelta]
+    total_eval_duration: Optional[timedelta]
+    container_duration: Dict[str, Optional[timedelta]]
+    train_eval_time_per_node: Dict[str, Optional[timedelta]]
+
+
 def run_on_yarn(
     experiment_fn: ExperimentFn,
-    task_specs: typing.Dict[str, TaskSpec],
+    task_specs: Dict[str, TaskSpec],
     *,
-    pyenv_zip_path: typing.Union[str, typing.Dict[NodeLabel, str]] = None,
+    pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
     python: str = f"{v.major}.{v.minor}.{v.micro}",
-    pip_packages: typing.List[str] = None,
-    files: typing.Dict[str, str] = None,
-    env: typing.Dict[str, str] = {},
+    pip_packages: List[str] = None,
+    files: Dict[str, str] = None,
+    env: Dict[str, str] = {},
     queue: str = "default",
-    file_systems: typing.List[str] = None,
+    file_systems: List[str] = None,
     log_conf_file: str = None
 ) -> None:
     """Run an experiment on YARN.
@@ -245,7 +261,7 @@ def run_on_yarn(
             queue=queue,
             file_systems=file_systems)
         with skein.Client() as client:
-            _submit_and_await_termination(client, spec, tasks)
+            return _submit_and_await_termination(client, spec, tasks)
 
 
 def _check_task_specs(task_specs):
@@ -275,7 +291,7 @@ def _maybe_zip_task_files(files, tempdir):
     return task_files
 
 
-def _make_conda_envs(python, pip_packages) -> typing.Dict[NodeLabel, str]:
+def _make_conda_envs(python, pip_packages) -> Dict[NodeLabel, str]:
     fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
     base_packages = [
         "dill==" + dill.__version__,
@@ -321,11 +337,11 @@ def _shutdown_on_exception(app: skein.ApplicationClient):
 def _submit_and_await_termination(
     client: skein.Client,
     spec: skein.ApplicationSpec,
-    tasks: typing.List[str],
+    tasks: List[str],
     poll_every_secs: int = 10
 ):
     app = client.submit_and_connect(spec)
-    events: typing.Dict[str, typing.Dict[str, str]] = {task: {} for task in tasks}
+    events: Dict[str, Dict[str, str]] = {task: {} for task in tasks}
     event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
     event_listener.start()
     with _shutdown_on_exception(app):
@@ -339,14 +355,16 @@ def _submit_and_await_termination(
 
             if report.final_status != "undefined":
                 event_listener.join()
-                logger.info(_format_run_summary(events))
+                log_events, metrics = _handle_events(events)
+                logger.info(log_events)
                 if report.final_status == "failed":
                     raise RunFailed
                 else:
                     break
-
             time.sleep(poll_every_secs)
             state = report.state
+
+    return metrics
 
 
 def _format_app_report(report: ApplicationReport) -> str:
@@ -364,7 +382,7 @@ def _format_app_report(report: ApplicationReport) -> str:
 
 def _aggregate_events(
     kv: skein.kv.KeyValueStore,
-    events: typing.Dict[str, typing.Dict[str, str]]
+    events: Dict[str, Dict[str, str]]
 ) -> None:
     """
     Aggregate events from all dispatched tasks.
@@ -379,15 +397,33 @@ def _aggregate_events(
     queue = kv.events(event_type="PUT")
     with suppress(skein.exceptions.ConnectionError), queue:
         for event in queue:
-            task, stage = event.key.rsplit("/", 1)
-            events[task][stage] = event.result.value.decode()
+            if "/" in event.key:
+                task, stage = event.key.rsplit("/", 1)
+                events[task][stage] = event.result.value.decode()
 
 
-def _format_run_summary(
-    events: typing.Dict[str, typing.Dict[str, str]]
-) -> str:
+def _handle_events(
+    events: Dict[str, Dict[str, str]]
+) -> Tuple[str, Metrics]:
+    def is_worker(task: str) -> bool:
+        return task == 'worker'
+
+    def is_evaluator(task: str) -> bool:
+        return task == 'evaluator'
+
+    def is_chief(task: str) -> bool:
+        return task == 'chief'
+
     header = []
     details = []
+    min_training_start_time = timedelta.max
+    max_training_stop_time = timedelta.min
+    min_eval_start_time = timedelta.max
+    max_eval_stop_time = timedelta.min
+    valid_training_time = True
+    valid_eval_time = True
+    container_duration: Dict[str, Optional[timedelta]] = dict()
+    train_eval_time_per_node: Dict[str, Optional[timedelta]] = dict()
     for task, stages in sorted(events.items()):
         if "stop" in stages:
             status = "FAILED" if stages["stop"] else "SUCCEEDED"
@@ -400,10 +436,55 @@ def _format_run_summary(
         sock_addr = stages.get("init", "")
         exception = stages.get("stop", "")
         logs = stages.get("logs", "")
-        header.append(f"{task:>16}  {sock_addr}  {status}  {logs}")
+
+        container_duration[task] = None
+        if 'container_start_time' in stages and 'container_stop_time' in stages:
+            container_duration[task] = timedelta(seconds=(float(stages['container_stop_time'])
+                                                          - float(stages['container_start_time'])))
+
+        train_eval_time_per_node[task] = None
+        task_type = task.split(':')[0]
+        if 'train_eval_start_time' in stages and 'train_eval_stop_time' in stages and not exception:
+            start_time = timedelta(seconds=float(stages['train_eval_start_time']))
+            stop_time = timedelta(seconds=float(stages['train_eval_stop_time']))
+            train_eval_time_per_node[task] = stop_time - start_time
+            if is_worker(task_type) or is_chief(task_type):
+                if start_time < min_training_start_time:
+                    min_training_start_time = start_time
+                if stop_time > max_training_stop_time:
+                    max_training_stop_time = stop_time
+            elif is_evaluator(task_type):
+                if start_time < min_eval_start_time:
+                    min_eval_start_time = start_time
+                if stop_time > max_eval_stop_time:
+                    max_eval_stop_time = stop_time
+        else:
+            if is_worker(task_type) or is_chief(task_type):
+                valid_training_time = False
+            elif is_evaluator(task_type):
+                valid_eval_time = False
+
+        header.append(f"{task:>16}  {sock_addr}  {status}  {logs}"
+                      f"  Container duration: {container_duration[task]}"
+                      f"  Training/evaluation duration : {train_eval_time_per_node[task]}")
+
         if exception:
             details.append(f"Exception in task {task}:")
             details.append(exception)
-    return (os.linesep + os.linesep.join(header)
+
+    training_time = max_training_stop_time - min_training_start_time\
+        if valid_training_time else None
+    eval_time = max_eval_stop_time - min_eval_start_time\
+        if valid_eval_time else None
+    header.append(f'Training time = {training_time}')
+    header.append(f'Evaluation time = {eval_time}')
+
+    metrics = Metrics(
+        training_time,
+        eval_time,
+        container_duration,
+        train_eval_time_per_node
+    )
+    return ((os.linesep + os.linesep.join(header)
             + os.linesep * (1 + bool(details))
-            + os.linesep.join(details))
+             + os.linesep.join(details)), metrics)

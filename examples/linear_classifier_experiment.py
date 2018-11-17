@@ -65,5 +65,6 @@ if __name__ == "__main__":
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
         },
-        files={os.path.basename(winequality.__file__): winequality.__file__}
+        files={os.path.basename(winequality.__file__): winequality.__file__},
+        num_threads= 2
         )

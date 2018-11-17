@@ -101,10 +101,12 @@ def run_on_yarn(
     pip_packages: typing.List[str] = None,
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = {},
+    num_threads: int ,
     queue: str = "default",
     file_systems: typing.List[str] = None,
     log_conf_file: str = None
 ) -> None:
+
     """Run an experiment on YARN.
 
     The implementation allocates a service with the requested number
@@ -226,7 +228,7 @@ def run_on_yarn(
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
             services[task_type] = skein.Service(
-                [gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
+                [gen_task_cmd(pyenv, num_ps, num_workers, num_threads, log_conf_file)], 
                 skein.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
                 instances=task_spec.instances,

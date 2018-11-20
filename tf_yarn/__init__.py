@@ -101,7 +101,7 @@ def run_on_yarn(
     pip_packages: typing.List[str] = None,
     files: typing.Dict[str, str] = None,
     env: typing.Dict[str, str] = {},
-    num_threads: int = 0,
+    num_threads: int = 1,
     queue: str = "default",
     file_systems: typing.List[str] = None,
     log_conf_file: str = None

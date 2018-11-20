@@ -39,7 +39,7 @@ from ._internal import (
 def main(
     experiment_fn: ExperimentFn,
     all_tasks: typing.List[str],
-    num_threads : int = 0
+    num_threads : int 
 ) -> None:
 
 
@@ -118,9 +118,10 @@ def main(
         config = experiment.config
         assert config.task_type == task_type and config.task_id == task_id
     
-    server_config = tf.ConfigProto()
-    server_config.intra_op_parallelism_threads=num_threads
-    server_config.inter_op_parallelism_threads=num_threads
+    server_config = tf.ConfigProto(log_device_placement=True,
+                                   intra_op_parallelism_threads=num_threads,
+                                   inter_op_parallelism_threads=num_threads)
+
     if fake_google_env:
 
         tf.train.Server(

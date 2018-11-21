@@ -58,13 +58,13 @@ if __name__ == "__main__":
 
     logging.basicConfig(level="INFO")
     
-   
+
     run_on_yarn(
         partial(experiment_fn, dataset_path),
         task_specs={
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
+            #also one can add num_cores=num_cores here where num_cores value is user specified, otherwise the default is 1
         },
-        files={os.path.basename(winequality.__file__): winequality.__file__},
-        num_threads= 2
+        files={os.path.basename(winequality.__file__): winequality.__file__}
         )

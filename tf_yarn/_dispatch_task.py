@@ -39,7 +39,7 @@ from ._internal import (
 def main(
     experiment_fn: ExperimentFn,
     all_tasks: typing.List[str],
-    num_threads : int 
+    num_cores : int 
 ) -> None:
 
 
@@ -116,11 +116,10 @@ def main(
             raise
 
         config = experiment.config
+        #adding the number of the cores here to the config
+        config.session_config.intra_op_parallelism_threads=num_cores
+        config.session_config.inter_op_parallelism_threads=num_cores
         assert config.task_type == task_type and config.task_id == task_id
-    
-    server_config = tf.ConfigProto(log_device_placement=True,
-                                   intra_op_parallelism_threads=num_threads,
-                                   inter_op_parallelism_threads=num_threads)
 
     if fake_google_env:
 
@@ -128,7 +127,7 @@ def main(
             config.cluster_spec,
             job_name=config.task_type,
             task_index=config.task_id,
-            config=server_config,
+            config=config.session_config,
             start=True)
 
     tf.logging.info(f"Starting {task_type}:{task_id}")
@@ -224,7 +223,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-ps", type=int)
     parser.add_argument("--experiment-fn", type=load_fn)
     parser.add_argument("--log-conf-file", type=str)
-    parser.add_argument("--num-threads",type=int)
+    parser.add_argument("--num-cores",type=int)
     args = parser.parse_args()
     _setup_logging(args.log_conf_file)
-    main(args.experiment_fn, list(iter_tasks(args.num_workers, args.num_ps)),args.num_threads) 
+    main(args.experiment_fn, list(iter_tasks(args.num_workers, args.num_ps)),args.num_cores) 

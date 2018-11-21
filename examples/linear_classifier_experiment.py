@@ -58,13 +58,12 @@ if __name__ == "__main__":
 
     logging.basicConfig(level="INFO")
     
-
+    #also one can use run_on_yarn(...,num_cores=num_cores) where num_cores is the user specified value, otherwise the default is 1
     run_on_yarn(
         partial(experiment_fn, dataset_path),
         task_specs={
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
-            #also one can add num_cores=num_cores here where num_cores value is user specified, otherwise the default is 1
         },
         files={os.path.basename(winequality.__file__): winequality.__file__}
         )

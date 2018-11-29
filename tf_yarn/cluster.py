@@ -32,10 +32,10 @@ def get_task_description() -> typing.Tuple[str, int]:
     return task_type, task_id
 
 
-def start_cluster(client: skein.ApplicationClient,
-                  all_tasks: typing.List[str],
-                  config: tf.ConfigProto = None
-                  ):
+def start_cluster(
+    client: skein.ApplicationClient,
+    all_tasks: typing.List[str]
+) -> typing.Dict[str, typing.List[str]]:
     # There is a race condition between acquiring a TCP port for
     # ``tf.train.Server``, and calling ``train_and_evaluate``.
     # There is no TensorFlow API to get rid of the race condition
@@ -44,7 +44,6 @@ def start_cluster(client: skein.ApplicationClient,
     # See https://github.com/tensorflow/tensorflow/issues/21492
     task_type, task_id = get_task_description()
     cluster_spec: typing.Dict = dict()
-    fake_google_env = False
     with _internal.reserve_sock_addr() as (host, port):
         event.init_event(client, get_task(), f"{socket.gethostbyname(host)}:{port}")
         cluster_spec = aggregate_spec(client, all_tasks)
@@ -52,19 +51,30 @@ def start_cluster(client: skein.ApplicationClient,
         # Note that "evaluator" does not need a cluster, and "ps" (!)
         # surprisingly does not follow the same code path as the rest
         # and spawns a server regardless of the "environment" value.
-        fake_google_env = task_type != "evaluator" and task_type != "ps"
         _internal.xset_environ(TF_CONFIG=json.dumps({
             "cluster": cluster_spec,
-            "environment": "google" if fake_google_env else "",
+            "environment": "google" if is_fake_google_env(task_type) else "",
             "task": {"type": task_type, "index": task_id},
         }))
+        return cluster_spec
 
-    if fake_google_env and cluster_spec:
+
+def start_tf_server(
+    cluster_spec: typing.Dict[str, typing.List[str]],
+    session_config: tf.ConfigProto = None
+) -> typing.Optional[tf.train.Server]:
+    task_type, task_id = get_task_description()
+
+    if is_fake_google_env(task_type) and cluster_spec:
         server = tf.train.Server(
             tf.train.ClusterSpec(cluster_spec),
             job_name=task_type,
             task_index=task_id,
-            config=config,
+            config=session_config,
             start=True)
         return server
     return None
+
+
+def is_fake_google_env(task_type: str) -> bool:
+    return task_type != "evaluator" and task_type != "ps"

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -75,6 +74,8 @@ def main(
         logs = "http://" + logs
     event.logs_event(client, task, logs)
 
+    cluster_spec = cluster.start_cluster(client, all_tasks)
+
     try:
         experiment = experiment_fn()
     except Exception as e:
@@ -82,8 +83,7 @@ def main(
         raise
 
     config = experiment.config
-
-    cluster.start_cluster(client, all_tasks, config.session_config)
+    cluster.start_tf_server(cluster_spec, config.session_config)
 
     tf.logging.info(f"Starting {task_type}:{task_id}")
     thread = MonitoredThread(

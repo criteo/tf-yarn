@@ -12,10 +12,7 @@ It should :
 * Compute the mean
 """
 
-from multiprocessing import Pool
-import uuid
 import sys
-import os
 
 import skein
 import numpy as np
@@ -29,7 +26,8 @@ NODE_NAME = "worker"
 
 def create_cluster():
     client = skein.ApplicationClient.from_current()
-    cluster.start_cluster(client, [f'{NODE_NAME}:0', f'{NODE_NAME}:1'])
+    cluster_spec = cluster.start_cluster(client, [f'{NODE_NAME}:0', f'{NODE_NAME}:1'])
+    cluster.start_tf_server(cluster_spec)
     event.wait(client, "stop")
 
 

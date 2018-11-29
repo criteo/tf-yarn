@@ -32,16 +32,17 @@ def test_get_task_description():
         assert "MYTASK", 42 == cluster.get_task_description()
 
 
-@pytest.mark.parametrize("task_name, task_index, is_server_started", [
-    pytest.param("worker", 1, True),
-    pytest.param("ps", 0, False)
-])
-def test_start_cluster_worker(task_name, task_index, is_server_started):
-    CURRENT_HOST = "1.1.1.1"
-    CURRENT_PORT = 8888
-    WORKER0_HOST = "1.1.1.2"
-    WORKER0_PORT = 8888
+CURRENT_HOST = "1.1.1.1"
+CURRENT_PORT = 8888
+WORKER0_HOST = "1.1.1.2"
+WORKER0_PORT = 8888
 
+
+@pytest.mark.parametrize("task_name, task_index", [
+    pytest.param("worker", 1),
+    pytest.param("ps", 0)
+])
+def test_start_cluster_worker(task_name, task_index):
     task = f"{task_name}:{task_index}"
 
     CLUSTER_SPEC = {"worker:0/init": f"{WORKER0_HOST}:{WORKER0_PORT}",
@@ -52,18 +53,33 @@ def test_start_cluster_worker(task_name, task_index, is_server_started):
         mock_reserve = stack.enter_context(
             mock.patch(f"{MODULE_TO_TEST}._internal.reserve_sock_addr"))
         mock_event = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.event"))
-        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.train"))
 
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
+
         mock_reserve.return_value.__enter__.return_value = CURRENT_HOST, CURRENT_PORT
-
         mock_event.wait.side_effect = lambda client, key: CLUSTER_SPEC[key]
-
         mock_client = mock.Mock(spec=skein.ApplicationClient)
         cluster.start_cluster(mock_client, [task, "worker:0"])
 
         mock_event.init_event.assert_called_once_with(mock_client, task,
                                                       f"{CURRENT_HOST}:{CURRENT_PORT}")
+
+
+@pytest.mark.parametrize("task_name, task_index, is_server_started", [
+    pytest.param("worker", 1, True),
+    pytest.param("ps", 0, False)
+])
+def test_start_tf_server(task_name, task_index, is_server_started):
+    task = f"{task_name}:{task_index}"
+
+    CLUSTER_SPEC = {"worker:0/init": f"{WORKER0_HOST}:{WORKER0_PORT}",
+                    f"{task}/init": f"{CURRENT_HOST}:{CURRENT_PORT}"}
+
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(mock.patch.dict(os.environ))
+        os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
+        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.train"))
+        cluster.start_tf_server(CLUSTER_SPEC)
 
         if is_server_started:
             assert mock_server.Server.call_count == 1

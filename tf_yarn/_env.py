@@ -35,6 +35,5 @@ def gen_task_cmd(pyenv: PythonEnvDescription,
     conf_args = f"--log-conf-file={log_conf_file}" if log_conf_file is not None else ""
 
     return (f"{pyenv.dispatch_task_cmd} "
-            f"--num-ps={num_ps} --num-workers={num_workers} "
-            f"--experiment-fn=experiment_fn.dill " + conf_args
+            f"--num-ps={num_ps} --num-workers={num_workers} " + conf_args
             )

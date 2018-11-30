@@ -18,6 +18,7 @@ import re
 import sys
 import typing
 
+import dill
 import skein
 import tensorflow as tf
 import logging
@@ -27,17 +28,13 @@ from . import ExperimentFn
 from ._internal import (
     iter_tasks,
     expand_wildcards_in_classpath,
-    load_fn,
     MonitoredThread
 )
 from . import event
 from . import cluster
 
 
-def main(
-    experiment_fn: ExperimentFn,
-    all_tasks: typing.List[str]
-) -> None:
+def main(all_tasks: typing.List[str]) -> None:
 
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
@@ -77,7 +74,7 @@ def main(
     cluster_spec = cluster.start_cluster(client, all_tasks)
 
     try:
-        experiment = experiment_fn()
+        experiment = dill.loads(client.kv.wait('experiment_fn'))()
     except Exception as e:
         event.stop_event(client, task, e)
         raise
@@ -166,8 +163,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--num-workers", type=int)
     parser.add_argument("--num-ps", type=int)
-    parser.add_argument("--experiment-fn", type=load_fn)
     parser.add_argument("--log-conf-file", type=str)
     args = parser.parse_args()
     _setup_logging(args.log_conf_file)
-    main(args.experiment_fn, list(iter_tasks(args.num_workers, args.num_ps)))
+    main(list(iter_tasks(args.num_workers, args.num_ps)))

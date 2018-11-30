@@ -13,8 +13,6 @@ import pytest
 from tf_yarn._internal import (
     MonitoredThread,
     reserve_sock_addr,
-    dump_fn,
-    load_fn,
     xset_environ,
     zip_path,
     StaticDefaultDict,
@@ -56,18 +54,6 @@ def test_xset_environ_failure(monkeypatch):
         xset_environ(foo="boo")
 
     assert os.environ["foo"] == "bar"
-
-
-def test_encode_fn_decode_fn(tmpdir):
-    def g(x):
-        return x
-
-    def f():
-        return g(42)
-
-    path = tmpdir.join("f.dill")
-    dump_fn(f, path)
-    assert load_fn(path)() == f()
 
 
 def test_zip_path(tmpdir):

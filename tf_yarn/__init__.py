@@ -41,7 +41,6 @@ from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport
 
 from ._internal import (
-    dump_fn,
     iter_tasks,
     zip_path,
     StaticDefaultDict,
@@ -66,8 +65,6 @@ class Experiment(NamedTuple):
     estimator: tf.estimator.Estimator
     train_spec: tf.estimator.TrainSpec
     eval_spec: tf.estimator.EvalSpec
-
-    # TODO: experiment name?
 
     @property
     def config(self) -> tf.estimator.RunConfig:
@@ -197,6 +194,9 @@ def run_on_yarn(
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
+    # Attempt serialization early to avoid allocating unnecesary resources
+    serialized_fn = dill.dumps(experiment_fn, recurse=True)
+
     if not pyenv_zip_path:
         warnings.warn(
             "Auto generation of conda environment is deprecated and will be removed in "
@@ -219,9 +219,6 @@ def run_on_yarn(
     with tempfile.TemporaryDirectory() as tempdir:
         task_files = _maybe_zip_task_files(files or {}, tempdir)
         task_files[__package__] = zip_path(here, tempdir)
-        with tempfile.NamedTemporaryFile(suffix=".dill", delete=False) as file:
-            dump_fn(experiment_fn, file.name)
-            task_files["experiment_fn.dill"] = file.name
 
         libhdfs_opts = "-Xms64m -Xmx512m"
         if "LIBHDFS_OPTS" in env:
@@ -261,7 +258,7 @@ def run_on_yarn(
             queue=queue,
             file_systems=file_systems)
         with skein.Client() as client:
-            return _submit_and_await_termination(client, spec, tasks)
+            return _submit_and_await_termination(client, spec, tasks, serialized_fn)
 
 
 def _check_task_specs(task_specs):
@@ -338,18 +335,19 @@ def _submit_and_await_termination(
     client: skein.Client,
     spec: skein.ApplicationSpec,
     tasks: List[str],
+    serialized_fn: bytes,
     poll_every_secs: int = 10
 ):
     app = client.submit_and_connect(spec)
     events: Dict[str, Dict[str, str]] = {task: {} for task in tasks}
     event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
     event_listener.start()
+    app.kv['experiment_fn'] = serialized_fn
     with _shutdown_on_exception(app):
         state = None
         while True:
             report = client.application_report(app.id)
-            logger.info(
-                f"Application report for {app.id} (state: {report.state})")
+            logger.info(f"Application report for {app.id} (state: {report.state})")
             if state != report.state:
                 logger.info(_format_app_report(report))
 

@@ -20,13 +20,11 @@ import shutil
 import socket
 import tempfile
 import typing
-import uuid
 from contextlib import contextmanager
 from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
 from ._criteo import get_requirements_file
 
-import dill
 import setuptools
 
 logger = logging.getLogger(__name__)
@@ -100,18 +98,6 @@ def iter_tasks(num_workers, num_ps) -> typing.Iterable[str]:
     yield "chief:0"
     yield from (f"worker:{task_id}" for task_id in range(num_workers))
     yield from (f"ps:{task_id}" for task_id in range(num_ps))
-
-
-def dump_fn(fn, path: str) -> None:
-    """Dump a function to a file in an unspecified binary format."""
-    with open(path, "wb") as file:
-        dill.dump(fn, file, recurse=True)
-
-
-def load_fn(path: str):
-    """Load a function from a file produced by ``encode_fn``."""
-    with open(path, "rb") as file:
-        return dill.load(file)
 
 
 def xset_environ(**kwargs):

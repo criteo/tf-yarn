@@ -57,7 +57,7 @@ setup(
         "tensorflow==1.12.0",
         "dill==0.2.8",
         "conda-pack",
-        "skein==" + _check_add_criteo_environment('0.2')
+        "skein==0.3.1"
     ],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

@@ -242,8 +242,8 @@ def run_on_yarn(
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
             services[task_type] = skein.Service(
-                [gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
-                skein.Resources(task_spec.memory, task_spec.vcores),
+                commands=[gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
+                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
                 instances=task_spec.instances,
                 node_label=task_spec.label.value,

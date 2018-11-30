@@ -1,4 +1,4 @@
 tensorflow==1.12.0
 conda-pack
 dill==0.2.8
-skein==0.1.1
+skein==0.3.1

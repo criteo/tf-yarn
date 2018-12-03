@@ -48,7 +48,8 @@ from ._internal import (
 )
 from ._env import (
    gen_pyenv_from_existing_archive,
-   gen_task_cmd
+   gen_task_cmd,
+   PythonEnvDescription
 )
 
 __all__ = [
@@ -91,7 +92,10 @@ class TaskSpec(NamedTuple):
     label: NodeLabel = NodeLabel.CPU
 
 
-TASK_SPEC_NONE = TaskSpec(0, 0, 0)
+class SkeinCluster(NamedTuple):
+    client: skein.Client
+    app: skein.ApplicationClient
+    tasks: List[str]
 
 
 class RunFailed(Exception):
@@ -105,9 +109,234 @@ class Metrics(NamedTuple):
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
 
 
+GB = 2**10
+MAX_MEMORY_CONTAINER = 48 * GB
+MAX_VCORES_CONTAINER = 48
+ALL_TASK_TYPES = {"chief", "worker", "ps", "evaluator"}
+
+
+def _check_general_topology(task_specs: Dict[str, TaskSpec]) -> None:
+    if not task_specs.keys() <= ALL_TASK_TYPES:
+        raise ValueError(
+            f"task_specs.keys() must be a subset of: {ALL_TASK_TYPES}")
+    if task_specs["chief"].instances != 1:
+        raise ValueError("exactly one 'chief' task is required")
+
+
+def _check_ps_topology(task_specs: Dict[str, TaskSpec]) -> None:
+    _check_general_topology(task_specs)
+    if task_specs["evaluator"].instances > 1:
+        raise ValueError("no more than one 'evaluator' task is allowed")
+    if not task_specs["ps"].instances:
+        raise ValueError(
+            "task_specs must contain at least a single 'ps' task for "
+            "multi-worker training")
+
+
+def ps_strategy_topology(
+    nb_workers: int = 2,
+    nb_ps: int = 1,
+    memory: int = MAX_MEMORY_CONTAINER,
+    vcores: int = MAX_VCORES_CONTAINER
+) -> Dict[str, TaskSpec]:
+    # TODO: compute num_ps from the model size and the number of
+    # executors. See https://stackoverflow.com/a/46080567/262432.
+    topology = {
+        "chief": TaskSpec(memory=memory, vcores=vcores),
+        "evaluator": TaskSpec(memory=memory, vcores=vcores, instances=1),
+        "worker": TaskSpec(memory=memory, vcores=vcores, instances=nb_workers),
+        "ps": TaskSpec(memory=memory, vcores=vcores, instances=nb_ps)
+    }
+    _check_ps_topology(topology)
+    return topology
+
+
+TASK_SPEC_NONE = ps_strategy_topology()
+
+
+def _setup_pyenvs(
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
+        python: str = f"{v.major}.{v.minor}.{v.micro}",
+        pip_packages: List[str] = None
+) -> Dict[NodeLabel, PythonEnvDescription]:
+    if not pyenv_zip_path:
+        warnings.warn(
+                "Auto generation of conda environment is deprecated and will be removed in "
+                "version 0.2.0, consider creating to pack yourself your environment and "
+                "use the pyenv_zip_path argument")
+        conda_envs = _make_conda_envs(python, pip_packages or [])
+        pyenvs = {node_label: gen_pyenv_from_existing_archive(zipped_path)
+                  for node_label, zipped_path in conda_envs.items()}
+    elif isinstance(pyenv_zip_path, str):
+        pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(pyenv_zip_path)}
+    else:
+        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path)
+                  for label, env_zip_path in pyenv_zip_path.items()}
+    return pyenvs
+
+
+def _setup_task_env(
+        tempdir: str,
+        files: Dict[str, str] = None,
+        env: Dict[str, str] = {}
+):
+    task_files = _maybe_zip_task_files(files or {}, tempdir)
+    task_files[__package__] = zip_path(here, tempdir)
+
+    libhdfs_opts = "-Xms64m -Xmx512m"
+    if "LIBHDFS_OPTS" in env:
+        libhdfs_opts = "{default} {env}".format(default=libhdfs_opts,
+                                                env=env.get("LIBHDFS_OPTS"))
+
+    task_env = {
+        **env,
+        "LIBHDFS_OPTS": libhdfs_opts,
+        # Make Python modules/packages passed via ``files`` importable.
+        "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
+        "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
+    }
+
+    return task_files, task_env
+
+
+def setup_skein_cluster(
+    task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
+    *,
+    pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
+    python: str = f"{v.major}.{v.minor}.{v.micro}",
+    pip_packages: List[str] = None,
+    files: Dict[str, str] = None,
+    env: Dict[str, str] = {},
+    queue: str = "default",
+    file_systems: List[str] = None,
+    log_conf_file: str = None
+) -> SkeinCluster:
+    """Request a cluster on YARN with Skein.
+
+    The implementation allocates a service with the requested number
+    of instances for each distributed TensorFlow task type. Each
+    instance expects a serialized run_config to setup the tensorflow servers
+    and an experiment function to execute.
+
+    Parameters
+    ----------
+    task_specs
+        Resources to allocate for each task type. The keys
+        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+        ``"evaluator"``. The minimal spec must contain at least
+        ``"chief"``.
+
+    pyenv_zip_path
+        Path to an archive of a python environment to be deployed
+        It can be a zip conda env or a pex archive
+        In case of GPU/CPU cluster, provide a dictionnary with both
+        environments.
+
+    python
+        Python version in the MAJOR.MINOR.MICRO format. Defaults to the
+        version of ``sys.executable``.
+
+    pip_packages
+        Python packages to install in the environment. The packages
+        are installed via pip, therefore all of the following forms
+        are supported::
+
+            SomeProject>=1,<2
+            git+https://github.com/org/SomeProject
+            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
+            path/to/SomeProject
+
+        See `Installing Packages <https://packaging.python.org/tutorials \
+        /installing-packages>`_ for more examples.
+
+    files
+        Local files or directories to upload to the container.
+        The keys are the target locations of the resources relative
+        to the container root, while the values -- their
+        corresponding local sources. Note that container root is
+        appended to ``PYTHONPATH``. Therefore, any listed Python
+        module a package is automatically importable.
+
+    env
+        Environment variables to forward to the containers.
+
+    queue
+        YARN queue to use.
+
+    file_systems
+        A list of namenode URIs to acquire delegation tokens for
+        in addition to ``fs.defaultFS``.
+
+    log_conf_file
+        optional file with log config, setups logging by default with INFO verbosity,
+        if you specify a file here don't forget to also ship it to the containers via files arg
+    """
+    pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        task_files, task_env = _setup_task_env(tempdir, files, env)
+        num_ps = task_specs["ps"].instances
+        num_workers = task_specs["worker"].instances
+        services = {}
+        for task_type, task_spec in list(task_specs.items()):
+            pyenv = pyenvs[task_spec.label]
+            services[task_type] = skein.Service(
+                commands=[gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
+                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
+                max_restarts=0,
+                instances=task_spec.instances,
+                node_label=task_spec.label.value,
+                files={
+                    **task_files,
+                    pyenv.dest_path: pyenv.path_to_archive
+                },
+                env=task_env)
+
+        tasks = list(iter_tasks(num_workers, num_ps))
+        if "evaluator" in task_specs:
+            tasks.append("evaluator:0")  # Not part of the cluster.
+        spec = skein.ApplicationSpec(
+            services,
+            queue=queue,
+            file_systems=file_systems)
+
+        client = skein.Client()
+        app = client.submit_and_connect(spec)
+        return SkeinCluster(client, app, tasks)
+
+
+def run_on_cluster(
+    experiment_fn: ExperimentFn,
+    cluster: SkeinCluster
+) -> None:
+    """Run an experiment on YARN.
+
+    Dispatches experiment_fn to the cluster and awaits termination
+    of the train_and_evaluate execution.
+
+    Parameters
+    ----------
+    experiment_fn
+        A function constructing the estimator alongside the train
+        and eval specs.
+
+    cluster
+        optional skein cluster. All parameters except experiment_fn will be ignored.
+
+    Raises
+    ------
+    RunFailed
+        If the final status of the YARN application is ``"FAILED"``.
+    """
+    # Attempt serialization early to avoid allocating unnecesary resources
+    serialized_fn = dill.dumps(experiment_fn, recurse=True)
+    with cluster.client:
+        return _execute_and_await_termination(cluster, serialized_fn)
+
+
 def run_on_yarn(
     experiment_fn: ExperimentFn,
-    task_specs: Dict[str, TaskSpec],
+    task_specs: Dict[str, TaskSpec] = None,
     *,
     pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
     python: str = f"{v.major}.{v.minor}.{v.micro}",
@@ -194,71 +423,19 @@ def run_on_yarn(
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
-    # Attempt serialization early to avoid allocating unnecesary resources
-    serialized_fn = dill.dumps(experiment_fn, recurse=True)
-
-    if not pyenv_zip_path:
-        warnings.warn(
-            "Auto generation of conda environment is deprecated and will be removed in "
-            "version 0.2.0, consider creating to pack yourself your environment and "
-            "use the pyenv_zip_path argument")
-        conda_envs = _make_conda_envs(python, pip_packages or [])
-        pyenvs = {node_label: gen_pyenv_from_existing_archive(zipped_path)
-                  for node_label, zipped_path in conda_envs.items()}
-    elif isinstance(pyenv_zip_path, str):
-        pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(pyenv_zip_path)}
-    else:
-        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path)
-                  for label, env_zip_path in pyenv_zip_path.items()}
-
-    # TODO: compute num_ps from the model size and the number of
-    # executors. See https://stackoverflow.com/a/46080567/262432.
-    task_specs = StaticDefaultDict(task_specs, default=TASK_SPEC_NONE)
-    _check_task_specs(task_specs)
-
-    with tempfile.TemporaryDirectory() as tempdir:
-        task_files = _maybe_zip_task_files(files or {}, tempdir)
-        task_files[__package__] = zip_path(here, tempdir)
-
-        libhdfs_opts = "-Xms64m -Xmx512m"
-        if "LIBHDFS_OPTS" in env:
-            libhdfs_opts = "{default} {env}".format(default=libhdfs_opts,
-                                                    env=env.get("LIBHDFS_OPTS"))
-
-        task_env = {
-            **env,
-            "LIBHDFS_OPTS": libhdfs_opts,
-            # Make Python modules/packages passed via ``files`` importable.
-            "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
-            "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
-        }
-
-        num_ps = task_specs["ps"].instances
-        num_workers = task_specs["worker"].instances
-        services = {}
-        for task_type, task_spec in list(task_specs.items()):
-            pyenv = pyenvs[task_spec.label]
-            services[task_type] = skein.Service(
-                commands=[gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
-                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
-                max_restarts=0,
-                instances=task_spec.instances,
-                node_label=task_spec.label.value,
-                files={
-                    **task_files,
-                    pyenv.dest_path: pyenv.path_to_archive
-                },
-                env=task_env)
-
-        tasks = list(iter_tasks(num_workers, num_ps))
-        if "evaluator" in task_specs:
-            tasks.append("evaluator:0")  # Not part of the cluster.
-        spec = skein.ApplicationSpec(
-            services,
-            queue=queue,
-            file_systems=file_systems)
-        with skein.Client() as client:
-            return _submit_and_await_termination(client, spec, tasks, serialized_fn)
+    warnings.warn("This method is deprecated. Please use run_on_cluster and setup_skein_cluster")
+    cluster = setup_skein_cluster(
+        StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+        pyenv_zip_path=pyenv_zip_path,
+        python=python,
+        pip_packages=pip_packages,
+        files=files,
+        env=env,
+        queue=queue,
+        file_systems=file_systems,
+        log_conf_file=log_conf_file
+    )
+    run_on_cluster(experiment_fn, cluster)
 
 
 def _check_task_specs(task_specs):
@@ -331,23 +508,20 @@ def _shutdown_on_exception(app: skein.ApplicationClient):
         raise
 
 
-def _submit_and_await_termination(
-    client: skein.Client,
-    spec: skein.ApplicationSpec,
-    tasks: List[str],
+def _execute_and_await_termination(
+    cluster: SkeinCluster,
     serialized_fn: bytes,
     poll_every_secs: int = 10
 ):
-    app = client.submit_and_connect(spec)
-    events: Dict[str, Dict[str, str]] = {task: {} for task in tasks}
-    event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
+    events: Dict[str, Dict[str, str]] = {task: {} for task in cluster.tasks}
+    event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
     event_listener.start()
-    app.kv['experiment_fn'] = serialized_fn
-    with _shutdown_on_exception(app):
+    cluster.app.kv['experiment_fn'] = serialized_fn
+    with _shutdown_on_exception(cluster.app):
         state = None
         while True:
-            report = client.application_report(app.id)
-            logger.info(f"Application report for {app.id} (state: {report.state})")
+            report = cluster.client.application_report(cluster.app.id)
+            logger.info(f"Application report for {cluster.app.id} (state: {report.state})")
             if state != report.state:
                 logger.info(_format_app_report(report))
 

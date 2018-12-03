@@ -16,9 +16,18 @@ import argparse
 import os
 import re
 import sys
-import typing
+from typing import (
+    Dict,
+    Optional,
+    Tuple,
+    NamedTuple,
+    Callable,
+    Union,
+    List
+)
 
 import dill
+import json
 import skein
 import tensorflow as tf
 import logging
@@ -26,15 +35,15 @@ import logging.config
 
 from . import ExperimentFn
 from ._internal import (
-    iter_tasks,
     expand_wildcards_in_classpath,
-    MonitoredThread
+    MonitoredThread,
+    iter_tasks
 )
 from . import event
 from . import cluster
 
 
-def main(all_tasks: typing.List[str]) -> None:
+def main() -> None:
 
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
@@ -71,7 +80,8 @@ def main(all_tasks: typing.List[str]) -> None:
         logs = "http://" + logs
     event.logs_event(client, task, logs)
 
-    cluster_spec = cluster.start_cluster(client, all_tasks)
+    cluster_tasks = list(iter_tasks(json.loads(client.kv.wait('cluster_instances').decode())))
+    cluster_spec = cluster.start_cluster(client, cluster_tasks)
 
     try:
         experiment = dill.loads(client.kv.wait('experiment_fn'))()
@@ -105,7 +115,7 @@ def main(all_tasks: typing.List[str]) -> None:
     event.stop_event(client, task, thread.exception)
     wait_for_connected_tasks(
         client,
-        all_tasks,
+        cluster_tasks,
         getattr(config.session_config, "device_filters", []))
 
     event.broadcast_container_stop_time(client, task)
@@ -136,7 +146,7 @@ def wait_for_connected_tasks(client, all_tasks, device_filters):
             event.wait(client, f"{task}/stop")
 
 
-def matches_device_filters(task: str, device_filters: typing.List[str]):
+def matches_device_filters(task: str, device_filters: List[str]):
     task_type, task_id = task.split(":", 1)
     for device_filter in device_filters:
         [(filter_type, filter_id)] = re.findall(
@@ -161,9 +171,7 @@ def _setup_logging(log_conf_file):
 if __name__ == "__main__":
     print(f"start", file=sys.stderr)
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument("--num-workers", type=int)
-    parser.add_argument("--num-ps", type=int)
     parser.add_argument("--log-conf-file", type=str)
     args = parser.parse_args()
     _setup_logging(args.log_conf_file)
-    main(list(iter_tasks(args.num_workers, args.num_ps)))
+    main()

@@ -19,7 +19,17 @@ import platform
 import shutil
 import socket
 import tempfile
-import typing
+from typing import (
+    Dict,
+    Optional,
+    Tuple,
+    NamedTuple,
+    Callable,
+    Union,
+    List,
+    Iterable,
+    Iterator
+)
 from contextlib import contextmanager
 from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
@@ -48,7 +58,7 @@ class MonitoredThread(Thread):
         return "FAILED" if self.exception is not None else "SUCCEEDED"
 
     @property
-    def exception(self) -> typing.Optional[Exception]:
+    def exception(self) -> Optional[Exception]:
         return self._exc
 
     def run(self):
@@ -71,7 +81,7 @@ def get_so_reuseport():
 
 
 @contextmanager
-def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
+def reserve_sock_addr() -> Iterator[Tuple[str, int]]:
     """Reserve an available TCP port to listen on.
 
     The reservation is done by binding a TCP socket to port 0 with
@@ -90,14 +100,11 @@ def reserve_sock_addr() -> typing.Iterator[typing.Tuple[str, int]]:
         yield (socket.gethostname(), port)
 
 
-def iter_tasks(num_workers, num_ps) -> typing.Iterable[str]:
+def iter_tasks(tasks: List[Tuple[str, int]]) -> Iterable[str]:
     """Iterate the tasks in a TensorFlow cluster.
-
-    Note that ``"evaluator"`` is not part of the cluster.
     """
-    yield "chief:0"
-    yield from (f"worker:{task_id}" for task_id in range(num_workers))
-    yield from (f"ps:{task_id}" for task_id in range(num_ps))
+    for task_type, n_instances in tasks:
+        yield from (f"{task_type}:{task_id}" for task_id in range(n_instances))
 
 
 def xset_environ(**kwargs):
@@ -169,8 +176,8 @@ class StaticDefaultDict(dict):
 def create_and_pack_conda_env(
     name: str,
     python: str,
-    pip_packages: typing.List[str],
-    root: typing.Optional[str] = tempfile.tempdir
+    pip_packages: List[str],
+    root: Optional[str] = tempfile.tempdir
 ) -> str:
     """Create a Conda environment.
 

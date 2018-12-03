@@ -1,8 +1,16 @@
-import typing
+from typing import (
+    Dict,
+    Optional,
+    Tuple,
+    NamedTuple,
+    Callable,
+    Union,
+    List
+)
 import os
 
 
-class PythonEnvDescription(typing.NamedTuple):
+class PythonEnvDescription(NamedTuple):
     path_to_archive: str
     dispatch_task_cmd: str
     dest_path: str
@@ -28,12 +36,6 @@ def gen_pyenv_from_existing_archive(path_to_archive: str
 
 
 def gen_task_cmd(pyenv: PythonEnvDescription,
-                 num_ps: int,
-                 num_workers: int,
-                 log_conf_file: typing.Optional[str]) -> str:
-
+                 log_conf_file: Optional[str]) -> str:
     conf_args = f"--log-conf-file={log_conf_file}" if log_conf_file is not None else ""
-
-    return (f"{pyenv.dispatch_task_cmd} "
-            f"--num-ps={num_ps} --num-workers={num_workers} " + conf_args
-            )
+    return f"{pyenv.dispatch_task_cmd} " + conf_args

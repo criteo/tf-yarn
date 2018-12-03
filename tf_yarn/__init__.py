@@ -26,6 +26,7 @@ from typing import (
     Union,
     List
 )
+import itertools
 import warnings
 from contextlib import suppress, contextmanager
 from enum import Enum
@@ -35,16 +36,17 @@ from threading import Thread
 from datetime import timedelta
 
 import dill
+import json
 import skein
 import tensorflow as tf
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport
 
 from ._internal import (
-    iter_tasks,
     zip_path,
     StaticDefaultDict,
-    create_and_pack_conda_env
+    create_and_pack_conda_env,
+    iter_tasks
 )
 from ._env import (
    gen_pyenv_from_existing_archive,
@@ -95,7 +97,7 @@ class TaskSpec(NamedTuple):
 class SkeinCluster(NamedTuple):
     client: skein.Client
     app: skein.ApplicationClient
-    tasks: List[str]
+    tasks: List[Tuple[str, int]]
 
 
 class RunFailed(Exception):
@@ -121,6 +123,15 @@ def _check_general_topology(task_specs: Dict[str, TaskSpec]) -> None:
             f"task_specs.keys() must be a subset of: {ALL_TASK_TYPES}")
     if task_specs["chief"].instances != 1:
         raise ValueError("exactly one 'chief' task is required")
+    for task_type, spec in task_specs.items():
+        if spec.memory > MAX_MEMORY_CONTAINER:
+            raise ValueError(
+                f"{task_type}: Can not demand more memory than "
+                f"{MAX_MEMORY_CONTAINER} bytes for container")
+        if spec.vcores > MAX_VCORES_CONTAINER:
+            raise ValueError(
+                f"{task_type}: Can not demand more vcores than "
+                f"{MAX_VCORES_CONTAINER} for container")
 
 
 def _check_ps_topology(task_specs: Dict[str, TaskSpec]) -> None:
@@ -133,6 +144,15 @@ def _check_ps_topology(task_specs: Dict[str, TaskSpec]) -> None:
             "multi-worker training")
 
 
+def single_server_topology(
+    memory: int = MAX_MEMORY_CONTAINER,
+    vcores: int = MAX_VCORES_CONTAINER
+) -> Dict[str, TaskSpec]:
+    topology = {"chief": TaskSpec(memory=memory, vcores=vcores)}
+    _check_general_topology(topology)
+    return topology
+
+
 def ps_strategy_topology(
     nb_workers: int = 2,
     nb_ps: int = 1,
@@ -143,7 +163,7 @@ def ps_strategy_topology(
     # executors. See https://stackoverflow.com/a/46080567/262432.
     topology = {
         "chief": TaskSpec(memory=memory, vcores=vcores),
-        "evaluator": TaskSpec(memory=memory, vcores=vcores, instances=1),
+        "evaluator": TaskSpec(memory=memory, vcores=vcores),
         "worker": TaskSpec(memory=memory, vcores=vcores, instances=nb_workers),
         "ps": TaskSpec(memory=memory, vcores=vcores, instances=nb_ps)
     }
@@ -275,13 +295,11 @@ def setup_skein_cluster(
 
     with tempfile.TemporaryDirectory() as tempdir:
         task_files, task_env = _setup_task_env(tempdir, files, env)
-        num_ps = task_specs["ps"].instances
-        num_workers = task_specs["worker"].instances
         services = {}
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
             services[task_type] = skein.Service(
-                commands=[gen_task_cmd(pyenv, num_ps, num_workers, log_conf_file)],
+                commands=[gen_task_cmd(pyenv, log_conf_file)],
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
                 instances=task_spec.instances,
@@ -292,17 +310,18 @@ def setup_skein_cluster(
                 },
                 env=task_env)
 
-        tasks = list(iter_tasks(num_workers, num_ps))
-        if "evaluator" in task_specs:
-            tasks.append("evaluator:0")  # Not part of the cluster.
         spec = skein.ApplicationSpec(
             services,
             queue=queue,
             file_systems=file_systems)
-
         client = skein.Client()
         app = client.submit_and_connect(spec)
-        return SkeinCluster(client, app, tasks)
+        task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
+        # Note that evaluator is not part of the cluster
+        cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
+        app.kv['cluster_instances'] = json.dumps(cluster_instances).encode()
+
+        return SkeinCluster(client, app, task_instances)
 
 
 def run_on_cluster(
@@ -438,22 +457,6 @@ def run_on_yarn(
     run_on_cluster(experiment_fn, cluster)
 
 
-def _check_task_specs(task_specs):
-    all_task_types = {"chief", "worker", "ps", "evaluator"}
-    if not task_specs.keys() <= all_task_types:
-        raise ValueError(
-            f"task_specs.keys() must be a subset of: {all_task_types}")
-
-    if task_specs["chief"].instances != 1:
-        raise ValueError("exactly one 'chief' task is required")
-    if task_specs["evaluator"].instances > 1:
-        raise ValueError("no more than one 'evaluator' task is allowed")
-    if task_specs["worker"].instances > 0 and not task_specs["ps"].instances:
-        raise ValueError(
-            "task_specs must contain at least a single 'ps' task for "
-            "multi-worker training")
-
-
 def _maybe_zip_task_files(files, tempdir):
     task_files = {}
     for target, source in files.items():
@@ -513,7 +516,7 @@ def _execute_and_await_termination(
     serialized_fn: bytes,
     poll_every_secs: int = 10
 ):
-    events: Dict[str, Dict[str, str]] = {task: {} for task in cluster.tasks}
+    events: Dict[str, Dict[str, str]] = {task: {} for task in iter_tasks(cluster.tasks)}
     event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
     event_listener.start()
     cluster.app.kv['experiment_fn'] = serialized_fn
@@ -645,9 +648,9 @@ def _handle_events(
             details.append(exception)
 
     training_time = max_training_stop_time - min_training_start_time\
-        if valid_training_time else None
+        if valid_training_time and min_training_start_time < timedelta.max else None
     eval_time = max_eval_stop_time - min_eval_start_time\
-        if valid_eval_time else None
+        if valid_eval_time and min_eval_start_time < timedelta.max else None
     header.append(f'Training time = {training_time}')
     header.append(f'Evaluation time = {eval_time}')
 

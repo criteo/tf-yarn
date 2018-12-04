@@ -16,7 +16,7 @@ class PythonEnvDescription(NamedTuple):
     dest_path: str
 
 
-DISPATCH_MODULE = "-m tf_yarn._dispatch_task"
+DISPATCH_MODULE = "-m tf_yarn._independent_workers_task"
 CONDA_ENV_NAME = "pyenv"
 CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python {DISPATCH_MODULE}"
 

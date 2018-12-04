@@ -42,29 +42,31 @@ def start_cluster(
     # completely, but the window of opportunity can be reduced by
     # preempting the server.
     # See https://github.com/tensorflow/tensorflow/issues/21492
-    task_type, task_id = get_task_description()
     cluster_spec: typing.Dict = dict()
     with _internal.reserve_sock_addr() as (host, port):
         event.init_event(client, get_task(), f"{socket.gethostbyname(host)}:{port}")
         cluster_spec = aggregate_spec(client, all_tasks)
-
-        # Note that "evaluator" does not need a cluster, and "ps" (!)
-        # surprisingly does not follow the same code path as the rest
-        # and spawns a server regardless of the "environment" value.
-        _internal.xset_environ(TF_CONFIG=json.dumps({
-            "cluster": cluster_spec,
-            "environment": "google" if is_fake_google_env(task_type) else "",
-            "task": {"type": task_type, "index": task_id},
-        }))
         return cluster_spec
+
+
+def setup_tf_config(cluster_spec):
+    # Note that "evaluator" does not need a cluster, and "ps" (!)
+    # surprisingly does not follow the same code path as the rest
+    # and spawns a server regardless of the "environment" value.
+    task_type, task_id = get_task_description()
+    _internal.xset_environ(TF_CONFIG=json.dumps({
+        "cluster": cluster_spec,
+        "environment": "google" if is_fake_google_env(task_type) else "",
+        "task": {"type": task_type, "index": task_id},
+    }))
 
 
 def start_tf_server(
     cluster_spec: typing.Dict[str, typing.List[str]],
     session_config: tf.ConfigProto = None
 ) -> typing.Optional[tf.train.Server]:
-    task_type, task_id = get_task_description()
 
+    task_type, task_id = get_task_description()
     if is_fake_google_env(task_type) and cluster_spec:
         server = tf.train.Server(
             tf.train.ClusterSpec(cluster_spec),

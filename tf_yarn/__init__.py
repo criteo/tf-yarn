@@ -26,11 +26,9 @@ from typing import (
     Union,
     List
 )
-import itertools
 import warnings
 from contextlib import suppress, contextmanager
-from enum import Enum
-from sys import version_info as v, modules
+from sys import version_info as v
 import tempfile
 from threading import Thread
 from datetime import timedelta
@@ -42,6 +40,10 @@ import tensorflow as tf
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport
 
+from tf_yarn.topologies import (
+    single_server_topology,
+    ps_strategy_topology,
+    TaskSpec, NodeLabel)
 from ._internal import (
     zip_path,
     StaticDefaultDict,
@@ -53,11 +55,16 @@ from ._env import (
    gen_task_cmd,
    PythonEnvDescription
 )
+from .cluster import aggregate_spec
 
 __all__ = [
-    "Experiment",
-    "run_on_yarn", "RunFailed", "NodeLabel", "TaskSpec",
+    "Experiment", "run_on_yarn", "RunFailed",
+    "single_server_topology", "ps_strategy_topology",
+    "setup_skein_cluster", "run_on_cluster"
 ]
+
+KV_CLUSTER_INSTANCES = 'cluster_instances'
+KV_EXPERIMENT_FN = 'experiment_fn'
 
 logger = logging.getLogger(__name__)
 
@@ -77,27 +84,11 @@ class Experiment(NamedTuple):
 ExperimentFn = Callable[[], Experiment]
 
 
-class NodeLabel(Enum):
-    """YARN node label expression.
-
-    A task with a CPU label could be scheduled on any node, whereas
-    a task with a GPU label, only on the one labeled with ``"gpu"``.
-    """
-    CPU = ""  # Default.
-    GPU = "gpu"
-
-
-class TaskSpec(NamedTuple):
-    memory: int
-    vcores: int
-    instances: int = 1
-    label: NodeLabel = NodeLabel.CPU
-
-
 class SkeinCluster(NamedTuple):
     client: skein.Client
     app: skein.ApplicationClient
     tasks: List[Tuple[str, int]]
+    cluster_spec: tf.train.ClusterSpec
 
 
 class RunFailed(Exception):
@@ -109,66 +100,6 @@ class Metrics(NamedTuple):
     total_eval_duration: Optional[timedelta]
     container_duration: Dict[str, Optional[timedelta]]
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
-
-
-GB = 2**10
-MAX_MEMORY_CONTAINER = 48 * GB
-MAX_VCORES_CONTAINER = 48
-ALL_TASK_TYPES = {"chief", "worker", "ps", "evaluator"}
-
-
-def _check_general_topology(task_specs: Dict[str, TaskSpec]) -> None:
-    if not task_specs.keys() <= ALL_TASK_TYPES:
-        raise ValueError(
-            f"task_specs.keys() must be a subset of: {ALL_TASK_TYPES}")
-    if task_specs["chief"].instances != 1:
-        raise ValueError("exactly one 'chief' task is required")
-    for task_type, spec in task_specs.items():
-        if spec.memory > MAX_MEMORY_CONTAINER:
-            raise ValueError(
-                f"{task_type}: Can not demand more memory than "
-                f"{MAX_MEMORY_CONTAINER} bytes for container")
-        if spec.vcores > MAX_VCORES_CONTAINER:
-            raise ValueError(
-                f"{task_type}: Can not demand more vcores than "
-                f"{MAX_VCORES_CONTAINER} for container")
-
-
-def _check_ps_topology(task_specs: Dict[str, TaskSpec]) -> None:
-    _check_general_topology(task_specs)
-    if task_specs["evaluator"].instances > 1:
-        raise ValueError("no more than one 'evaluator' task is allowed")
-    if not task_specs["ps"].instances:
-        raise ValueError(
-            "task_specs must contain at least a single 'ps' task for "
-            "multi-worker training")
-
-
-def single_server_topology(
-    memory: int = MAX_MEMORY_CONTAINER,
-    vcores: int = MAX_VCORES_CONTAINER
-) -> Dict[str, TaskSpec]:
-    topology = {"chief": TaskSpec(memory=memory, vcores=vcores)}
-    _check_general_topology(topology)
-    return topology
-
-
-def ps_strategy_topology(
-    nb_workers: int = 2,
-    nb_ps: int = 1,
-    memory: int = MAX_MEMORY_CONTAINER,
-    vcores: int = MAX_VCORES_CONTAINER
-) -> Dict[str, TaskSpec]:
-    # TODO: compute num_ps from the model size and the number of
-    # executors. See https://stackoverflow.com/a/46080567/262432.
-    topology = {
-        "chief": TaskSpec(memory=memory, vcores=vcores),
-        "evaluator": TaskSpec(memory=memory, vcores=vcores),
-        "worker": TaskSpec(memory=memory, vcores=vcores, instances=nb_workers),
-        "ps": TaskSpec(memory=memory, vcores=vcores, instances=nb_ps)
-    }
-    _check_ps_topology(topology)
-    return topology
 
 
 TASK_SPEC_NONE = ps_strategy_topology()
@@ -217,6 +148,16 @@ def _setup_task_env(
     }
 
     return task_files, task_env
+
+
+def _setup_cluster_tasks(
+    task_instances: List[Tuple[str, int]],
+    app: skein.ApplicationClient
+) -> tf.train.ClusterSpec:
+    # Note that evaluator is not part of the cluster
+    cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
+    app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
+    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
 
 
 def setup_skein_cluster(
@@ -317,11 +258,9 @@ def setup_skein_cluster(
         client = skein.Client()
         app = client.submit_and_connect(spec)
         task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
-        # Note that evaluator is not part of the cluster
-        cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
-        app.kv['cluster_instances'] = json.dumps(cluster_instances).encode()
+        cluster_spec = _setup_cluster_tasks(task_instances, app)
 
-        return SkeinCluster(client, app, task_instances)
+        return SkeinCluster(client, app, task_instances, cluster_spec)
 
 
 def run_on_cluster(
@@ -519,7 +458,7 @@ def _execute_and_await_termination(
     events: Dict[str, Dict[str, str]] = {task: {} for task in iter_tasks(cluster.tasks)}
     event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
     event_listener.start()
-    cluster.app.kv['experiment_fn'] = serialized_fn
+    cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
     with _shutdown_on_exception(cluster.app):
         state = None
         while True:

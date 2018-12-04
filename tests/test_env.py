@@ -6,7 +6,7 @@ from tf_yarn._env import (
 )
 
 test_data = [
-    ("/path/to/myenv.pex", "./myenv.pex -m tf_yarn._dispatch_task ",
+    ("/path/to/myenv.pex", "./myenv.pex -m tf_yarn._independent_workers_task ",
      "myenv.pex"),
     ("/path/to/myenv.zip", CONDA_CMD, CONDA_ENV_NAME)
 ]

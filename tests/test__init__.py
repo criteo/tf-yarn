@@ -28,28 +28,51 @@ sock_addrs = {
 
 
 @mock.patch("tf_yarn.skein.ApplicationClient")
-@pytest.mark.parametrize("tasks_instances", [
-    ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)]),
-    ([('chief', 3)]),
-    ([('worker', 3), ('ps', 3)]),
-    ([('worker', 1), ('evaluator', 0)])
+@pytest.mark.parametrize("tasks_instances, expected_spec, standalone_client_mode", [
+    ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
+     {'chief': ['addr1:port1'],
+      'ps': ['addr4:port4'],
+      'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9']
+      },
+     False
+     ),
+    ([('chief', 3)],
+     {'chief': ['addr1:port1', 'addr10:port10', 'addr11:port11']},
+     False
+     ),
+    ([('worker', 3), ('ps', 3)],
+     {'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9'],
+      'ps': ['addr4:port4', 'addr5:port5', 'addr6:port6']
+      },
+     False
+     ),
+    ([('worker', 1), ('evaluator', 0)],
+     {'worker': ['addr7:port7']},
+     False
+     ),
+    ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
+     {'ps': ['addr4:port4'],
+      'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9']
+      },
+     True
+     )
 ])
-def test__setup_cluster_tasks(mock_skein_app, tasks_instances):
+def test__setup_cluster_tasks(
+        mock_skein_app,
+        tasks_instances,
+        expected_spec,
+        standalone_client_mode):
     kv_store = dict()
     for task_type, nb_instances in tasks_instances:
         for i in range(nb_instances):
             kv_store[f'{task_type}:{i}/init'] = sock_addrs[task_type][i].encode()
 
     mock_skein_app.kv.wait = kv_store.get
-    cluster_spec = _setup_cluster_tasks(tasks_instances, mock_skein_app)
+    cluster_spec = _setup_cluster_tasks(tasks_instances,
+                                        mock_skein_app,
+                                        standalone_client_mode)
 
-    expected_cluster_spec_dict = {
-        task_type: sock_addrs[task_type][:nb_instances]
-        for task_type, nb_instances in tasks_instances
-    }
-
-    for task_type, task_sock_addrs in cluster_spec.as_dict().items():
-        assert task_sock_addrs == expected_cluster_spec_dict[task_type]
+    assert cluster_spec.as_dict() == expected_spec
 
 
 def test_kill_skein_on_exception():

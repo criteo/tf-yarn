@@ -8,71 +8,56 @@ It should :
 """
 import sys
 
-import skein
 import numpy as np
 import tensorflow as tf
 
-from tf_yarn import cluster
 from tf_yarn import event
+from tf_yarn import TaskSpec, TFYarnExecutor
 
 """
 You need to package tf-yarn in order to ship it to the executors
 First create a pex from root dir
 pex . -o examples/tf-yarn.pex
 """
-PEX_FILE = f"tf-yarn.pex"
+PEX_FILE = "tf-yarn.pex"
 
 NODE_NAME = "worker"
-
-
-def create_cluster():
-    client = skein.ApplicationClient.from_current()
-    cluster_spec = cluster.start_cluster(client, [f"{NODE_NAME}:0", f"{NODE_NAME}:1"])
-    cluster.setup_tf_config(cluster_spec)
-    cluster.start_tf_server(cluster_spec)
-    event.wait(client, "stop")
-
-
-def create_skein_app():
-    service = skein.Service(commands=[f'./{PEX_FILE} session_run_example.py --server'],
-                            resources=skein.Resources(2 * 1024, 1),
-                            env={'PEX_ROOT': '/tmp/{uuid.uuid4()}/'},
-                            files={PEX_FILE: PEX_FILE,
-                                   'session_run_example.py': __file__},
-                            instances=2)
-    spec = skein.ApplicationSpec({NODE_NAME: service})
-    return spec
-
-
-def client_tf(client):
-    spec = create_skein_app()
-    app = client.submit_and_connect(spec)
-    x = tf.placeholder(tf.float32, 100)
-
-    with tf.device(f"/job:{NODE_NAME}/task:1"):
-        first_batch = tf.slice(x, [0], [50])
-        mean1 = tf.reduce_mean(first_batch)
-
-    with tf.device(f"/job:{NODE_NAME}/task:0"):
-        second_batch = tf.slice(x, [50], [-1])
-        mean2 = tf.reduce_mean(second_batch)
-        mean = (mean1 + mean2) / 2
-
-    first_task = event.wait(app, f"{NODE_NAME}:0/init")
-    with tf.Session(f"grpc://{first_task}") as sess:
-        result = sess.run(mean, feed_dict={x: np.random.random(100)})
-        print(f"mean = {result}")
-    event.broadcast(app, "stop", "1")
 
 
 def main():
     tf.logging.set_verbosity(tf.logging.DEBUG)
     print(sys.argv)
-    if '--server' in sys.argv:
-        create_cluster()
-    else:
-        with skein.Client() as client:
-            client_tf(client)
+
+    with TFYarnExecutor(pyenv_zip_path=f"{PEX_FILE}",
+                        standalone_client_mode=True) as tfYarnExecutor:
+        cluster = tfYarnExecutor.setup_skein_cluster(
+            task_specs={
+                NODE_NAME: TaskSpec(memory=4 * 2**10, vcores=32, instances=2)
+            }
+        )
+
+        size = 10000
+
+        x = tf.placeholder(tf.float32, size)
+
+        with tf.device(f"/job:{NODE_NAME}/task:1"):
+            with tf.name_scope("scope_of_task1"):
+                first_batch = tf.slice(x, [5000], [-1])
+                mean1 = tf.reduce_mean(first_batch)
+
+        with tf.device(f"/job:{NODE_NAME}/task:0"):
+            with tf.name_scope("scope_of_task0"):
+                second_batch = tf.slice(x, [0], [5000])
+                mean2 = tf.reduce_mean(second_batch)
+                mean = (mean1 + mean2) / 2
+
+        first_task = cluster.cluster_spec.job_tasks(NODE_NAME)[1]
+        with tf.Session(f"grpc://{first_task}",
+                        config=tf.ConfigProto(operation_timeout_in_ms=300000)) as sess:
+            result = sess.run(mean, feed_dict={x: np.random.random(size)})
+            print(f"mean = {result}")
+
+        event.broadcast(cluster.app, "stop", "1")
 
 
 if __name__ == "__main__":

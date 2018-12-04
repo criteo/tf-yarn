@@ -11,21 +11,28 @@ class PythonEnvDescription(NamedTuple):
     dest_path: str
 
 
-DISPATCH_MODULE = "-m tf_yarn._independent_workers_task"
+INDEPENDENT_WORKERS_MODULE = "tf_yarn._independent_workers_task"
+STANDALONE_CLIENT_MODULE = "tf_yarn._standalone_client_task"
 CONDA_ENV_NAME = "pyenv"
-CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python {DISPATCH_MODULE}"
+CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python"
 
 
-def gen_pyenv_from_existing_archive(path_to_archive: str
+def gen_pyenv_from_existing_archive(path_to_archive: str,
+                                    standalone_client_mode: bool
                                     ) -> PythonEnvDescription:
+
+    containers_module = STANDALONE_CLIENT_MODULE if standalone_client_mode \
+        else INDEPENDENT_WORKERS_MODULE
     archive_filename = os.path.basename(path_to_archive)
     if path_to_archive.endswith('.pex'):
         return PythonEnvDescription(
             path_to_archive,
-            f"./{archive_filename} {DISPATCH_MODULE} ",
+            f"./{archive_filename} -m {containers_module} ",
             archive_filename)
     elif path_to_archive.endswith(".zip"):
-        return PythonEnvDescription(path_to_archive, CONDA_CMD, CONDA_ENV_NAME)
+        return PythonEnvDescription(
+            path_to_archive,
+            f"{CONDA_CMD} -m {containers_module}", CONDA_ENV_NAME)
     else:
         raise ValueError("Archive format unsupported. Must be .pex or conda .zip")
 

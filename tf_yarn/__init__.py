@@ -91,7 +91,8 @@ TASK_SPEC_NONE = ps_strategy_topology()
 def _setup_pyenvs(
         pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
         python: str = f"{v.major}.{v.minor}.{v.micro}",
-        pip_packages: List[str] = None
+        pip_packages: List[str] = None,
+        standalone_client_mode: bool = False
 ) -> Dict[NodeLabel, PythonEnvDescription]:
     if not pyenv_zip_path:
         warnings.warn(
@@ -99,12 +100,16 @@ def _setup_pyenvs(
                 "version 0.2.0, consider creating to pack yourself your environment and "
                 "use the pyenv_zip_path argument")
         conda_envs = _make_conda_envs(python, pip_packages or [])
-        pyenvs = {node_label: gen_pyenv_from_existing_archive(zipped_path)
+        pyenvs = {node_label: gen_pyenv_from_existing_archive(
+                                     zipped_path,
+                                     standalone_client_mode)
                   for node_label, zipped_path in conda_envs.items()}
     elif isinstance(pyenv_zip_path, str):
-        pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(pyenv_zip_path)}
+        pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(
+                                    pyenv_zip_path,
+                                    standalone_client_mode)}
     else:
-        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path)
+        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path, standalone_client_mode)
                   for label, env_zip_path in pyenv_zip_path.items()}
     return pyenvs
 
@@ -173,9 +178,14 @@ def _make_conda_envs(python, pip_packages) -> Dict[NodeLabel, str]:
 
 def _setup_cluster_tasks(
     task_instances: List[Tuple[str, int]],
-    app: skein.ApplicationClient
+    app: skein.ApplicationClient,
+    standalone_client_mode: bool
 ) -> tf.train.ClusterSpec:
-    cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
+    tasks_not_in_cluster = ['evaluator']
+    # In standalone client mode the chief is also not part of the cluster
+    if standalone_client_mode:
+        tasks_not_in_cluster.append('chief')
+    cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
     app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
     return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
 
@@ -187,6 +197,7 @@ class TFYarnExecutor():
         pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
         python: str = f"{v.major}.{v.minor}.{v.micro}",
         pip_packages: List[str] = None,
+        standalone_client_mode: bool = False,
         queue: str = "default",
         acls: ACLs = None,
         file_systems: List[str] = None
@@ -215,6 +226,14 @@ class TFYarnExecutor():
             See `Installing Packages <https://packaging.python.org/tutorials \
                                           /installing-packages>`_ for more examples.
 
+        standalone_client_mode
+          https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
+              /contrib/distribute/README.md#standalone-client-mode
+          Standalone mode means starting tf server on the cluster,
+          launching everything on the client and letting tf take care of the rest
+          This is not limited to Estimator API, it also works with low level tf
+          (see session_run_example.py)
+
         queue
             YARN queue to use.
 
@@ -229,7 +248,8 @@ class TFYarnExecutor():
             in addition to ``fs.defaultFS``.
         """
 
-        self.pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
+        self.pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages, standalone_client_mode)
+        self.standalone_client_mode = standalone_client_mode
         self.queue = queue
         self.acls = acls
         self.file_systems = file_systems
@@ -329,7 +349,7 @@ class TFYarnExecutor():
             event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
             event_listener.start()
 
-            cluster_spec = _setup_cluster_tasks(task_instances, app)
+            cluster_spec = _setup_cluster_tasks(task_instances, app, self.standalone_client_mode)
 
             return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
 

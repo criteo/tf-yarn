@@ -134,14 +134,10 @@ def _setup_task_env(
     task_files = _maybe_zip_task_files(files or {}, tempdir)
     task_files[__package__] = zip_path(here, tempdir)
 
-    libhdfs_opts = "-Xms64m -Xmx512m"
-    if "LIBHDFS_OPTS" in env:
-        libhdfs_opts = "{default} {env}".format(default=libhdfs_opts,
-                                                env=env.get("LIBHDFS_OPTS"))
+    _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
 
     task_env = {
         **env,
-        "LIBHDFS_OPTS": libhdfs_opts,
         # Make Python modules/packages passed via ``files`` importable.
         "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
         "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
@@ -151,13 +147,20 @@ def _setup_task_env(
 
 
 def _setup_cluster_tasks(
-    task_instances: List[Tuple[str, int]],
-    app: skein.ApplicationClient
+        task_instances: List[Tuple[str, int]],
+        app: skein.ApplicationClient
 ) -> tf.train.ClusterSpec:
     # Note that evaluator is not part of the cluster
     cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
     app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
     return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
+
+
+def _add_to_env(env: Dict[str, str], env_name: str, opts: str):
+    if env_name in env:
+        env[env_name] = f"{opts} {env.get(env_name)}"
+    else:
+        env[env_name] = f"{opts}"
 
 
 def setup_skein_cluster(
@@ -233,6 +236,9 @@ def setup_skein_cluster(
         if you specify a file here don't forget to also ship it to the containers via files arg
     """
     pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
+
+    os.environ["JAVA_TOOL_OPTIONS"] = \
+        f"-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 {os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
     with tempfile.TemporaryDirectory() as tempdir:
         task_files, task_env = _setup_task_env(tempdir, files, env)

@@ -56,6 +56,11 @@ from ._env import (
    PythonEnvDescription
 )
 from .cluster import aggregate_spec
+from tf_yarn.experiment import Experiment
+from tf_yarn.evaluator_metrics import (
+        add_monitor_to_experiment,
+        EvaluatorMetricsLogger
+)
 
 __all__ = [
     "Experiment", "run_on_yarn", "RunFailed",
@@ -69,17 +74,6 @@ KV_EXPERIMENT_FN = 'experiment_fn'
 logger = logging.getLogger(__name__)
 
 here = os.path.dirname(__file__)
-
-
-class Experiment(NamedTuple):
-    estimator: tf.estimator.Estimator
-    train_spec: tf.estimator.TrainSpec
-    eval_spec: tf.estimator.EvalSpec
-
-    @property
-    def config(self) -> tf.estimator.RunConfig:
-        return self.estimator.config
-
 
 ExperimentFn = Callable[[], Experiment]
 
@@ -271,7 +265,8 @@ def setup_skein_cluster(
 
 def run_on_cluster(
     experiment_fn: ExperimentFn,
-    cluster: SkeinCluster
+    cluster: SkeinCluster,
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
 ) -> None:
     """Run an experiment on YARN.
 
@@ -292,10 +287,14 @@ def run_on_cluster(
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
+    def _new_experiment_fn():
+        return add_monitor_to_experiment(experiment_fn())
+    new_experiment_fn = _new_experiment_fn
+
     # Attempt serialization early to avoid allocating unnecesary resources
-    serialized_fn = dill.dumps(experiment_fn, recurse=True)
+    serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
     with cluster.client:
-        return _execute_and_await_termination(cluster, serialized_fn)
+        return _execute_and_await_termination(cluster, serialized_fn, eval_monitor_log_thresholds)
 
 
 def run_on_yarn(
@@ -309,7 +308,8 @@ def run_on_yarn(
     env: Dict[str, str] = {},
     queue: str = "default",
     file_systems: List[str] = None,
-    log_conf_file: str = None
+    log_conf_file: str = None,
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
 ) -> None:
     """Run an experiment on YARN.
 
@@ -382,6 +382,18 @@ def run_on_yarn(
         optional file with log config, setups logging by default with INFO verbosity,
         if you specify a file here don't forget to also ship it to the containers via files arg
 
+    eval_monitor_log_thresholds
+        optional dictionnary of string to (float 1, float 2).
+        Each couple (key, value) corresponds to an evaluation
+        monitored metric and an associated range. The evaluation monitored metric
+        is logged if it is in [float 1; float 2]. If the lower bound is None it is set to 0.
+        If the upper bound is None, it is set to maximum value
+        A monitored metric with no range is always logged. List of monitored metrics:
+        'awake_time_ratio': 'Awake/idle ratio',
+        'eval_step_mean_duration': 'Eval step mean duration (in sec)',
+        'last_training_step': 'Training set of last checkpoint',
+        'nb_eval_steps': 'Number of evaluation steps done'
+
     Raises
     ------
     RunFailed
@@ -399,7 +411,7 @@ def run_on_yarn(
         file_systems=file_systems,
         log_conf_file=log_conf_file
     )
-    run_on_cluster(experiment_fn, cluster)
+    run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
 
 
 def _maybe_zip_task_files(files, tempdir):
@@ -459,12 +471,18 @@ def _shutdown_on_exception(app: skein.ApplicationClient):
 def _execute_and_await_termination(
     cluster: SkeinCluster,
     serialized_fn: bytes,
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     poll_every_secs: int = 10
 ):
     events: Dict[str, Dict[str, str]] = {task: {} for task in iter_tasks(cluster.tasks)}
     event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
     event_listener.start()
     cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
+    eval_metrics_logger = EvaluatorMetricsLogger(
+        [task for task in iter_tasks(cluster.tasks) if task.startswith('evaluator')],
+        cluster.app,
+        eval_monitor_log_thresholds
+    )
     with _shutdown_on_exception(cluster.app):
         state = None
         while True:
@@ -481,6 +499,8 @@ def _execute_and_await_termination(
                     raise RunFailed
                 else:
                     break
+            else:
+                eval_metrics_logger.log()
             time.sleep(poll_every_secs)
             state = report.state
 

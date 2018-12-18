@@ -52,7 +52,7 @@ setup(
     packages=["tf_yarn"],
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.1.8"),
+    version=_check_add_criteo_environment("0.1.9"),
     install_requires=[
         "tensorflow==1.12.0",
         "dill==0.2.8",

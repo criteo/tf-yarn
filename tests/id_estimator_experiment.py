@@ -2,7 +2,7 @@ import logging
 
 import tensorflow as tf
 
-from tf_yarn import Experiment, run_on_yarn, TaskSpec
+from tf_yarn import Experiment, TFYarnExecutor, TaskSpec
 
 
 def model_fn(features, labels, mode):
@@ -38,6 +38,7 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
     logging.basicConfig(level="INFO")
 
-    run_on_yarn(experiment_fn, task_specs={
-        "chief": TaskSpec(memory=64, vcores=1)
-    })
+    with TFYarnExecutor() as tf_yarn_executor:
+        tf_yarn_executor.run_on_yarn(experiment_fn, task_specs={
+            "chief": TaskSpec(memory=64, vcores=1)
+        })

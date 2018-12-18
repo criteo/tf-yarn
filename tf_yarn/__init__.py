@@ -58,8 +58,8 @@ from ._env import (
 from .cluster import aggregate_spec
 from tf_yarn.experiment import Experiment
 from tf_yarn.evaluator_metrics import (
-        add_monitor_to_experiment,
-        EvaluatorMetricsLogger
+    add_monitor_to_experiment,
+    EvaluatorMetricsLogger
 )
 
 __all__ = [
@@ -140,278 +140,11 @@ def _setup_task_env(
     return task_files, task_env
 
 
-def _setup_cluster_tasks(
-        task_instances: List[Tuple[str, int]],
-        app: skein.ApplicationClient
-) -> tf.train.ClusterSpec:
-    # Note that evaluator is not part of the cluster
-    cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
-    app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
-    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
-
-
 def _add_to_env(env: Dict[str, str], env_name: str, opts: str):
     if env_name in env:
         env[env_name] = f"{opts} {env.get(env_name)}"
     else:
         env[env_name] = f"{opts}"
-
-
-def setup_skein_cluster(
-    task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
-    *,
-    pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-    python: str = f"{v.major}.{v.minor}.{v.micro}",
-    pip_packages: List[str] = None,
-    files: Dict[str, str] = None,
-    env: Dict[str, str] = {},
-    queue: str = "default",
-    file_systems: List[str] = None,
-    log_conf_file: str = None
-) -> SkeinCluster:
-    """Request a cluster on YARN with Skein.
-
-    The implementation allocates a service with the requested number
-    of instances for each distributed TensorFlow task type. Each
-    instance expects a serialized run_config to setup the tensorflow servers
-    and an experiment function to execute.
-
-    Parameters
-    ----------
-    task_specs
-        Resources to allocate for each task type. The keys
-        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-        ``"evaluator"``. The minimal spec must contain at least
-        ``"chief"``.
-
-    pyenv_zip_path
-        Path to an archive of a python environment to be deployed
-        It can be a zip conda env or a pex archive
-        In case of GPU/CPU cluster, provide a dictionnary with both
-        environments.
-
-    python
-        Python version in the MAJOR.MINOR.MICRO format. Defaults to the
-        version of ``sys.executable``.
-
-    pip_packages
-        Python packages to install in the environment. The packages
-        are installed via pip, therefore all of the following forms
-        are supported::
-
-            SomeProject>=1,<2
-            git+https://github.com/org/SomeProject
-            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
-            path/to/SomeProject
-
-        See `Installing Packages <https://packaging.python.org/tutorials \
-        /installing-packages>`_ for more examples.
-
-    files
-        Local files or directories to upload to the container.
-        The keys are the target locations of the resources relative
-        to the container root, while the values -- their
-        corresponding local sources. Note that container root is
-        appended to ``PYTHONPATH``. Therefore, any listed Python
-        module a package is automatically importable.
-
-    env
-        Environment variables to forward to the containers.
-
-    queue
-        YARN queue to use.
-
-    file_systems
-        A list of namenode URIs to acquire delegation tokens for
-        in addition to ``fs.defaultFS``.
-
-    log_conf_file
-        optional file with log config, setups logging by default with INFO verbosity,
-        if you specify a file here don't forget to also ship it to the containers via files arg
-    """
-    pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
-
-    os.environ["JAVA_TOOL_OPTIONS"] = \
-        f"-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 {os.environ.get('JAVA_TOOL_OPTIONS', '')}"
-
-    with tempfile.TemporaryDirectory() as tempdir:
-        task_files, task_env = _setup_task_env(tempdir, files, env)
-        services = {}
-        for task_type, task_spec in list(task_specs.items()):
-            pyenv = pyenvs[task_spec.label]
-            services[task_type] = skein.Service(
-                commands=[gen_task_cmd(pyenv, log_conf_file)],
-                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
-                max_restarts=0,
-                instances=task_spec.instances,
-                node_label=task_spec.label.value,
-                files={
-                    **task_files,
-                    pyenv.dest_path: pyenv.path_to_archive
-                },
-                env=task_env)
-
-        spec = skein.ApplicationSpec(
-            services,
-            queue=queue,
-            file_systems=file_systems)
-        client = skein.Client()
-        app = client.submit_and_connect(spec)
-        task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
-        cluster_spec = _setup_cluster_tasks(task_instances, app)
-
-        return SkeinCluster(client, app, task_instances, cluster_spec)
-
-
-def run_on_cluster(
-    experiment_fn: ExperimentFn,
-    cluster: SkeinCluster,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
-) -> None:
-    """Run an experiment on YARN.
-
-    Dispatches experiment_fn to the cluster and awaits termination
-    of the train_and_evaluate execution.
-
-    Parameters
-    ----------
-    experiment_fn
-        A function constructing the estimator alongside the train
-        and eval specs.
-
-    cluster
-        optional skein cluster. All parameters except experiment_fn will be ignored.
-
-    Raises
-    ------
-    RunFailed
-        If the final status of the YARN application is ``"FAILED"``.
-    """
-    def _new_experiment_fn():
-        return add_monitor_to_experiment(experiment_fn())
-    new_experiment_fn = _new_experiment_fn
-
-    # Attempt serialization early to avoid allocating unnecesary resources
-    serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
-    with cluster.client:
-        return _execute_and_await_termination(cluster, serialized_fn, eval_monitor_log_thresholds)
-
-
-def run_on_yarn(
-    experiment_fn: ExperimentFn,
-    task_specs: Dict[str, TaskSpec] = None,
-    *,
-    pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-    python: str = f"{v.major}.{v.minor}.{v.micro}",
-    pip_packages: List[str] = None,
-    files: Dict[str, str] = None,
-    env: Dict[str, str] = {},
-    queue: str = "default",
-    file_systems: List[str] = None,
-    log_conf_file: str = None,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
-) -> None:
-    """Run an experiment on YARN.
-
-    The implementation allocates a service with the requested number
-    of instances for each distributed TensorFlow task type. Each
-    instance runs ``_dispatch_task`` which roughly does the following.
-
-    1. Reserve a TCP port and communicate the resulting socket address
-       (host/port pair) to other instances using the "init" barrier.
-    2. Spawn ``train_and_evaluate`` in a separate thread.
-    3. Synchronize the "ps" tasks on the "stop" barrier.
-       The barrier compensates for the fact that "ps" tasks never
-       terminate, and therefore should be killed once all other
-       tasks are finished.
-
-    Parameters
-    ----------
-    experiment_fn
-        A function constructing the estimator alongside the train
-        and eval specs.
-
-    task_specs
-        Resources to allocate for each task type. The keys
-        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-        ``"evaluator"``. The minimal spec must contain at least
-        ``"chief"``.
-
-    pyenv_zip_path
-        Path to an archive of a python environment to be deployed
-        It can be a zip conda env or a pex archive
-        In case of GPU/CPU cluster, provide a dictionnary with both
-        environments.
-
-    python
-        Python version in the MAJOR.MINOR.MICRO format. Defaults to the
-        version of ``sys.executable``.
-
-    pip_packages
-        Python packages to install in the environment. The packages
-        are installed via pip, therefore all of the following forms
-        are supported::
-
-            SomeProject>=1,<2
-            git+https://github.com/org/SomeProject
-            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
-            path/to/SomeProject
-
-        See `Installing Packages <https://packaging.python.org/tutorials \
-        /installing-packages>`_ for more examples.
-
-    files
-        Local files or directories to upload to the container.
-        The keys are the target locations of the resources relative
-        to the container root, while the values -- their
-        corresponding local sources. Note that container root is
-        appended to ``PYTHONPATH``. Therefore, any listed Python
-        module a package is automatically importable.
-
-    env
-        Environment variables to forward to the containers.
-
-    queue
-        YARN queue to use.
-
-    file_systems
-        A list of namenode URIs to acquire delegation tokens for
-        in addition to ``fs.defaultFS``.
-
-    log_conf_file
-        optional file with log config, setups logging by default with INFO verbosity,
-        if you specify a file here don't forget to also ship it to the containers via files arg
-
-    eval_monitor_log_thresholds
-        optional dictionnary of string to (float 1, float 2).
-        Each couple (key, value) corresponds to an evaluation
-        monitored metric and an associated range. The evaluation monitored metric
-        is logged if it is in [float 1; float 2]. If the lower bound is None it is set to 0.
-        If the upper bound is None, it is set to maximum value
-        A monitored metric with no range is always logged. List of monitored metrics:
-        'awake_time_ratio': 'Awake/idle ratio',
-        'eval_step_mean_duration': 'Eval step mean duration (in sec)',
-        'last_training_step': 'Training set of last checkpoint',
-        'nb_eval_steps': 'Number of evaluation steps done'
-
-    Raises
-    ------
-    RunFailed
-        If the final status of the YARN application is ``"FAILED"``.
-    """
-    warnings.warn("This method is deprecated. Please use run_on_cluster and setup_skein_cluster")
-    cluster = setup_skein_cluster(
-        StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
-        pyenv_zip_path=pyenv_zip_path,
-        python=python,
-        pip_packages=pip_packages,
-        files=files,
-        env=env,
-        queue=queue,
-        file_systems=file_systems,
-        log_conf_file=log_conf_file
-    )
-    run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
 
 
 def _maybe_zip_task_files(files, tempdir):
@@ -447,6 +180,257 @@ def _make_conda_envs(python, pip_packages) -> Dict[NodeLabel, str]:
             ]
         )
     }
+
+
+def _setup_cluster_tasks(
+    task_instances: List[Tuple[str, int]],
+    app: skein.ApplicationClient
+) -> tf.train.ClusterSpec:
+    # Note that evaluator is not part of the cluster
+    cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
+    app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
+    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
+
+
+class TFYarnExecutor():
+
+    def __init__(
+        self,
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
+        python: str = f"{v.major}.{v.minor}.{v.micro}",
+        pip_packages: List[str] = None,
+        queue: str = "default",
+        file_systems: List[str] = None
+    ):
+        """
+        pyenv_zip_path
+            Path to an archive of a python environment to be deployed
+            It can be a zip conda env or a pex archive
+            In case of GPU/CPU cluster, provide a dictionnary with both
+            environments.
+
+        python
+            Python version in the MAJOR.MINOR.MICRO format. Defaults to the
+            version of ``sys.executable``.
+
+        pip_packages
+            Python packages to install in the environment. The packages
+            are installed via pip, therefore all of the following forms
+            are supported::
+
+        SomeProject>=1,<2
+            git+https://github.com/org/SomeProject
+            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
+            path/to/SomeProject
+
+            See `Installing Packages <https://packaging.python.org/tutorials \
+                                          /installing-packages>`_ for more examples.
+
+        queue
+            YARN queue to use.
+
+        file_systems
+            A list of namenode URIs to acquire delegation tokens for
+            in addition to ``fs.defaultFS``.
+        """
+
+        self.pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
+        self.queue = queue
+        self.file_systems = file_systems
+
+    def __enter__(self):
+        skein.Client.start_global_daemon()
+        return self
+
+    def __exit__(self, *args):
+        skein.Client.stop_global_daemon()
+
+    def setup_skein_cluster(
+        self,
+        task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
+        *,
+        files: Dict[str, str] = None,
+        env: Dict[str, str] = {},
+        log_conf_file: str = None
+    ) -> SkeinCluster:
+        """Request a cluster on YARN with Skein.
+
+        The implementation allocates a service with the requested number
+        of instances for each distributed TensorFlow task type. Each
+        instance expects a serialized run_config to setup the tensorflow servers
+        and an experiment function to execute.
+
+        Parameters
+        ----------
+        task_specs
+            Resources to allocate for each task type. The keys
+            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+            ``"evaluator"``. The minimal spec must contain at least
+            ``"chief"``.
+
+        files
+            Local files or directories to upload to the container.
+            The keys are the target locations of the resources relative
+            to the container root, while the values -- their
+            corresponding local sources. Note that container root is
+            appended to ``PYTHONPATH``. Therefore, any listed Python
+            module a package is automatically importable.
+
+        env
+            Environment variables to forward to the containers.
+
+        log_conf_file
+            optional file with log config, setups logging by default with INFO verbosity,
+            if you specify a file here don't forget to also ship it to the containers via files arg
+        """
+        os.environ["JAVA_TOOL_OPTIONS"] = \
+            "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
+            f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            task_files, task_env = _setup_task_env(tempdir, files, env)
+            services = {}
+            for task_type, task_spec in list(task_specs.items()):
+                pyenv = self.pyenvs[task_spec.label]
+                services[task_type] = skein.Service(
+                    commands=[gen_task_cmd(pyenv, log_conf_file)],
+                    resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
+                    max_restarts=0,
+                    instances=task_spec.instances,
+                    node_label=task_spec.label.value,
+                    files={
+                        **task_files,
+                        pyenv.dest_path: pyenv.path_to_archive
+                    },
+                    env=task_env)
+
+            spec = skein.ApplicationSpec(
+                services,
+                queue=self.queue,
+                file_systems=self.file_systems)
+            try:
+                client = skein.Client.from_global_daemon()
+            except skein.exceptions.DaemonNotRunningError:
+                client = skein.Client()
+            app = client.submit_and_connect(spec)
+            task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
+            cluster_spec = _setup_cluster_tasks(task_instances, app)
+
+            return SkeinCluster(client, app, task_instances, cluster_spec)
+
+    def run_on_cluster(
+        self,
+        experiment_fn: ExperimentFn,
+        cluster: SkeinCluster,
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
+    ) -> None:
+        """Run an experiment on YARN.
+
+        Dispatches experiment_fn to the cluster and awaits termination
+        of the train_and_evaluate execution.
+
+        Parameters
+        ----------
+        experiment_fn
+            A function constructing the estimator alongside the train
+            and eval specs.
+
+        cluster
+            optional skein cluster. All parameters except experiment_fn will be ignored.
+
+        Raises
+        ------
+        RunFailed
+            If the final status of the YARN application is ``"FAILED"``.
+        """
+        def _new_experiment_fn():
+            return add_monitor_to_experiment(experiment_fn())
+        new_experiment_fn = _new_experiment_fn
+
+        # Attempt serialization early to avoid allocating unnecesary resources
+        serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
+        with cluster.client:
+            return _execute_and_await_termination(
+                cluster,
+                serialized_fn,
+                eval_monitor_log_thresholds
+            )
+
+    def run_on_yarn(
+        self,
+        experiment_fn: ExperimentFn,
+        task_specs: Dict[str, TaskSpec] = None,
+        *,
+        files: Dict[str, str] = None,
+        env: Dict[str, str] = {},
+        log_conf_file: str = None,
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
+    ) -> None:
+        """Run an experiment on YARN.
+
+        The implementation allocates a service with the requested number
+        of instances for each distributed TensorFlow task type. Each
+        instance runs ``_dispatch_task`` which roughly does the following.
+
+        1. Reserve a TCP port and communicate the resulting socket address
+           (host/port pair) to other instances using the "init" barrier.
+        2. Spawn ``train_and_evaluate`` in a separate thread.
+        3. Synchronize the "ps" tasks on the "stop" barrier.
+           The barrier compensates for the fact that "ps" tasks never
+           terminate, and therefore should be killed once all other
+           tasks are finished.
+
+        Parameters
+        ----------
+        experiment_fn
+            A function constructing the estimator alongside the train
+            and eval specs.
+
+        task_specs
+            Resources to allocate for each task type. The keys
+            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+            ``"evaluator"``. The minimal spec must contain at least
+            ``"chief"``.
+
+        files
+            Local files or directories to upload to the container.
+            The keys are the target locations of the resources relative
+            to the container root, while the values -- their
+            corresponding local sources. Note that container root is
+            appended to ``PYTHONPATH``. Therefore, any listed Python
+            module a package is automatically importable.
+
+        env
+            Environment variables to forward to the containers.
+
+        log_conf_file
+            optional file with log config, setups logging by default with INFO verbosity,
+            if you specify a file here don't forget to also ship it to the containers via files arg
+
+        eval_monitor_log_thresholds
+            optional dictionnary of string to (float 1, float 2).
+            Each couple (key, value) corresponds to an evaluation
+            monitored metric and an associated range. The evaluation monitored metric
+            is logged if it is in [float 1; float 2]. If the lower bound is None it is set to 0.
+            If the upper bound is None, it is set to maximum value
+            A monitored metric with no range is always logged. List of monitored metrics:
+            'awake_time_ratio': 'Awake/idle ratio',
+            'eval_step_mean_duration': 'Eval step mean duration (in sec)',
+            'last_training_step': 'Training set of last checkpoint',
+            'nb_eval_steps': 'Number of evaluation steps done'
+
+        Raises
+        ------
+        RunFailed
+            If the final status of the YARN application is ``"FAILED"``.
+        """
+        cluster = self.setup_skein_cluster(
+            StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+            files=files,
+            env=env,
+            log_conf_file=log_conf_file
+        )
+        self.run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
 
 
 @contextmanager

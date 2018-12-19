@@ -201,7 +201,7 @@ class TFYarnExecutor():
         pip_packages: List[str] = None,
         queue: str = "default",
         file_systems: List[str] = None
-    ):
+    ) -> None:
         """
         pyenv_zip_path
             Path to an archive of a python environment to be deployed
@@ -323,7 +323,7 @@ class TFYarnExecutor():
         experiment_fn: ExperimentFn,
         cluster: SkeinCluster,
         eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
-    ) -> None:
+    ) -> Optional[Metrics]:
         """Run an experiment on YARN.
 
         Dispatches experiment_fn to the cluster and awaits termination
@@ -365,7 +365,7 @@ class TFYarnExecutor():
         env: Dict[str, str] = {},
         log_conf_file: str = None,
         eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
-    ) -> None:
+    ) -> Optional[Metrics]:
         """Run an experiment on YARN.
 
         The implementation allocates a service with the requested number
@@ -430,7 +430,7 @@ class TFYarnExecutor():
             env=env,
             log_conf_file=log_conf_file
         )
-        self.run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
+        return self.run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
 
 
 @contextmanager
@@ -457,7 +457,7 @@ def _execute_and_await_termination(
     serialized_fn: bytes,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     poll_every_secs: int = 10
-):
+) -> Optional[Metrics]:
     events: Dict[str, Dict[str, str]] = {task: {} for task in iter_tasks(cluster.tasks)}
     event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
     event_listener.start()

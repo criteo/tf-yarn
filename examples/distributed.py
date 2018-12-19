@@ -2,9 +2,9 @@
 Example of using low level API
 
 Create first a pex with tf yarn call example.pex
-pex tf-yarn -o example.pex
+pex cryptography==2.1.4 tf-yarn -o tf-yarn/examples/example.pex
 
-Then execute the script 'python distributed.py'
+Then in repo tf-yarn/examples execute the script 'python distributed.py'
 
 It should :
 * Create a yarn application with 2 containers called 'worker'
@@ -33,8 +33,8 @@ def create_cluster():
 
 
 def create_skein_app():
-    service = skein.Service(['./example.pex distributed.py --server'],
-                            skein.Resources(2*1024, 1),
+    service = skein.Service(commands=['./example.pex distributed.py --server'],
+                            resources=skein.Resources(2*1024, 1),
                             env={'PEX_ROOT': '/tmp/{uuid.uuid4()}/'},
                             files={'example.pex': 'example.pex',
                                    'distributed.py': __file__},

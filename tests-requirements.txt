@@ -1,2 +1,2 @@
-pytest
+pytest==3.*
 hadoop-test-cluster

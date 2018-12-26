@@ -185,10 +185,8 @@ def _setup_cluster_tasks(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient
 ) -> tf.train.ClusterSpec:
-    # Note that evaluator is not part of the cluster
-    cluster_instances = [t for t in task_instances if t[0] is not 'evaluator']
-    app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
-    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
+    app.kv[KV_CLUSTER_INSTANCES] = json.dumps(task_instances).encode()
+    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(task_instances))))
 
 
 class TFYarnExecutor():

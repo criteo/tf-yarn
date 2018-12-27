@@ -63,9 +63,8 @@ from tf_yarn.evaluator_metrics import (
 )
 
 __all__ = [
-    "Experiment", "run_on_yarn", "RunFailed",
-    "single_server_topology", "ps_strategy_topology",
-    "setup_skein_cluster", "run_on_cluster"
+    "Experiment", "TFYarnExecutor", "RunFailed",
+    "single_server_topology", "ps_strategy_topology"
 ]
 
 KV_CLUSTER_INSTANCES = 'cluster_instances'

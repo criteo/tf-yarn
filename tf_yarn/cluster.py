@@ -14,7 +14,7 @@ def aggregate_spec(client: skein.ApplicationClient,
                    all_tasks: typing.List[str]
                    ) -> typing.Dict[str, typing.List[str]]:
     spec: typing.Dict[str, typing.List[str]] = {}
-    for task in sorted(all_tasks):
+    for task in sorted(all_tasks, key=lambda x: int(x.split(':', 1)[1])):
         sock_addr = event.wait(client, f"{task}/init")
         task_type, _task_id = task.split(":", 1)
         spec.setdefault(task_type, []).append(sock_addr)

@@ -59,8 +59,8 @@ from .cluster import aggregate_spec
 from tf_yarn.experiment import Experiment
 from tf_yarn.evaluator_metrics import (
     add_monitor_to_experiment,
-    EvaluatorMetricsLogger
-)
+    EvaluatorMetricsLogger)
+from tf_yarn.metrics import OneShotMetricsLogger
 
 __all__ = [
     "Experiment", "TFYarnExecutor", "RunFailed",
@@ -297,6 +297,10 @@ class TFYarnExecutor():
             services = {}
             for task_type, task_spec in list(task_specs.items()):
                 pyenv = self.pyenvs[task_spec.label]
+                service_env = task_env.copy()
+                if task_spec.termination_timeout_seconds >= 0:
+                    _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
+                                str(task_spec.termination_timeout_seconds))
                 services[task_type] = skein.Service(
                     commands=[gen_task_cmd(pyenv, log_conf_file)],
                     resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
@@ -307,7 +311,7 @@ class TFYarnExecutor():
                         **task_files,
                         pyenv.dest_path: pyenv.path_to_archive
                     },
-                    env=task_env)
+                    env=service_env)
 
             spec = skein.ApplicationSpec(
                 services,
@@ -477,6 +481,10 @@ def _execute_and_await_termination(
         cluster.app,
         eval_monitor_log_thresholds
     )
+    one_shot_metrics_logger = OneShotMetricsLogger(
+        cluster.app,
+        {task: ['url'] for task in iter_tasks(cluster.tasks) if task.startswith('tensorboard')}
+    )
     with _shutdown_on_exception(cluster.app):
         state = None
         while True:
@@ -495,6 +503,7 @@ def _execute_and_await_termination(
                     break
             else:
                 eval_metrics_logger.log()
+                one_shot_metrics_logger.log()
             time.sleep(poll_every_secs)
             state = report.state
 

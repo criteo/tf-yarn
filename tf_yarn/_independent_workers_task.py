@@ -37,7 +37,8 @@ def main() -> None:
 
     # "ps" tasks do not terminate by themselves. See
     # https://github.com/tensorflow/tensorflow/issues/4713.
-    if task_type != "ps":
+    # Tensorboard is terminated after all other tasks in _shutdown_container
+    if task_type not in ['ps', 'tensorboard']:
         thread.join()
         tf.logging.info(f"{task_type}:{task_id} {thread.state}")
 

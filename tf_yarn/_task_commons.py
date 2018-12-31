@@ -11,23 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import argparse
+import json
+import logging
+import logging.config
 import os
 import re
 import sys
-import argparse
 from typing import List, Tuple, Dict, Optional
 
 import dill
-import json
 import skein
 import tensorflow as tf
 
-import logging
-import logging.config
-
 from tf_yarn import event, cluster, Experiment
-from tf_yarn._internal import expand_wildcards_in_classpath, MonitoredThread, iter_tasks
 from tf_yarn.__init__ import KV_CLUSTER_INSTANCES, KV_EXPERIMENT_FN
+from tf_yarn._internal import expand_wildcards_in_classpath, MonitoredThread, iter_tasks
+from tf_yarn.tensorboard import start_tf_board, get_termination_timeout
 
 
 def _process_arguments() -> None:
@@ -116,14 +116,16 @@ def _execute_dispatched_function(
 ) -> MonitoredThread:
     task_type, task_id = cluster.get_task_description()
     tf.logging.info(f"Starting execution {task_type}:{task_id}")
-    thread = MonitoredThread(
-        name=f"{task_type}:{task_id}",
-        target=_gen_monitored_train_and_evaluate(client),
-        args=tuple(experiment),
-        daemon=True)
-
+    if task_type == 'tensorboard':
+        thread = start_tf_board(client, experiment)
+    else:
+        thread = MonitoredThread(
+            name=f"{task_type}:{task_id}",
+            target=_gen_monitored_train_and_evaluate(client),
+            args=tuple(experiment),
+            daemon=True)
+        thread.start()
     task = cluster.get_task()
-    thread.start()
     event.start_event(client, task)
     return thread
 
@@ -157,14 +159,24 @@ def _shutdown_container(
     # wait for contains all tasks in the cluster, or the ones
     # matching ``device_filters`` if set. The implementation assumes
     # that ``device_filers`` are symmetric.
-    exception = thread.exception if thread is not None else None
+    exception = thread.exception if thread is not None and isinstance(thread, MonitoredThread) \
+                                 else None
     task = cluster.get_task()
     event.stop_event(client, task, exception)
+    if cluster_tasks is None:
+        tasks = None
+    else:
+        tasks = [c for c in cluster_tasks if not c.startswith('tensorboard')]
     wait_for_connected_tasks(
         client,
-        cluster_tasks,
+        tasks,
         getattr(run_config.session_config, "device_filters", []))
 
+    if task.startswith('tensorboard'):
+        timeout = get_termination_timeout()
+        if thread is not None:
+            thread.join(timeout)
+        tf.logging.info(f"{task} finished")
     event.broadcast_container_stop_time(client, task)
 
     if exception is not None:

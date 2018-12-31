@@ -4,7 +4,7 @@ from typing import Dict, NamedTuple
 GB = 2**10
 MAX_MEMORY_CONTAINER = 48 * GB
 MAX_VCORES_CONTAINER = 48
-ALL_TASK_TYPES = {"chief", "worker", "ps", "evaluator"}
+ALL_TASK_TYPES = {"chief", "worker", "ps", "evaluator", "tensorboard"}
 
 
 class NodeLabel(Enum):
@@ -22,6 +22,7 @@ class TaskSpec(NamedTuple):
     vcores: int
     instances: int = 1
     label: NodeLabel = NodeLabel.CPU
+    termination_timeout_seconds: int = -1
 
 
 def _check_general_topology(task_specs: Dict[str, TaskSpec]) -> None:
@@ -45,6 +46,8 @@ def _check_ps_topology(task_specs: Dict[str, TaskSpec]) -> None:
     _check_general_topology(task_specs)
     if task_specs["evaluator"].instances > 1:
         raise ValueError("no more than one 'evaluator' task is allowed")
+    if task_specs["tensorboard"].instances > 1:
+        raise ValueError("no more than one 'tensorboard' task is allowed")
     if not task_specs["ps"].instances:
         raise ValueError(
             "task_specs must contain at least a single 'ps' task for "
@@ -72,7 +75,8 @@ def ps_strategy_topology(
         "chief": TaskSpec(memory=memory, vcores=vcores),
         "evaluator": TaskSpec(memory=memory, vcores=vcores),
         "worker": TaskSpec(memory=memory, vcores=vcores, instances=nb_workers),
-        "ps": TaskSpec(memory=memory, vcores=vcores, instances=nb_ps)
+        "ps": TaskSpec(memory=memory, vcores=vcores, instances=nb_ps),
+        "tensorboard": TaskSpec(memory=memory, vcores=vcores, instances=1)
     }
     _check_ps_topology(topology)
     return topology

@@ -20,12 +20,8 @@ import shutil
 import socket
 import tempfile
 from typing import (
-    Dict,
     Optional,
     Tuple,
-    NamedTuple,
-    Callable,
-    Union,
     List,
     Iterable,
     Iterator
@@ -97,7 +93,7 @@ def reserve_sock_addr() -> Iterator[Tuple[str, int]]:
         sock.setsockopt(socket.SOL_SOCKET, so_reuseport, 1)
         sock.bind(("", 0))
         _ipaddr, port = sock.getsockname()
-        yield (socket.gethostname(), port)
+        yield (socket.getfqdn(), port)
 
 
 def iter_tasks(tasks: List[Tuple[str, int]]) -> Iterable[str]:

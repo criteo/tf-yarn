@@ -1,13 +1,8 @@
-from typing import (
-    Dict,
-    Optional,
-    Tuple,
-    NamedTuple,
-    Callable,
-    Union,
-    List
-)
 import os
+from typing import (
+    Optional,
+    NamedTuple
+)
 
 
 class PythonEnvDescription(NamedTuple):

@@ -20,6 +20,12 @@ def logs_event(client: skein.ApplicationClient,
     broadcast(client, f"{task}/logs", logs)
 
 
+def url_event(client: skein.ApplicationClient,
+              task: str,
+              url: str) -> None:
+    broadcast(client, f"{task}/url", url)
+
+
 def init_event(client: skein.ApplicationClient,
                task: str,
                sock_addr: str) -> None:

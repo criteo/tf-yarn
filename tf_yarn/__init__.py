@@ -82,6 +82,8 @@ class SkeinCluster(NamedTuple):
     app: skein.ApplicationClient
     tasks: List[Tuple[str, int]]
     cluster_spec: tf.train.ClusterSpec
+    event_listener: Thread
+    events: Dict[str, Dict[str, str]]
 
 
 class RunFailed(Exception):
@@ -315,11 +317,19 @@ class TFYarnExecutor():
                 client = skein.Client.from_global_daemon()
             except skein.exceptions.DaemonNotRunningError:
                 client = skein.Client()
-            app = client.submit_and_connect(spec)
+
             task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
+            events: Dict[str, Dict[str, str]] = \
+                {task: {} for task in iter_tasks(task_instances)}
+            app = client.submit_and_connect(spec)
+
+            # Start a thread which collects all events posted by all tasks in kv store
+            event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
+            event_listener.start()
+
             cluster_spec = _setup_cluster_tasks(task_instances, app)
 
-            return SkeinCluster(client, app, task_instances, cluster_spec)
+            return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
 
     def run_on_cluster(
         self,
@@ -461,9 +471,6 @@ def _execute_and_await_termination(
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     poll_every_secs: int = 10
 ) -> Optional[Metrics]:
-    events: Dict[str, Dict[str, str]] = {task: {} for task in iter_tasks(cluster.tasks)}
-    event_listener = Thread(target=_aggregate_events, args=(cluster.app.kv, events))
-    event_listener.start()
     cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
     eval_metrics_logger = EvaluatorMetricsLogger(
         [task for task in iter_tasks(cluster.tasks) if task.startswith('evaluator')],
@@ -479,8 +486,8 @@ def _execute_and_await_termination(
                 logger.info(_format_app_report(report))
 
             if report.final_status != "undefined":
-                event_listener.join()
-                log_events, metrics = _handle_events(events)
+                cluster.event_listener.join()
+                log_events, metrics = _handle_events(cluster.events)
                 logger.info(log_events)
                 if report.final_status == "failed":
                     raise RunFailed

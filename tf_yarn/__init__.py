@@ -242,7 +242,13 @@ class TFYarnExecutor():
         return self
 
     def __exit__(self, *args):
-        skein.Client.stop_global_daemon()
+        try:
+            client = skein.Client.from_global_daemon()
+        except skein.exceptions.DaemonNotRunningError:
+            return
+        else:
+            if not [app for app in client.get_applications() if app.user == os.environ['USER']]:
+                skein.Client.stop_global_daemon()
 
     def setup_skein_cluster(
         self,

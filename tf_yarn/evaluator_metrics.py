@@ -12,7 +12,7 @@ import warnings
 MONITORED_METRICS = {
     'awake_time_ratio': 'Awake/idle ratio',
     'eval_step_mean_duration': 'Eval step mean duration (in sec)',
-    'last_training_step': 'Training set of last checkpoint',
+    'last_training_step': 'Training step of last checkpoint',
     'nb_eval_steps': 'Number of evaluation steps done'
 }
 
@@ -53,13 +53,11 @@ class EvaluatorMetricsLogger():
             for key, value in MONITORED_METRICS.items():
                 stat = self.app.kv.get(f'{evaluator}/{key}', None)
                 stat = float(stat.decode()) if stat else None
-                if stat and stat != self.last_metrics[evaluator][key]:
+                if stat is not None and stat != self.last_metrics[evaluator][key]:
                     if key not in self.log_thresholds or\
                             (self.log_thresholds[key][0] <= stat <= self.log_thresholds[key][1]):
                         cur_eval_stats.append(f'{value}: {stat}')
                     self.last_metrics[evaluator][key] = stat
-                else:
-                    break
             if len(cur_eval_stats) > 0:
                 logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
 

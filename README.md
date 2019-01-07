@@ -9,7 +9,6 @@ Installation
 ```bash
 $ git clone https://github.com/criteo/tf-yarn
 $ cd tf-yarn
-$ pip install -r requirements.txt
 $ pip install .
 ```
 
@@ -50,22 +49,23 @@ for multi-node training, meaning that a `"chief"` task complemented by an
 in its own YARN container.
 
 ```python
-from tf_yarn import run_on_yarn, TaskSpec
+from tf_yarn import TaskSpec, TFYarnExecutor
 
-run_on_yarn(
-    experiment_fn,
-    task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-        "evaluator": TaskSpec(memory=2**10, vcores=1)
-    }
-)
+with TFYarnExecutor() as tfYarnExecutor:
+    tfYarnExecutor.run_on_yarn(
+        experiment_fn,
+        task_specs={
+            "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+            "evaluator": TaskSpec(memory=2**10, vcores=1)
+        }
+    )
 ```
 
 The final bit is to forward the `winequality.py` module to the YARN containers,
 in order for the tasks to be able to import them:
 
 ```python
-run_on_yarn(
+tfYarnExecutor.run_on_yarn(
     ...,
     files={
         os.path.basename(winequality.__file__): winequality.__file__,
@@ -116,7 +116,7 @@ generally a good idea to give `"ps"` tasks >1 vcores to allow for concurrent I/O
 processing.
 
 ```python
-run_on_yarn(
+tfYarnExecutor.run_on_yarn(
     ...,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
@@ -129,19 +129,30 @@ run_on_yarn(
 
 ### Configuring the Python interpreter and packages
 
-tf-yarn ships an isolated Python environment to the containers. By default
-it comes with a Python interpreter, TensorFlow, and a few of the tf-yarn
+tf-yarn ships an isolated Python environment to the containers. We use conda for that which by default
+comes with a Python interpreter. The conda environment includes TensorFlow and a few of the tf-yarn
 dependencies (see `requirements.txt` for the full list).
 
 Additional pip-installable packages can be added via the `pip_packages` argument
 to `run_on_yarn`:
 
 ```python
-run_on_yarn(
-    ...,
+tfYarnExecutor = TFYarnExecutor(
     pip_packages=["keras"]
 )
 ```
+
+You can also provide you own full prepackaged conda environment with [conda pack][conda pack] or your own virtual environment using [pex][pex]
+(make sure that you also include all the dependencies from `requirements.txt`):
+
+```python
+with TFYarnExecutor(
+    pyenv_zip_path="myarchive.pex"
+) as tfYarnExecutor:
+```
+
+[conda pack]: https://conda.github.io/conda-pack/
+[pex]: https://pex.readthedocs.io/en/stable/
 
 ### Running on GPU
 
@@ -165,14 +176,14 @@ to run on the GPU ones:
 ```python
 from tf_yarn import NodeLabel
 
-run_on_yarn(
-    experiment_fn,
-    task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
-        "evaluator": TaskSpec(memory=2**10, vcores=1)
-    },
-    queue="ml-gpu"
-)
+with TFYarnExecutor(queue="ml-gpu") as tfYarnExecutor:
+    tfYarnExecutor.run_on_yarn(
+        experiment_fn,
+        task_specs={
+            "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
+            "evaluator": TaskSpec(memory=2**10, vcores=1)
+        }
+    )
 ```
 
 [node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
@@ -187,20 +198,28 @@ to `run_on_yarn`. This would instruct `skein` to acquire a delegation token for
 these namenodes in addition to ``fs.defaultFS``:
 
 ```python
-run_on_yarn(
+with TFYarnExecutor(
     ...,
     file_systems=["hdfs://preprod"]
-)
+) as tfYarnExecutor:
 ```
 
 Depending on the cluster configuration, you might need to point libhdfs to a
 different configuration folder. For instance:
 
 ```python
-run_on_yarn(
+tfYarnExecutor.run_on_yarn(
     ...,
     env={"HADOOP_CONF_DIR": "/etc/hadoop/conf.all"}
 )
 ```
 
 [federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
+
+### Tensorboard
+
+Tensorboard is activated by default. It runs inside its own Yarn container,
+assigns a new port and prints its url in the logs ("Tensorboard is listening at .. ").
+When the learning is finished the UI stays alive for 30 seconds by default.
+The termination timeout can be configured using termination_timeout_seconds.
+

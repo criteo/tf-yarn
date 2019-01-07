@@ -6,7 +6,4 @@ def is_criteo():
 
 
 def get_requirements_file():
-    if is_criteo():
-        return "criteo.requirements.txt"
-    else:
-        return "requirements.txt"
+    return "requirements.txt"

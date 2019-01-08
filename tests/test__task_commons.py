@@ -11,9 +11,9 @@ import skein
 import tensorflow as tf
 
 from tf_yarn.__init__ import Experiment
-from tf_yarn._internal import iter_tasks, expand_wildcards_in_classpath, MonitoredThread
+from tf_yarn._internal import iter_tasks, MonitoredThread
 from tf_yarn._task_commons import matches_device_filters, \
-    _prepare_container, _check_classpath, _get_experiment, _execute_dispatched_function, \
+    _prepare_container, _get_experiment, _execute_dispatched_function, \
     wait_for_connected_tasks, _shutdown_container
 
 
@@ -37,30 +37,11 @@ def test_does_not_match_device_filters(task, device_filters):
     assert not matches_device_filters(task, device_filters)
 
 
-def test__check_classpath():
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(patch.dict(os.environ))
-        mocked_logging = stack.enter_context(patch(f'{MODULE_TO_TEST}.tf.logging.warn'))
-        # Only throw warning if classpath is not set
-        _check_classpath()
-        mocked_logging.assert_called_once()
-
-        # expand classpath when provided
-        mocked_expansion = stack.enter_context(
-            patch(f'{MODULE_TO_TEST}.expand_wildcards_in_classpath'))
-        expanded_path = 'expanded_path'
-        mocked_expansion.return_value = expanded_path
-        os.environ["CLASSPATH"] = "mock_path"
-        _check_classpath()
-        assert os.environ["CLASSPATH"] == expanded_path
-
-
 def test__prepare_container():
     with contextlib.ExitStack() as stack:
         # mock modules
         mocked_client_call = stack.enter_context(
             patch(f"{MODULE_TO_TEST}.skein.ApplicationClient.from_current"))
-        mocked_check = stack.enter_context(patch(f'{MODULE_TO_TEST}._check_classpath'))
         mocked_logs = stack.enter_context(patch(f'{MODULE_TO_TEST}._setup_container_logs'))
         mocked_cluster_spec = stack.enter_context(patch(f'{MODULE_TO_TEST}.cluster.start_cluster'))
 
@@ -72,7 +53,6 @@ def test__prepare_container():
         client, cluster_spec, cluster_tasks = _prepare_container()
 
         # checks
-        mocked_check.assert_called_once()
         mocked_logs.assert_called_once()
         mocked_cluster_spec.assert_called_once_with(mocked_client, cluster_tasks)
         assert client == mocked_client

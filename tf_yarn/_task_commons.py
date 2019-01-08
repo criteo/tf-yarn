@@ -26,7 +26,7 @@ import tensorflow as tf
 
 from tf_yarn import event, cluster, Experiment
 from tf_yarn.__init__ import KV_CLUSTER_INSTANCES, KV_EXPERIMENT_FN
-from tf_yarn._internal import expand_wildcards_in_classpath, MonitoredThread, iter_tasks
+from tf_yarn._internal import MonitoredThread, iter_tasks
 from tf_yarn.tensorboard import start_tf_board, get_termination_timeout
 
 
@@ -40,19 +40,6 @@ def _process_arguments() -> None:
         log_conf_file = os.path.join(base_dir, "default.log.conf")
     logging.config.fileConfig(log_conf_file, disable_existing_loggers=True)
     tf.logging.info(f"using log file {log_conf_file}")
-
-
-def _check_classpath():
-    try:
-        classpath = os.environ["CLASSPATH"]
-    except KeyError:
-        tf.logging.warn(
-            "$CLASSPATH is not defined. HDFS access will surely fail.")
-    else:
-        tf.logging.info("Attempting to expand wildcards in $CLASSPATH")
-        os.environ["CLASSPATH"] = expand_wildcards_in_classpath(classpath)
-        del classpath
-        tf.logging.info(os.environ["CLASSPATH"])
 
 
 def _setup_container_logs(client):
@@ -71,7 +58,6 @@ def _prepare_container(
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
-    _check_classpath()
     client = skein.ApplicationClient.from_current()
     _setup_container_logs(client)
     cluster_tasks = list(iter_tasks(json.loads(client.kv.wait(KV_CLUSTER_INSTANCES).decode())))

@@ -129,26 +129,6 @@ def zip_path(path: str, tempdir: str):
     return zip_path
 
 
-def expand_wildcards_in_classpath(classpath: str) -> str:
-    """Expand wildcard entries in the $CLASSPATH.
-
-    JNI-invoked JVM does not support wildcards in the classpath. This
-    function replaces all classpath entries of the form ``foo/bar/*``
-    with the JARs in the ``foo/bar`` directory.
-
-    See "Common Problems" section in the libhdfs docs
-    https://hadoop.apache.org/docs/current/hadoop-project-dist/hadoop-hdfs/LibHdfs.html
-    """
-    def maybe_glob(path):
-        if path.endswith("*"):
-            yield from glob.iglob(path + ".jar")
-        else:
-            yield path
-
-    return ":".join(entry for path in classpath.split(":")
-                    for entry in maybe_glob(path))
-
-
 class StaticDefaultDict(dict):
     """A ``dict`` with a static default value.
 

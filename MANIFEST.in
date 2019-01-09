@@ -1,5 +1,6 @@
 include *.md
 include LICENSE
 include tf_yarn/default.log.conf
+include requirements.txt
 
 recursive-include examples

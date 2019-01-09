@@ -26,6 +26,16 @@ try:
 except IOError:
     LONG_DESCRIPTION = ""
 
+
+def _read_reqs(relpath):
+    fullpath = os.path.join(os.path.dirname(__file__), relpath)
+    with open(fullpath) as f:
+        return [s.strip() for s in f.readlines()
+                if (s.strip() and not s.startswith("#"))]
+
+
+REQUIREMENTS = _read_reqs("requirements.txt")
+
 CLASSIFIERS = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -53,12 +63,7 @@ setup(
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
     version=_check_add_criteo_environment("0.1.11"),
-    install_requires=[
-        "tensorflow==1.12.0",
-        "dill==0.2.8",
-        "conda-pack",
-        "skein==0.3.1"
-    ],
+    install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",
 

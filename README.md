@@ -56,7 +56,8 @@ with TFYarnExecutor() as tfYarnExecutor:
         experiment_fn,
         task_specs={
             "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-            "evaluator": TaskSpec(memory=2**10, vcores=1)
+            "evaluator": TaskSpec(memory=2**10, vcores=1),
+            "tensorboard": TaskSpec(memory=2**10, vcores=1)
         }
     )
 ```
@@ -122,7 +123,8 @@ tfYarnExecutor.run_on_yarn(
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
         "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=8),
         "ps": TaskSpec(memory=2 * 2**10, vcores=8),
-        "evaluator": TaskSpec(memory=2**10, vcores=1)
+        "evaluator": TaskSpec(memory=2**10, vcores=1),
+        "tensorboard": TaskSpec(memory=2**10, vcores=1)
     }
 )
 ```
@@ -181,7 +183,8 @@ with TFYarnExecutor(queue="ml-gpu") as tfYarnExecutor:
         experiment_fn,
         task_specs={
             "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
-            "evaluator": TaskSpec(memory=2**10, vcores=1)
+            "evaluator": TaskSpec(memory=2**10, vcores=1),
+            "tensorboard": TaskSpec(memory=2**10, vcores=1)
         }
     )
 ```
@@ -218,8 +221,27 @@ tfYarnExecutor.run_on_yarn(
 
 ### Tensorboard
 
-Tensorboard is activated by default. It runs inside its own Yarn container,
-assigns a new port and prints its url in the logs ("Tensorboard is listening at .. ").
-When the learning is finished the UI stays alive for 30 seconds by default.
-The termination timeout can be configured using termination_timeout_seconds.
+You can use Tensorboard with TF Yarn.
+Tensorboard is automatically spawned when using a default task_specs. Thus running as a separate container on YARN.
+If you use a custom task_specs, you must add explicitly a Tensorboard task to your configuration.
+
+```python
+tfYarnExecutor.run_on_yarn(
+    ...,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+        "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=8),
+        "ps": TaskSpec(memory=2 * 2**10, vcores=8),
+        "evaluator": TaskSpec(memory=2**10, vcores=1),
+        "tensorboard": TaskSpec(memory=2**10, vcores=1, instances=1, termination_timeout_seconds=30)
+    }
+)
+```
+
+Both instances and termination_timeout_seconds are optional parameters.
+* instances: controls the number of Tensorboard instances to spawn. Defaults to 1
+* termination_timeout_seconds: controls how many seconds each tensorboard instance must stay alive after the end of the run. Defaults to 30 seconds
+
+The full access URL of each tensorboard instance is advertised as a _url_event_ starting with "Tensorboard is listening at...".
+Typically, you will see it appearing on the standard output of a _run_on_yarn_ call.
 

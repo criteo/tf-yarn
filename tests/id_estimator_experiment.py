@@ -1,8 +1,16 @@
 import logging
+import os
+import pwd
+from subprocess import check_output
 
 import tensorflow as tf
 
 from tf_yarn import Experiment, TFYarnExecutor, TaskSpec
+
+USER = pwd.getpwuid(os.getuid()).pw_name
+FS = check_output(
+    "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
+HDFS_DIR = f"{FS}/user/{USER}"
 
 
 def model_fn(features, labels, mode):
@@ -38,7 +46,7 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
     logging.basicConfig(level="INFO")
 
-    with TFYarnExecutor() as tf_yarn_executor:
+    with TFYarnExecutor(f"{HDFS_DIR}/example.pex") as tf_yarn_executor:
         tf_yarn_executor.run_on_yarn(experiment_fn, task_specs={
             "chief": TaskSpec(memory=64, vcores=1)
         })

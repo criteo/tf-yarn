@@ -26,7 +26,7 @@ NODE_NAME = "worker"
 
 def create_cluster():
     client = skein.ApplicationClient.from_current()
-    cluster_spec = cluster.start_cluster(client, [f'{NODE_NAME}:0', f'{NODE_NAME}:1'])
+    cluster_spec = cluster.start_cluster(client, [f"{NODE_NAME}:0", f"{NODE_NAME}:1"])
     cluster.setup_tf_config(cluster_spec)
     cluster.start_tf_server(cluster_spec)
     event.wait(client, "stop")

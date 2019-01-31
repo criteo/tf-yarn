@@ -245,3 +245,7 @@ Both instances and termination_timeout_seconds are optional parameters.
 The full access URL of each tensorboard instance is advertised as a _url_event_ starting with "Tensorboard is listening at...".
 Typically, you will see it appearing on the standard output of a _run_on_yarn_ call.
 
+#### Environment variables
+The following optional environment variables can be passed to the tensorboard task:
+* TF_BOARD_MODEL_DIR: to configure a model directory. Note that the experiment model dir, if specified, has higher priority. Defaults: None
+* TF_BOARD_EXTRA_ARGS: appends command line arguments to the mandatory ones (--logdir and --port): defaults: None 

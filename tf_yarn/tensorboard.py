@@ -23,8 +23,12 @@ def get_termination_timeout():
 
 
 def start_tf_board(client: skein.ApplicationClient,
-                   experiment: Experiment):
+                   experiment: Experiment = None):
     thread = None
+    if experiment:
+        model_dir = experiment.estimator.config.model_dir
+    else:
+        model_dir = os.environ.get('TF_BOARD_MODEL_DIR', None)
     task = cluster.get_task()
     os.environ['GCS_READ_CACHE_DISABLED'] = '1'
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'cpp'
@@ -35,8 +39,11 @@ def start_tf_board(client: skein.ApplicationClient,
                                           default.get_assets_zip_provider())
         with _internal.reserve_sock_addr() as (h, p):
             tensorboard_url = f"http://{h}:{p}"
-            argv = ['tensorboard', f"--logdir={experiment.estimator.config.model_dir}",
+            argv = ['tensorboard', f"--logdir={model_dir}",
                     f"--port={p}"]
+            # Append more arguments if needed.
+            if 'TF_BOARD_EXTRA_ARGS' in os.environ:
+                argv += os.environ['TF_BOARD_EXTRA_ARGS'].split(' ')
             tensorboard.configure(argv)
         tensorboard.launch()
         event.url_event(client, task, f"Tensorboard is listening at {tensorboard_url}")

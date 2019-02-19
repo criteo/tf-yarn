@@ -38,7 +38,7 @@ import json
 import skein
 import tensorflow as tf
 from skein.exceptions import SkeinError
-from skein.model import FinalStatus, ApplicationReport
+from skein.model import FinalStatus, ApplicationReport, ACLs
 
 from tf_yarn.topologies import (
     single_server_topology,
@@ -200,6 +200,7 @@ class TFYarnExecutor():
         python: str = f"{v.major}.{v.minor}.{v.micro}",
         pip_packages: List[str] = None,
         queue: str = "default",
+        acls: ACLs = None,
         file_systems: List[str] = None
     ) -> None:
         """
@@ -229,6 +230,12 @@ class TFYarnExecutor():
         queue
             YARN queue to use.
 
+        acls
+            Configures the application-level Access Control Lists (ACLs).
+            Optional, defaults to no ACLs.
+
+            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+
         file_systems
             A list of namenode URIs to acquire delegation tokens for
             in addition to ``fs.defaultFS``.
@@ -236,6 +243,7 @@ class TFYarnExecutor():
 
         self.pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages)
         self.queue = queue
+        self.acls = acls
         self.file_systems = file_systems
 
     def __enter__(self):
@@ -317,6 +325,7 @@ class TFYarnExecutor():
             spec = skein.ApplicationSpec(
                 services,
                 queue=self.queue,
+                acls=self.acls,
                 file_systems=self.file_systems)
             try:
                 client = skein.Client.from_global_daemon()

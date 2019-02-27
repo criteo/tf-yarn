@@ -17,25 +17,23 @@ kdestroy
 kinit $user$DOMAIN -k -t $KEYTAB
 klist
 
-if [ ! -d "tf-yarn_test_env" ];
-then
-    # Setup environment
-    python3.6 -m venv $MAINPATH/tf-yarn_test_env
-	. $MAINPATH/tf-yarn_test_env/bin/activate
-    pip install -r $MAINPATH/tf-yarn/tests-requirements.txt
-    pip install -e $MAINPATH/tf-yarn
-    pip install pex
-    # Setup pex
-    pex cryptography==2.1.4 tf-yarn -o tf-yarn/examples/example.pex
-    hdfs dfs -put $MAINPATH/tf-yarn/examples/example.pex
-    # Setup specific to examples
-    # Get wine dataset for linear_classifier_example
-    curl http://www3.dsi.uminho.pt/pcortez/wine/winequality.zip -o $MAINPATH/tf-yarn/examples/winequality.zip
-    python -c "import zipfile; zip_ref = zipfile.ZipFile('tf-yarn/examples/winequality.zip', 'r'); zip_ref.extractall('tf-yarn/examples'); zip_ref.close()"
-    hdfs dfs -put $MAINPATH/tf-yarn/examples/winequality/winequality-red.csv
-else
-    . $MAINPATH/tf-yarn_test_env/bin/activate
-fi
+# Setup environment
+rm -rf $MAINPATH/tf-yarn_test_env
+python3.6 -m venv $MAINPATH/tf-yarn_test_env
+. $MAINPATH/tf-yarn_test_env/bin/activate
+pip install -r $MAINPATH/tf-yarn/tests-requirements.txt
+pip install -e $MAINPATH/tf-yarn
+pip install pex
+
+# Setup pex
+pex cryptography==2.1.4 tf-yarn -o tf-yarn/examples/example.pex
+hdfs dfs -put $MAINPATH/tf-yarn/examples/example.pex
+
+# Setup specific to examples
+# Get wine dataset for linear_classifier_example
+curl http://www3.dsi.uminho.pt/pcortez/wine/winequality.zip -o $MAINPATH/tf-yarn/examples/winequality.zip
+python -c "import zipfile; zip_ref = zipfile.ZipFile('tf-yarn/examples/winequality.zip', 'r'); zip_ref.extractall('tf-yarn/examples'); zip_ref.close()"
+hdfs dfs -put $MAINPATH/tf-yarn/examples/winequality/winequality-red.csv
 
 # Execute examples
 exit_code = 0

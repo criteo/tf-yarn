@@ -88,7 +88,7 @@ def test_kill_skein_on_exception():
                 client=None, app=mock_app, cluster_spec=dict(),
                 event_listener=None, events=None, tasks=[])
             try:
-                executor.run_on_cluster(lambda: None, cluster)
+                executor._run_on_cluster(lambda: None, cluster)
             except Exception:
                 pass
             mock_app.shutdown.assert_called_once_with(

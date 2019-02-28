@@ -57,6 +57,7 @@ __all__ = [
 KV_CLUSTER_INSTANCES = 'cluster_instances'
 KV_EXPERIMENT_FN = 'experiment_fn'
 YARN_LOG_TRIES = 15
+KV_TF_SESSION_CONFIG = 'tf_session_config'
 
 logger = logging.getLogger(__name__)
 
@@ -193,14 +194,13 @@ def _setup_cluster_tasks(
 class TFYarnExecutor():
 
     def __init__(
-        self,
-        pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-        python: str = f"{v.major}.{v.minor}.{v.micro}",
-        pip_packages: List[str] = None,
-        standalone_client_mode: bool = False,
-        queue: str = "default",
-        acls: ACLs = None,
-        file_systems: List[str] = None
+            self,
+            pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
+            python: str = f"{v.major}.{v.minor}.{v.micro}",
+            pip_packages: List[str] = None,
+            queue: str = "default",
+            acls: ACLs = None,
+            file_systems: List[str] = None
     ) -> None:
         """
         pyenv_zip_path
@@ -226,14 +226,6 @@ class TFYarnExecutor():
             See `Installing Packages <https://packaging.python.org/tutorials \
                                           /installing-packages>`_ for more examples.
 
-        standalone_client_mode
-          https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
-              /contrib/distribute/README.md#standalone-client-mode
-          Standalone mode means starting tf server on the cluster,
-          launching everything on the client and letting tf take care of the rest
-          This is not limited to Estimator API, it also works with low level tf
-          (see session_run_example.py)
-
         queue
             YARN queue to use.
 
@@ -247,9 +239,9 @@ class TFYarnExecutor():
             A list of namenode URIs to acquire delegation tokens for
             in addition to ``fs.defaultFS``.
         """
-
-        self.pyenvs = _setup_pyenvs(pyenv_zip_path, python, pip_packages, standalone_client_mode)
-        self.standalone_client_mode = standalone_client_mode
+        self.pyenv_zip_path = pyenv_zip_path
+        self.python = python
+        self.pip_packages = pip_packages
         self.queue = queue
         self.acls = acls
         self.file_systems = file_systems
@@ -267,44 +259,15 @@ class TFYarnExecutor():
             if not [app for app in client.get_applications() if app.user == os.environ['USER']]:
                 skein.Client.stop_global_daemon()
 
-    def setup_skein_cluster(
-        self,
-        task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
-        *,
-        files: Dict[str, str] = None,
-        env: Dict[str, str] = {},
-        log_conf_file: str = None
+    def _setup_skein_cluster(
+            self,
+            task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
+            *,
+            files: Dict[str, str] = None,
+            env: Dict[str, str] = {},
+            log_conf_file: str = None,
+            standalone_client_mode: bool = False
     ) -> SkeinCluster:
-        """Request a cluster on YARN with Skein.
-
-        The implementation allocates a service with the requested number
-        of instances for each distributed TensorFlow task type. Each
-        instance expects a serialized run_config to setup the tensorflow servers
-        and an experiment function to execute.
-
-        Parameters
-        ----------
-        task_specs
-            Resources to allocate for each task type. The keys
-            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-            ``"evaluator"``. The minimal spec must contain at least
-            ``"chief"``.
-
-        files
-            Local files or directories to upload to the container.
-            The keys are the target locations of the resources relative
-            to the container root, while the values -- their
-            corresponding local sources. Note that container root is
-            appended to ``PYTHONPATH``. Therefore, any listed Python
-            module a package is automatically importable.
-
-        env
-            Environment variables to forward to the containers.
-
-        log_conf_file
-            optional file with log config, setups logging by default with INFO verbosity,
-            if you specify a file here don't forget to also ship it to the containers via files arg
-        """
         os.environ["JAVA_TOOL_OPTIONS"] = \
             "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
             f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
@@ -349,39 +312,17 @@ class TFYarnExecutor():
             event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
             event_listener.start()
 
-            cluster_spec = _setup_cluster_tasks(task_instances, app, self.standalone_client_mode)
+            cluster_spec = _setup_cluster_tasks(task_instances, app, standalone_client_mode)
 
             return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
 
-    def run_on_cluster(
+    def _run_on_cluster(
         self,
         experiment_fn: ExperimentFn,
         cluster: SkeinCluster,
         eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
         path_hdfs_logs: str = None
     ) -> Optional[Metrics]:
-        """Run an experiment on YARN.
-
-        Dispatches experiment_fn to the cluster and awaits termination
-        of the train_and_evaluate execution.
-
-        Parameters
-        ----------
-        experiment_fn
-            A function constructing the estimator alongside the train
-            and eval specs.
-
-        cluster
-            optional skein cluster. All parameters except experiment_fn will be ignored.
-
-        path_hdfs_logs
-            optional path. tf-yarn will store yarn logs in this folder
-
-        Raises
-        ------
-        RunFailed
-            If the final status of the YARN application is ``"FAILED"``.
-        """
         def _new_experiment_fn():
             return add_monitor_to_experiment(experiment_fn())
         new_experiment_fn = _new_experiment_fn
@@ -468,14 +409,90 @@ class TFYarnExecutor():
         RunFailed
             If the final status of the YARN application is ``"FAILED"``.
         """
-        cluster = self.setup_skein_cluster(
+        self.pyenvs = _setup_pyenvs(
+            self.pyenv_zip_path,
+            self.python,
+            self.pip_packages,
+            standalone_client_mode=False)
+        cluster = self._setup_skein_cluster(
             StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
             files=files,
             env=env,
-            log_conf_file=log_conf_file
+            log_conf_file=log_conf_file,
+            standalone_client_mode=False
         )
-        return self.run_on_cluster(
+        return self._run_on_cluster(
             experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+
+    @contextmanager
+    def standalone_client_mode(
+            self,
+            task_specs: Dict[str, TaskSpec] = None,
+            tf_session_config: Optional[tf.ConfigProto] = None,
+            *,
+            files: Dict[str, str] = None,
+            env: Dict[str, str] = {},
+            log_conf_file: str = None):
+        """
+        https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
+              /contrib/distribute/README.md#standalone-client-mode
+        Standalone mode means starting tf server on the cluster,
+        launching everything on the client and letting tf take care of the rest
+        This is not limited to Estimator API, it also works with low level tf
+        (see session_run_example.py)
+
+        Parameters
+        ----------
+
+        task_specs
+            Resources to allocate for each task type. The keys
+            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+            ``"evaluator"``. The minimal spec must contain at least
+            ``"chief"``.
+
+        tf_session_config
+            tf.ConfigProto to be provided to each started TFServer
+
+        files
+            Local files or directories to upload to the container.
+            The keys are the target locations of the resources relative
+            to the container root, while the values -- their
+            corresponding local sources. Note that container root is
+            appended to ``PYTHONPATH``. Therefore, any listed Python
+            module a package is automatically importable.
+
+        env
+            Environment variables to forward to the containers.
+
+        log_conf_file
+            optional file with log config, setups logging by default with INFO verbosity,
+            if you specify a file here don't forget to also ship it to the containers via files arg
+        """
+        try:
+            self.pyenvs = _setup_pyenvs(
+                self.pyenv_zip_path,
+                self.python,
+                self.pip_packages,
+                standalone_client_mode=True)
+            cluster = self._setup_skein_cluster(
+                StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+                files=files,
+                env=env,
+                log_conf_file=log_conf_file,
+                standalone_client_mode=True
+            )
+            self._send_config_proto(cluster, tf_session_config)
+
+            yield cluster.cluster_spec
+        finally:
+            event.broadcast(cluster.app, "stop", "1")
+
+    def _send_config_proto(
+            self,
+            cluster: SkeinCluster,
+            tf_session_config: tf.ConfigProto):
+        serialized_fn = dill.dumps(tf_session_config, recurse=True)
+        cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
 
 
 @contextmanager

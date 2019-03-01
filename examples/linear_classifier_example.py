@@ -14,7 +14,7 @@ from functools import partial
 from subprocess import check_output
 from datetime import datetime
 
-from tf_yarn import Experiment, TFYarnExecutor, TaskSpec, packaging
+from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
 import winequality
 
 logging.basicConfig(level="INFO")
@@ -70,16 +70,15 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
-    with TFYarnExecutor() as tf_yarn_executor:
-        tf_yarn_executor.run_on_yarn(
-            pyenv_zip_path=pyenv_zip_path,
-            experiment_fn=experiment_fn,
-            task_specs={
-                "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
-                "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
-            },
-            files={
-                **editable_requirements,
-                os.path.basename(winequality.__file__): winequality.__file__,
-            }
-        )
+    run_on_yarn(
+        pyenv_zip_path=pyenv_zip_path,
+        experiment_fn=experiment_fn,
+        task_specs={
+            "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
+            "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
+        },
+        files={
+            **editable_requirements,
+            os.path.basename(winequality.__file__): winequality.__file__,
+        }
+    )

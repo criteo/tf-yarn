@@ -1,3 +1,4 @@
+import getpass
 import hashlib
 import logging
 import uuid
@@ -50,7 +51,8 @@ from tf_yarn.evaluator_metrics import (
 from tf_yarn.metrics import OneShotMetricsLogger
 
 __all__ = [
-    "Experiment", "TFYarnExecutor", "RunFailed",
+    "Experiment", "RunFailed", "run_on_yarn",
+    "skein_global_daemon", "standalone_client_mode"
     "single_server_topology", "ps_strategy_topology"
 ]
 
@@ -155,108 +157,26 @@ def _setup_cluster_tasks(
     return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
 
 
-class TFYarnExecutor():
+@contextmanager
+def skein_global_daemon():
+    """
+    Allows to run multiple learnings with one single skein daemon
+    Permits to save resource when many learnings are launched in parallel
+    """
+    skein.Client.start_global_daemon()
+    yield
+    try:
+        client = skein.Client.from_global_daemon()
+    except skein.exceptions.DaemonNotRunningError:
+        return
+    else:
+        if not [app for app in client.get_applications() if app.user == getpass.getuser()]:
+            skein.Client.stop_global_daemon()
 
-    def __enter__(self):
-        skein.Client.start_global_daemon()
-        return self
 
-    def __exit__(self, *args):
-        try:
-            client = skein.Client.from_global_daemon()
-        except skein.exceptions.DaemonNotRunningError:
-            return
-        else:
-            if not [app for app in client.get_applications() if app.user == os.environ['USER']]:
-                skein.Client.stop_global_daemon()
-
-    def _setup_skein_cluster(
-            self,
-            pyenvs: Dict[NodeLabel, PythonEnvDescription],
-            task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
-            *,
-            files: Dict[str, str] = None,
-            env: Dict[str, str] = {},
-            queue: str = "default",
-            acls: ACLs = None,
-            file_systems: List[str] = None,
-            log_conf_file: str = None,
-            standalone_client_mode: bool = False
-    ) -> SkeinCluster:
-        os.environ["JAVA_TOOL_OPTIONS"] = \
-            "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
-            f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
-
-        with tempfile.TemporaryDirectory() as tempdir:
-            task_files, task_env = _setup_task_env(tempdir, files, env)
-            services = {}
-            for task_type, task_spec in list(task_specs.items()):
-                pyenv = pyenvs[task_spec.label]
-                service_env = task_env.copy()
-                if task_spec.termination_timeout_seconds >= 0:
-                    _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
-                                str(task_spec.termination_timeout_seconds))
-                services[task_type] = skein.Service(
-                    commands=[gen_task_cmd(pyenv, log_conf_file)],
-                    resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
-                    max_restarts=0,
-                    instances=task_spec.instances,
-                    node_label=task_spec.label.value,
-                    files={
-                        **task_files,
-                        pyenv.dest_path: pyenv.path_to_archive
-                    },
-                    env=service_env)
-
-            spec = skein.ApplicationSpec(
-                services,
-                queue=queue,
-                acls=acls,
-                file_systems=file_systems)
-            try:
-                client = skein.Client.from_global_daemon()
-            except skein.exceptions.DaemonNotRunningError:
-                client = skein.Client()
-
-            task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
-            events: Dict[str, Dict[str, str]] = \
-                {task: {} for task in iter_tasks(task_instances)}
-            app = client.submit_and_connect(spec)
-
-            # Start a thread which collects all events posted by all tasks in kv store
-            event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
-            event_listener.start()
-
-            cluster_spec = _setup_cluster_tasks(task_instances, app, standalone_client_mode)
-
-            return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
-
-    def _run_on_cluster(
-        self,
-        experiment_fn: ExperimentFn,
-        cluster: SkeinCluster,
-        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-        path_hdfs_logs: str = None
-    ) -> Optional[Metrics]:
-        def _new_experiment_fn():
-            return add_monitor_to_experiment(experiment_fn())
-        new_experiment_fn = _new_experiment_fn
-
-        with _shutdown_on_exception(cluster.app, path_hdfs_logs):
-            # Attempt serialization early to avoid allocating unnecesary resources
-            serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
-            with cluster.client:
-                return _execute_and_await_termination(
-                    cluster,
-                    serialized_fn,
-                    eval_monitor_log_thresholds
-                )
-
-    def run_on_yarn(
-        self,
-        pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
-        experiment_fn: ExperimentFn,
-        task_specs: Dict[str, TaskSpec] = None,
+def _setup_skein_cluster(
+        pyenvs: Dict[NodeLabel, PythonEnvDescription],
+        task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
         *,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
@@ -264,94 +184,263 @@ class TFYarnExecutor():
         acls: ACLs = None,
         file_systems: List[str] = None,
         log_conf_file: str = None,
-        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-        path_to_log_hdfs: str = None
-    ) -> Optional[Metrics]:
-        """Run an experiment on YARN.
+        standalone_client_mode: bool = False
+) -> SkeinCluster:
+    os.environ["JAVA_TOOL_OPTIONS"] = \
+        "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
+        f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
-        The implementation allocates a service with the requested number
-        of instances for each distributed TensorFlow task type. Each
-        instance runs ``_dispatch_task`` which roughly does the following.
+    with tempfile.TemporaryDirectory() as tempdir:
+        task_files, task_env = _setup_task_env(tempdir, files, env)
+        services = {}
+        for task_type, task_spec in list(task_specs.items()):
+            pyenv = pyenvs[task_spec.label]
+            service_env = task_env.copy()
+            if task_spec.termination_timeout_seconds >= 0:
+                _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
+                            str(task_spec.termination_timeout_seconds))
+            services[task_type] = skein.Service(
+                commands=[gen_task_cmd(pyenv, log_conf_file)],
+                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
+                max_restarts=0,
+                instances=task_spec.instances,
+                node_label=task_spec.label.value,
+                files={
+                    **task_files,
+                    pyenv.dest_path: pyenv.path_to_archive
+                },
+                env=service_env)
 
-        1. Reserve a TCP port and communicate the resulting socket address
-           (host/port pair) to other instances using the "init" barrier.
-        2. Spawn ``train_and_evaluate`` in a separate thread.
-        3. Synchronize the "ps" tasks on the "stop" barrier.
-           The barrier compensates for the fact that "ps" tasks never
-           terminate, and therefore should be killed once all other
-           tasks are finished.
+        spec = skein.ApplicationSpec(
+            services,
+            queue=queue,
+            acls=acls,
+            file_systems=file_systems)
+        try:
+            client = skein.Client.from_global_daemon()
+        except skein.exceptions.DaemonNotRunningError:
+            client = skein.Client()
 
-        Parameters
-        ----------
+        task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
+        events: Dict[str, Dict[str, str]] = \
+            {task: {} for task in iter_tasks(task_instances)}
+        app = client.submit_and_connect(spec)
 
-        pyenv_zip_path
-            Path to an archive of a python environment to be deployed
-            It can be a zip conda env or a pex archive
-            In case of GPU/CPU cluster, provide a dictionnary with both
-            environments.
+        # Start a thread which collects all events posted by all tasks in kv store
+        event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
+        event_listener.start()
 
-        experiment_fn
-            A function constructing the estimator alongside the train
-            and eval specs.
+        cluster_spec = _setup_cluster_tasks(task_instances, app, standalone_client_mode)
 
-        task_specs
-            Resources to allocate for each task type. The keys
-            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-            ``"evaluator"``. The minimal spec must contain at least
-            ``"chief"``.
+        return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
 
-        files
-            Local files or directories to upload to the container.
-            The keys are the target locations of the resources relative
-            to the container root, while the values -- their
-            corresponding local sources. Note that container root is
-            appended to ``PYTHONPATH``. Therefore, any listed Python
-            module a package is automatically importable.
 
-        env
-            Environment variables to forward to the containers.
+def _run_on_cluster(
+    experiment_fn: ExperimentFn,
+    cluster: SkeinCluster,
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+    path_hdfs_logs: str = None
+) -> Optional[Metrics]:
+    def _new_experiment_fn():
+        return add_monitor_to_experiment(experiment_fn())
+    new_experiment_fn = _new_experiment_fn
 
-        queue
-            YARN queue to use.
+    with _shutdown_on_exception(cluster.app, path_hdfs_logs):
+        # Attempt serialization early to avoid allocating unnecesary resources
+        serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
+        with cluster.client:
+            return _execute_and_await_termination(
+                cluster,
+                serialized_fn,
+                eval_monitor_log_thresholds
+            )
 
-        acls
-            Configures the application-level Access Control Lists (ACLs).
-            Optional, defaults to no ACLs.
 
-            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+def run_on_yarn(
+    pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
+    experiment_fn: ExperimentFn,
+    task_specs: Dict[str, TaskSpec] = None,
+    *,
+    files: Dict[str, str] = None,
+    env: Dict[str, str] = {},
+    queue: str = "default",
+    acls: ACLs = None,
+    file_systems: List[str] = None,
+    log_conf_file: str = None,
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+    path_to_log_hdfs: str = None
+) -> Optional[Metrics]:
+    """Run an experiment on YARN.
 
-        file_systems
-            A list of namenode URIs to acquire delegation tokens for
-            in addition to ``fs.defaultFS``.
+    The implementation allocates a service with the requested number
+    of instances for each distributed TensorFlow task type. Each
+    instance runs ``_dispatch_task`` which roughly does the following.
 
-        log_conf_file
-            optional file with log config, setups logging by default with INFO verbosity,
-            if you specify a file here don't forget to also ship it to the containers via files arg
+    1. Reserve a TCP port and communicate the resulting socket address
+        (host/port pair) to other instances using the "init" barrier.
+    2. Spawn ``train_and_evaluate`` in a separate thread.
+    3. Synchronize the "ps" tasks on the "stop" barrier.
+        The barrier compensates for the fact that "ps" tasks never
+        terminate, and therefore should be killed once all other
+        tasks are finished.
 
-        eval_monitor_log_thresholds
-            optional dictionnary of string to (float 1, float 2).
-            Each couple (key, value) corresponds to an evaluation
-            monitored metric and an associated range. The evaluation monitored metric
-            is logged if it is in [float 1; float 2]. If the lower bound is None it is set to 0.
-            If the upper bound is None, it is set to maximum value
-            A monitored metric with no range is always logged. List of monitored metrics:
-            'awake_time_ratio': 'Awake/idle ratio',
-            'eval_step_mean_duration': 'Eval step mean duration (in sec)',
-            'last_training_step': 'Training set of last checkpoint',
-            'nb_eval_steps': 'Number of evaluation steps done'
+    Parameters
+    ----------
 
-        path_to_log_hdfs
-            Optional path. If specified, tf-yarn will copy hadoop logs into this path
+    pyenv_zip_path
+        Path to an archive of a python environment to be deployed
+        It can be a zip conda env or a pex archive
+        In case of GPU/CPU cluster, provide a dictionnary with both
+        environments.
 
-        Raises
-        ------
-        RunFailed
-            If the final status of the YARN application is ``"FAILED"``.
-        """
+    experiment_fn
+        A function constructing the estimator alongside the train
+        and eval specs.
+
+    task_specs
+        Resources to allocate for each task type. The keys
+        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+        ``"evaluator"``. The minimal spec must contain at least
+        ``"chief"``.
+
+    files
+        Local files or directories to upload to the container.
+        The keys are the target locations of the resources relative
+        to the container root, while the values -- their
+        corresponding local sources. Note that container root is
+        appended to ``PYTHONPATH``. Therefore, any listed Python
+        module a package is automatically importable.
+
+    env
+        Environment variables to forward to the containers.
+
+    queue
+        YARN queue to use.
+
+    acls
+        Configures the application-level Access Control Lists (ACLs).
+        Optional, defaults to no ACLs.
+
+        See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+
+    file_systems
+        A list of namenode URIs to acquire delegation tokens for
+        in addition to ``fs.defaultFS``.
+
+    log_conf_file
+        optional file with log config, setups logging by default with INFO verbosity,
+        if you specify a file here don't forget to also ship it to the containers via files arg
+
+    eval_monitor_log_thresholds
+        optional dictionnary of string to (float 1, float 2).
+        Each couple (key, value) corresponds to an evaluation
+        monitored metric and an associated range. The evaluation monitored metric
+        is logged if it is in [float 1; float 2]. If the lower bound is None it is set to 0.
+        If the upper bound is None, it is set to maximum value
+        A monitored metric with no range is always logged. List of monitored metrics:
+        'awake_time_ratio': 'Awake/idle ratio',
+        'eval_step_mean_duration': 'Eval step mean duration (in sec)',
+        'last_training_step': 'Training set of last checkpoint',
+        'nb_eval_steps': 'Number of evaluation steps done'
+
+    path_to_log_hdfs
+        Optional path. If specified, tf-yarn will copy hadoop logs into this path
+
+    Raises
+    ------
+    RunFailed
+        If the final status of the YARN application is ``"FAILED"``.
+    """
+    pyenvs = _setup_pyenvs(
+        pyenv_zip_path,
+        standalone_client_mode=False)
+    cluster = _setup_skein_cluster(
+        pyenvs=pyenvs,
+        task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+        files=files,
+        env=env,
+        queue=queue,
+        acls=acls,
+        file_systems=file_systems,
+        log_conf_file=log_conf_file,
+        standalone_client_mode=False
+    )
+    return _run_on_cluster(
+        experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+
+
+@contextmanager
+def standalone_client_mode(
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
+        task_specs: Dict[str, TaskSpec] = None,
+        tf_session_config: Optional[tf.ConfigProto] = None,
+        *,
+        files: Dict[str, str] = None,
+        env: Dict[str, str] = {},
+        queue: str = "default",
+        acls: ACLs = None,
+        file_systems: List[str] = None,
+        log_conf_file: str = None):
+    """
+    https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
+            /contrib/distribute/README.md#standalone-client-mode
+    Standalone mode means starting tf server on the cluster,
+    launching everything on the client and letting tf take care of the rest
+    This is not limited to Estimator API, it also works with low level tf
+    (see session_run_example.py)
+
+    Parameters
+    ----------
+
+    pyenv_zip_path
+        Path to an archive of a python environment to be deployed
+        It can be a zip conda env or a pex archive
+        In case of GPU/CPU cluster, provide a dictionnary with both
+        environments.
+
+    task_specs
+        Resources to allocate for each task type. The keys
+        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
+        ``"evaluator"``. The minimal spec must contain at least
+        ``"chief"``.
+
+    tf_session_config
+        tf.ConfigProto to be provided to each started TFServer
+
+    files
+        Local files or directories to upload to the container.
+        The keys are the target locations of the resources relative
+        to the container root, while the values -- their
+        corresponding local sources. Note that container root is
+        appended to ``PYTHONPATH``. Therefore, any listed Python
+        module a package is automatically importable.
+
+    env
+        Environment variables to forward to the containers.
+
+    queue
+        YARN queue to use.
+
+    acls
+        Configures the application-level Access Control Lists (ACLs).
+        Optional, defaults to no ACLs.
+
+        See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+
+    file_systems
+        A list of namenode URIs to acquire delegation tokens for
+        in addition to ``fs.defaultFS``.
+
+    log_conf_file
+        optional file with log config, setups logging by default with INFO verbosity,
+        if you specify a file here don't forget to also ship it to the containers via files arg
+    """
+    cluster = None
+    try:
         pyenvs = _setup_pyenvs(
             pyenv_zip_path,
-            standalone_client_mode=False)
-        cluster = self._setup_skein_cluster(
+            standalone_client_mode=True)
+        cluster = _setup_skein_cluster(
             pyenvs=pyenvs,
             task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
             files=files,
@@ -360,107 +449,21 @@ class TFYarnExecutor():
             acls=acls,
             file_systems=file_systems,
             log_conf_file=log_conf_file,
-            standalone_client_mode=False
+            standalone_client_mode=True
         )
-        return self._run_on_cluster(
-            experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+        _send_config_proto(cluster, tf_session_config)
 
-    @contextmanager
-    def standalone_client_mode(
-            self,
-            pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
-            task_specs: Dict[str, TaskSpec] = None,
-            tf_session_config: Optional[tf.ConfigProto] = None,
-            *,
-            files: Dict[str, str] = None,
-            env: Dict[str, str] = {},
-            queue: str = "default",
-            acls: ACLs = None,
-            file_systems: List[str] = None,
-            log_conf_file: str = None):
-        """
-        https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
-              /contrib/distribute/README.md#standalone-client-mode
-        Standalone mode means starting tf server on the cluster,
-        launching everything on the client and letting tf take care of the rest
-        This is not limited to Estimator API, it also works with low level tf
-        (see session_run_example.py)
+        yield cluster.cluster_spec
+    finally:
+        if cluster:
+            event.broadcast(cluster.app, "stop", "1")
 
-        Parameters
-        ----------
 
-        pyenv_zip_path
-            Path to an archive of a python environment to be deployed
-            It can be a zip conda env or a pex archive
-            In case of GPU/CPU cluster, provide a dictionnary with both
-            environments.
-
-        task_specs
-            Resources to allocate for each task type. The keys
-            must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-            ``"evaluator"``. The minimal spec must contain at least
-            ``"chief"``.
-
-        tf_session_config
-            tf.ConfigProto to be provided to each started TFServer
-
-        files
-            Local files or directories to upload to the container.
-            The keys are the target locations of the resources relative
-            to the container root, while the values -- their
-            corresponding local sources. Note that container root is
-            appended to ``PYTHONPATH``. Therefore, any listed Python
-            module a package is automatically importable.
-
-        env
-            Environment variables to forward to the containers.
-
-        queue
-            YARN queue to use.
-
-        acls
-            Configures the application-level Access Control Lists (ACLs).
-            Optional, defaults to no ACLs.
-
-            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
-
-        file_systems
-            A list of namenode URIs to acquire delegation tokens for
-            in addition to ``fs.defaultFS``.
-
-        log_conf_file
-            optional file with log config, setups logging by default with INFO verbosity,
-            if you specify a file here don't forget to also ship it to the containers via files arg
-        """
-        cluster = None
-        try:
-            pyenvs = _setup_pyenvs(
-                pyenv_zip_path,
-                standalone_client_mode=True)
-            cluster = self._setup_skein_cluster(
-                pyenvs=pyenvs,
-                task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
-                files=files,
-                env=env,
-                queue=queue,
-                acls=acls,
-                file_systems=file_systems,
-                log_conf_file=log_conf_file,
-                standalone_client_mode=True
-            )
-            self._send_config_proto(cluster, tf_session_config)
-
-            yield cluster.cluster_spec
-        finally:
-            if cluster:
-                event.broadcast(cluster.app, "stop", "1")
-
-    def _send_config_proto(
-            self,
-            cluster: SkeinCluster,
-            tf_session_config: tf.ConfigProto):
-        serialized_fn = dill.dumps(tf_session_config, recurse=True)
-        cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
+def _send_config_proto(
+        cluster: SkeinCluster,
+        tf_session_config: tf.ConfigProto):
+    serialized_fn = dill.dumps(tf_session_config, recurse=True)
+    cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
 
 
 @contextmanager

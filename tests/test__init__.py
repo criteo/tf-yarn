@@ -1,8 +1,8 @@
 from unittest import mock
 from tf_yarn import (
     NodeLabel,
+    _run_on_cluster,
     _setup_cluster_tasks,
-    TFYarnExecutor,
     SkeinCluster
 )
 import skein
@@ -72,13 +72,12 @@ def test_kill_skein_on_exception():
     with mock.patch('tf_yarn._setup_pyenvs'):
         with mock.patch('tf_yarn.dill.dumps') as mock_dill:
             mock_dill.side_effect = dill_raise_exception
-            executor = TFYarnExecutor()
             mock_app = mock.MagicMock(skein.ApplicationClient)
             cluster = SkeinCluster(
                 client=None, app=mock_app, cluster_spec=dict(),
                 event_listener=None, events=None, tasks=[])
             try:
-                executor._run_on_cluster(lambda: None, cluster)
+                _run_on_cluster(lambda: None, cluster)
             except Exception:
                 pass
             mock_app.shutdown.assert_called_once_with(

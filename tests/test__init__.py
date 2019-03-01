@@ -72,7 +72,7 @@ def test_kill_skein_on_exception():
     with mock.patch('tf_yarn._setup_pyenvs'):
         with mock.patch('tf_yarn.dill.dumps') as mock_dill:
             mock_dill.side_effect = dill_raise_exception
-            executor = TFYarnExecutor("")
+            executor = TFYarnExecutor()
             mock_app = mock.MagicMock(skein.ApplicationClient)
             cluster = SkeinCluster(
                 client=None, app=mock_app, cluster_spec=dict(),

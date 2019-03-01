@@ -23,11 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    zip_hdfs, env_name = packaging.upload_env_to_hdfs()
+    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
-    with TFYarnExecutor(pyenv_zip_path=zip_hdfs) as tfYarnExecutor:
+    with TFYarnExecutor() as tfYarnExecutor:
         session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
         with tfYarnExecutor.standalone_client_mode(
+                pyenv_zip_path=pyenv_zip_path,
                 task_specs={
                     NODE_NAME: TaskSpec(memory=4 * 2**10, vcores=32, instances=2)
                 },

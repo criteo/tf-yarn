@@ -157,39 +157,6 @@ def _setup_cluster_tasks(
 
 class TFYarnExecutor():
 
-    def __init__(
-            self,
-            pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
-            queue: str = "default",
-            acls: ACLs = None,
-            file_systems: List[str] = None
-    ) -> None:
-        """
-        pyenv_zip_path
-            Path to an archive of a python environment to be deployed
-            It can be a zip conda env or a pex archive
-            In case of GPU/CPU cluster, provide a dictionnary with both
-            environments.
-            See README.md -> Configuring the Python interpreter and packages
-
-        queue
-            YARN queue to use.
-
-        acls
-            Configures the application-level Access Control Lists (ACLs).
-            Optional, defaults to no ACLs.
-
-            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
-
-        file_systems
-            A list of namenode URIs to acquire delegation tokens for
-            in addition to ``fs.defaultFS``.
-        """
-        self.pyenv_zip_path = pyenv_zip_path
-        self.queue = queue
-        self.acls = acls
-        self.file_systems = file_systems
-
     def __enter__(self):
         skein.Client.start_global_daemon()
         return self
@@ -205,10 +172,14 @@ class TFYarnExecutor():
 
     def _setup_skein_cluster(
             self,
+            pyenvs: Dict[NodeLabel, PythonEnvDescription],
             task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
             *,
             files: Dict[str, str] = None,
             env: Dict[str, str] = {},
+            queue: str = "default",
+            acls: ACLs = None,
+            file_systems: List[str] = None,
             log_conf_file: str = None,
             standalone_client_mode: bool = False
     ) -> SkeinCluster:
@@ -220,7 +191,7 @@ class TFYarnExecutor():
             task_files, task_env = _setup_task_env(tempdir, files, env)
             services = {}
             for task_type, task_spec in list(task_specs.items()):
-                pyenv = self.pyenvs[task_spec.label]
+                pyenv = pyenvs[task_spec.label]
                 service_env = task_env.copy()
                 if task_spec.termination_timeout_seconds >= 0:
                     _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
@@ -239,9 +210,9 @@ class TFYarnExecutor():
 
             spec = skein.ApplicationSpec(
                 services,
-                queue=self.queue,
-                acls=self.acls,
-                file_systems=self.file_systems)
+                queue=queue,
+                acls=acls,
+                file_systems=file_systems)
             try:
                 client = skein.Client.from_global_daemon()
             except skein.exceptions.DaemonNotRunningError:
@@ -283,11 +254,15 @@ class TFYarnExecutor():
 
     def run_on_yarn(
         self,
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
         experiment_fn: ExperimentFn,
         task_specs: Dict[str, TaskSpec] = None,
         *,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
+        queue: str = "default",
+        acls: ACLs = None,
+        file_systems: List[str] = None,
         log_conf_file: str = None,
         eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
         path_to_log_hdfs: str = None
@@ -308,6 +283,13 @@ class TFYarnExecutor():
 
         Parameters
         ----------
+
+        pyenv_zip_path
+            Path to an archive of a python environment to be deployed
+            It can be a zip conda env or a pex archive
+            In case of GPU/CPU cluster, provide a dictionnary with both
+            environments.
+
         experiment_fn
             A function constructing the estimator alongside the train
             and eval specs.
@@ -328,6 +310,19 @@ class TFYarnExecutor():
 
         env
             Environment variables to forward to the containers.
+
+        queue
+            YARN queue to use.
+
+        acls
+            Configures the application-level Access Control Lists (ACLs).
+            Optional, defaults to no ACLs.
+
+            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+
+        file_systems
+            A list of namenode URIs to acquire delegation tokens for
+            in addition to ``fs.defaultFS``.
 
         log_conf_file
             optional file with log config, setups logging by default with INFO verbosity,
@@ -353,13 +348,17 @@ class TFYarnExecutor():
         RunFailed
             If the final status of the YARN application is ``"FAILED"``.
         """
-        self.pyenvs = _setup_pyenvs(
-            self.pyenv_zip_path,
+        pyenvs = _setup_pyenvs(
+            pyenv_zip_path,
             standalone_client_mode=False)
         cluster = self._setup_skein_cluster(
-            StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+            pyenvs=pyenvs,
+            task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
             files=files,
             env=env,
+            queue=queue,
+            acls=acls,
+            file_systems=file_systems,
             log_conf_file=log_conf_file,
             standalone_client_mode=False
         )
@@ -369,11 +368,15 @@ class TFYarnExecutor():
     @contextmanager
     def standalone_client_mode(
             self,
+            pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
             task_specs: Dict[str, TaskSpec] = None,
             tf_session_config: Optional[tf.ConfigProto] = None,
             *,
             files: Dict[str, str] = None,
             env: Dict[str, str] = {},
+            queue: str = "default",
+            acls: ACLs = None,
+            file_systems: List[str] = None,
             log_conf_file: str = None):
         """
         https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
@@ -385,6 +388,12 @@ class TFYarnExecutor():
 
         Parameters
         ----------
+
+        pyenv_zip_path
+            Path to an archive of a python environment to be deployed
+            It can be a zip conda env or a pex archive
+            In case of GPU/CPU cluster, provide a dictionnary with both
+            environments.
 
         task_specs
             Resources to allocate for each task type. The keys
@@ -406,19 +415,36 @@ class TFYarnExecutor():
         env
             Environment variables to forward to the containers.
 
+        queue
+            YARN queue to use.
+
+        acls
+            Configures the application-level Access Control Lists (ACLs).
+            Optional, defaults to no ACLs.
+
+            See `ACLs <https://jcrist.github.io/skein/specification.html#id16>` for details.
+
+        file_systems
+            A list of namenode URIs to acquire delegation tokens for
+            in addition to ``fs.defaultFS``.
+
         log_conf_file
             optional file with log config, setups logging by default with INFO verbosity,
             if you specify a file here don't forget to also ship it to the containers via files arg
         """
         cluster = None
         try:
-            self.pyenvs = _setup_pyenvs(
-                self.pyenv_zip_path,
+            pyenvs = _setup_pyenvs(
+                pyenv_zip_path,
                 standalone_client_mode=True)
             cluster = self._setup_skein_cluster(
-                StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+                pyenvs=pyenvs,
+                task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
                 files=files,
                 env=env,
+                queue=queue,
+                acls=acls,
+                file_systems=file_systems,
                 log_conf_file=log_conf_file,
                 standalone_client_mode=True
             )

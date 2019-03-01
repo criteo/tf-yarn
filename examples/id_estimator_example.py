@@ -1,16 +1,24 @@
+"""
+Example of using simple identity Estimator which just returns the input
+"""
 import logging
 import os
 import pwd
+import getpass
 from subprocess import check_output
 
 import tensorflow as tf
 
 from tf_yarn import Experiment, TFYarnExecutor, TaskSpec
 
-USER = pwd.getpwuid(os.getuid()).pw_name
-FS = check_output(
-    "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
-HDFS_DIR = f"{FS}/user/{USER}"
+logging.basicConfig(level="INFO")
+
+"""
+You need to package tf-yarn in order to ship it to the executors
+First create a pex from root dir
+pex tf-yarn -o tf-yarn/examples/tf-yarn.pex
+"""
+PEX_FILE = f"tf-yarn.pex"
 
 
 def model_fn(features, labels, mode):
@@ -36,17 +44,14 @@ def experiment_fn() -> Experiment:
         x = tf.constant([[1.0], [2.0], [3.0], [4.0]])
         return {"x": x}, x
 
-    config = tf.estimator.RunConfig()
-    estimator = tf.estimator.Estimator(model_fn=model_fn, config=config)
+    estimator = tf.estimator.Estimator(model_fn=model_fn)
     train_spec = tf.estimator.TrainSpec(input_fn, max_steps=1)
     eval_spec = tf.estimator.EvalSpec(input_fn, steps=1)
     return Experiment(estimator, train_spec, eval_spec)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level="INFO")
-
-    with TFYarnExecutor(f"{HDFS_DIR}/example.pex") as tf_yarn_executor:
+    with TFYarnExecutor(PEX_FILE) as tf_yarn_executor:
         tf_yarn_executor.run_on_yarn(experiment_fn, task_specs={
             "chief": TaskSpec(memory=64, vcores=1)
         })

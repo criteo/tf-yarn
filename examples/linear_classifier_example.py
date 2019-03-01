@@ -1,24 +1,51 @@
+"""
+Example of using LinearClassifier
+"""
 import logging
 import os
 import pwd
+import getpass
 import sys
 import warnings
-from functools import partial
-from subprocess import check_output
-
+import typing
 import tensorflow as tf
 
-import winequality
+from functools import partial
+from subprocess import check_output
+from datetime import datetime
+
 from tf_yarn import Experiment, TFYarnExecutor, TaskSpec
+import winequality
 
-USER = pwd.getpwuid(os.getuid()).pw_name
-FS = check_output(
-    "hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
-HDFS_DIR = f"{FS}/user/{USER}"
+logging.basicConfig(level="INFO")
+
+USER = getpass.getuser()
+FS = check_output("hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
+
+"""
+1. Download winequality-*.csv from the Wine Quality dataset at UCI
+   ML repository
+   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
+2. Upload it to HDFS
+3. Pass a full URI to either of the CSV files to the example
+"""
+WINE_EQUALITY_FILE = f"{FS}/user/{USER}/tf_yarn_test/winequality-red.csv"
+
+"""
+You need to package tf-yarn in order to ship it to the executors
+First create a pex from root dir
+pex tf-yarn -o tf-yarn/examples/tf-yarn.pex
+"""
+PEX_FILE = f"tf-yarn.pex"
+
+"""
+Output path of the learned model on hdfs
+"""
+HDFS_DIR = f"{FS}/user/{USER}/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}"
 
 
-def experiment_fn(dataset_path: str) -> Experiment:
-    train_data, test_data = winequality.get_train_eval_datasets(dataset_path)
+def experiment_fn() -> Experiment:
+    train_data, test_data = winequality.get_train_eval_datasets(WINE_EQUALITY_FILE)
 
     def train_input_fn():
         return (train_data.shuffle(1000)
@@ -33,13 +60,10 @@ def experiment_fn(dataset_path: str) -> Experiment:
                 .make_one_shot_iterator()
                 .get_next())
 
-    config = tf.estimator.RunConfig(
-        tf_random_seed=42,
-        model_dir=f"{HDFS_DIR}/{__name__}")
     estimator = tf.estimator.LinearClassifier(
-        winequality.get_feature_columns(),
-        n_classes=winequality.get_n_classes(),
-        config=config)
+        feature_columns=winequality.get_feature_columns(),
+        model_dir=f"{HDFS_DIR}",
+        n_classes=winequality.get_n_classes())
     return Experiment(
         estimator,
         tf.estimator.TrainSpec(train_input_fn, max_steps=10),
@@ -51,18 +75,9 @@ def experiment_fn(dataset_path: str) -> Experiment:
 
 
 if __name__ == "__main__":
-    try:
-        [dataset_path] = sys.argv[1:]
-    except ValueError:
-        dataset_path = f"{HDFS_DIR}/winequality-red.csv"
-        warnings.warn(f"No value given for dataset_path. Assuming {dataset_path}")
-        warnings.warn("If dataset is not available: " + winequality.__doc__)
-
-    logging.basicConfig(level="INFO")
-
-    with TFYarnExecutor(f"{HDFS_DIR}/example.pex") as tf_yarn_executor:
+    with TFYarnExecutor(PEX_FILE) as tf_yarn_executor:
         tf_yarn_executor.run_on_yarn(
-            partial(experiment_fn, f"{dataset_path}"),
+            experiment_fn,
             task_specs={
                 "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
                 "evaluator": TaskSpec(memory=2 ** 10, vcores=1)

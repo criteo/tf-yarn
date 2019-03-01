@@ -1,5 +1,7 @@
 #!/bin/bash
 #
+# Run this script from root dir ./tf-yarn/examples/run_examples.sh
+#
 # Run all examples available with file name pattern *_example.py
 # This script prepares a virtual environment and example specific setup like downloading data.
 # We assume that a hadoop cluster is setup correctly and authentication is handled with kerberos
@@ -8,38 +10,48 @@
 # export DOMAIN=@mydomain.com
 # export KEYTAB=keytab_path/username.keytab
 
+echo "run examples .."
+
 export USER=$user
 export LOGNAME=$user
 sudo chown -R $user:$user tf-yarn
-MAINPATH=$(dirname $(dirname $(dirname $(realpath $0))))
 
-kdestroy
 kinit $user$DOMAIN -k -t $KEYTAB
-klist
+
+# Cleanup old artefacts
+rm -rf tf-yarn_test_env
+rm -f tf-yarn/examples/example.pex
+hdfs dfs -rm -r -f tf_yarn_test/tf_yarn_*
 
 # Setup environment
-rm -rf $MAINPATH/tf-yarn_test_env
-python3.6 -m venv $MAINPATH/tf-yarn_test_env
-. $MAINPATH/tf-yarn_test_env/bin/activate
-pip install -r $MAINPATH/tf-yarn/tests-requirements.txt
-pip install -e $MAINPATH/tf-yarn
-pip install pex
+python3.6 -m venv tf-yarn_test_env
+. tf-yarn_test_env/bin/activate
+pip install -e tf-yarn
+pip install pex==1.5.2
 
 # Setup pex
-pex cryptography==2.1.4 tf-yarn -o tf-yarn/examples/example.pex
-hdfs dfs -put $MAINPATH/tf-yarn/examples/example.pex
+pex tf-yarn -o tf-yarn/examples/tf-yarn.pex
 
 # Setup specific to examples
 # Get wine dataset for linear_classifier_example
-curl http://www3.dsi.uminho.pt/pcortez/wine/winequality.zip -o $MAINPATH/tf-yarn/examples/winequality.zip
-python -c "import zipfile; zip_ref = zipfile.ZipFile('tf-yarn/examples/winequality.zip', 'r'); zip_ref.extractall('tf-yarn/examples'); zip_ref.close()"
-hdfs dfs -put $MAINPATH/tf-yarn/examples/winequality/winequality-red.csv
+hdfs dfs -test -e tf_yarn_test/winequality-red.csv
+if [[ $? == 1 ]]; then
+    echo "downloading winequality.zip .."
+    curl http://www3.dsi.uminho.pt/pcortez/wine/winequality.zip -o tf-yarn/examples/winequality.zip
+    python -c "import zipfile; zip_ref = zipfile.ZipFile('tf-yarn/examples/winequality.zip', 'r'); zip_ref.extractall('tf-yarn/examples'); zip_ref.close()"
+    hdfs dfs -put -f tf-yarn/examples/winequality/winequality-red.csv tf_yarn_test/winequality-red.csv
+fi
 
 # Execute examples
-exit_code = 0
-pushd $MAINPATH/tf-yarn/examples
+exit_code=0
+pushd tf-yarn/examples
     for example in *_example.py; do
-        python $example; if ! [ $? -eq 0 ]; then exit_code=1; fi
+        echo "executing $example .."
+        python $example
+        if ! [ $? -eq 0 ]; then
+            exit_code=1
+            echo "error on $example"
+        fi
     done
 popd
 exit $exit_code

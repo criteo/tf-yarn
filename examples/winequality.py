@@ -1,21 +1,3 @@
-"""\
-To run the example
-
-1. Download winequality-*.csv from the Wine Quality dataset at UCI
-   ML repository
-   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
-2. Upload it to HDFS.
-3. Pass a full URI to either of the CSV files to the example.
-
-For instance, if you prefer red wine::
-
-    %example.py% hdfs://path/to/winequality-red.csv
-
-You can check the configured ``fs.defaultFS`` value by running::
-
-    $ hdfs getconf -confKey fs.defaultFS
-"""
-
 import typing
 
 import tensorflow as tf

@@ -32,7 +32,7 @@ from tf_yarn import Experiment
 
 def experiment_fn():
     # ...
-    estimator = tf.estimator.DNNClassifier(...)
+    estimator = tf.estimator.LinearClassifier(...)
     return Experiment(
         estimator,
         tf.estimator.TrainSpec(train_input_fn),

@@ -1,17 +1,11 @@
 """
 Example of using low level API
 
-Create first a pex with tf yarn call example.pex
-pex cryptography==2.1.4 tf-yarn -o tf-yarn/examples/example.pex
-
-Then in repo tf-yarn/examples execute the script 'python session_run_example.py'
-
 It should :
 * Create a yarn application with 2 containers called 'worker'
 * The graph is distributed from this client to these workers
 * Compute the mean
 """
-
 import sys
 
 import skein
@@ -20,6 +14,13 @@ import tensorflow as tf
 
 from tf_yarn import cluster
 from tf_yarn import event
+
+"""
+You need to package tf-yarn in order to ship it to the executors
+First create a pex from root dir
+pex tf-yarn -o tf-yarn/examples/tf-yarn.pex
+"""
+PEX_FILE = f"tf-yarn.pex"
 
 NODE_NAME = "worker"
 
@@ -33,10 +34,10 @@ def create_cluster():
 
 
 def create_skein_app():
-    service = skein.Service(commands=['./example.pex session_run_example.py --server'],
-                            resources=skein.Resources(2*1024, 1),
+    service = skein.Service(commands=[f'./{PEX_FILE} session_run_example.py --server'],
+                            resources=skein.Resources(2 * 1024, 1),
                             env={'PEX_ROOT': '/tmp/{uuid.uuid4()}/'},
-                            files={'example.pex': 'example.pex',
+                            files={PEX_FILE: PEX_FILE,
                                    'session_run_example.py': __file__},
                             instances=2)
     spec = skein.ApplicationSpec({NODE_NAME: service})

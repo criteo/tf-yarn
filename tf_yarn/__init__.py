@@ -18,6 +18,7 @@ from sys import version_info as v
 import tempfile
 from threading import Thread
 from datetime import timedelta
+import subprocess
 
 import dill
 import json
@@ -37,9 +38,9 @@ from ._internal import (
     iter_tasks
 )
 from ._env import (
-   gen_pyenv_from_existing_archive,
-   gen_task_cmd,
-   PythonEnvDescription
+    gen_pyenv_from_existing_archive,
+    gen_task_cmd,
+    PythonEnvDescription
 )
 from .cluster import aggregate_spec
 from tf_yarn.experiment import Experiment
@@ -55,6 +56,7 @@ __all__ = [
 
 KV_CLUSTER_INSTANCES = 'cluster_instances'
 KV_EXPERIMENT_FN = 'experiment_fn'
+YARN_LOG_TRIES = 15
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +337,8 @@ class TFYarnExecutor():
         self,
         experiment_fn: ExperimentFn,
         cluster: SkeinCluster,
-        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+        path_hdfs_logs: str = None
     ) -> Optional[Metrics]:
         """Run an experiment on YARN.
 
@@ -351,6 +354,9 @@ class TFYarnExecutor():
         cluster
             optional skein cluster. All parameters except experiment_fn will be ignored.
 
+        path_hdfs_logs
+            optional path. tf-yarn will store yarn logs in this folder
+
         Raises
         ------
         RunFailed
@@ -360,7 +366,7 @@ class TFYarnExecutor():
             return add_monitor_to_experiment(experiment_fn())
         new_experiment_fn = _new_experiment_fn
 
-        with _shutdown_on_exception(cluster.app):
+        with _shutdown_on_exception(cluster.app, path_hdfs_logs):
             # Attempt serialization early to avoid allocating unnecesary resources
             serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
             with cluster.client:
@@ -378,7 +384,8 @@ class TFYarnExecutor():
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
         log_conf_file: str = None,
-        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+        path_to_log_hdfs: str = None
     ) -> Optional[Metrics]:
         """Run an experiment on YARN.
 
@@ -433,6 +440,9 @@ class TFYarnExecutor():
             'last_training_step': 'Training set of last checkpoint',
             'nb_eval_steps': 'Number of evaluation steps done'
 
+        path_to_log_hdfs
+            Optional path. If specified, tf-yarn will copy hadoop logs into this path
+
         Raises
         ------
         RunFailed
@@ -444,11 +454,13 @@ class TFYarnExecutor():
             env=env,
             log_conf_file=log_conf_file
         )
-        return self.run_on_cluster(experiment_fn, cluster, eval_monitor_log_thresholds)
+        return self.run_on_cluster(
+            experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
 
 
 @contextmanager
-def _shutdown_on_exception(app: skein.ApplicationClient):
+def _shutdown_on_exception(app: skein.ApplicationClient,
+                           path_to_log_hdfs: str = None):
     # Ensure SIGINT is not masked to enable kill on C-c.
     import signal
     signal.signal(signal.SIGINT, signal.default_int_handler)
@@ -464,6 +476,10 @@ def _shutdown_on_exception(app: skein.ApplicationClient):
             app.shutdown(FinalStatus.FAILED)
         logger.exception("Application shutdown due to an exception")
         raise
+    finally:
+        if path_to_log_hdfs:
+            with tf.gfile.GFile(f'{path_to_log_hdfs}/yarn_logs.txt', 'wb') as fd:
+                fd.write(app_logs(app))
 
 
 def _execute_and_await_termination(
@@ -628,3 +644,16 @@ def _handle_events(
     return ((os.linesep + os.linesep.join(header)
             + os.linesep * (1 + bool(details))
              + os.linesep.join(details)), metrics)
+
+
+def app_logs(app: skein.ApplicationClient) -> str:
+    command = ["yarn", "logs", "-applicationId", app.id]
+    for ind in range(YARN_LOG_TRIES - 1):
+        try:
+            return subprocess.check_output(command).decode()
+        except Exception:
+            logger.warn(
+                f"Cannot collect logs (attempt {ind}/{YARN_LOG_TRIES})",
+                exc_info=True)
+        time.sleep(1)
+    return subprocess.check_output(command).decode()

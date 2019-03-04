@@ -2,8 +2,11 @@ from unittest import mock
 from tf_yarn import (
     NodeLabel,
     _make_conda_envs,
-    _setup_cluster_tasks
+    _setup_cluster_tasks,
+    TFYarnExecutor,
+    SkeinCluster
 )
+import skein
 import pytest
 
 
@@ -47,3 +50,23 @@ def test__setup_cluster_tasks(mock_skein_app, tasks_instances):
 
     for task_type, task_sock_addrs in cluster_spec.as_dict().items():
         assert task_sock_addrs == expected_cluster_spec_dict[task_type]
+
+
+def test_kill_skein_on_exception():
+    def dill_raise_exception(*args, **kwargs):
+        raise Exception("Cannot serialize your method!")
+
+    with mock.patch('tf_yarn._setup_pyenvs'):
+        with mock.patch('tf_yarn.dill.dumps') as mock_dill:
+            mock_dill.side_effect = dill_raise_exception
+            executor = TFYarnExecutor()
+            mock_app = mock.MagicMock(skein.ApplicationClient)
+            cluster = SkeinCluster(
+                client=None, app=mock_app, cluster_spec=dict(),
+                event_listener=None, events=None, tasks=[])
+            try:
+                executor.run_on_cluster(lambda: None, cluster)
+            except Exception:
+                pass
+            mock_app.shutdown.assert_called_once_with(
+                skein.model.FinalStatus.FAILED)

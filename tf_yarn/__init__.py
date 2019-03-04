@@ -374,14 +374,15 @@ class TFYarnExecutor():
             return add_monitor_to_experiment(experiment_fn())
         new_experiment_fn = _new_experiment_fn
 
-        # Attempt serialization early to avoid allocating unnecesary resources
-        serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
-        with cluster.client:
-            return _execute_and_await_termination(
-                cluster,
-                serialized_fn,
-                eval_monitor_log_thresholds
-            )
+        with _shutdown_on_exception(cluster.app):
+            # Attempt serialization early to avoid allocating unnecesary resources
+            serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
+            with cluster.client:
+                return _execute_and_await_termination(
+                    cluster,
+                    serialized_fn,
+                    eval_monitor_log_thresholds
+                )
 
     def run_on_yarn(
         self,
@@ -495,27 +496,27 @@ def _execute_and_await_termination(
         cluster.app,
         {task: ['url'] for task in iter_tasks(cluster.tasks) if task.startswith('tensorboard')}
     )
-    with _shutdown_on_exception(cluster.app):
-        state = None
-        while True:
-            report = cluster.client.application_report(cluster.app.id)
-            logger.info(f"Application report for {cluster.app.id} (state: {report.state})")
-            if state != report.state:
-                logger.info(_format_app_report(report))
+    state = None
+    while True:
+        report = cluster.client.application_report(cluster.app.id)
+        logger.info(
+            f"Application report for {cluster.app.id} (state: {report.state})")
+        if state != report.state:
+            logger.info(_format_app_report(report))
 
-            if report.final_status != "undefined":
-                cluster.event_listener.join()
-                log_events, metrics = _handle_events(cluster.events)
-                logger.info(log_events)
-                if report.final_status == "failed":
-                    raise RunFailed
-                else:
-                    break
+        if report.final_status != "undefined":
+            cluster.event_listener.join()
+            log_events, metrics = _handle_events(cluster.events)
+            logger.info(log_events)
+            if report.final_status == "failed":
+                raise RunFailed
             else:
-                eval_metrics_logger.log()
-                one_shot_metrics_logger.log()
-            time.sleep(poll_every_secs)
-            state = report.state
+                break
+        else:
+            eval_metrics_logger.log()
+            one_shot_metrics_logger.log()
+        time.sleep(poll_every_secs)
+        state = report.state
 
     return metrics
 

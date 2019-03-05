@@ -15,13 +15,6 @@ import tensorflow as tf
 from tf_yarn import event
 from tf_yarn import TaskSpec, TFYarnExecutor
 
-"""
-You need to package tf-yarn in order to ship it to the executors
-First create a pex from root dir
-pex . -o examples/tf-yarn.pex
-"""
-PEX_FILE = "tf-yarn.pex"
-
 NODE_NAME = "worker"
 
 logging.basicConfig(level="INFO")
@@ -30,13 +23,18 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    with TFYarnExecutor(pyenv_zip_path=PEX_FILE) as tfYarnExecutor:
+    zip_hdfs, env_name = packaging.upload_env_to_hdfs()
+    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    with TFYarnExecutor(pyenv_zip_path=zip_hdfs) as tfYarnExecutor:
         session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
         with tfYarnExecutor.standalone_client_mode(
                 task_specs={
                     NODE_NAME: TaskSpec(memory=4 * 2**10, vcores=32, instances=2)
                 },
-                tf_session_config=session_config) as cluster_spec:
+                tf_session_config=session_config,
+                files={
+                    **editable_requirements,
+                }) as cluster_spec:
             size = 10000
             x = tf.placeholder(tf.float32, size)
 

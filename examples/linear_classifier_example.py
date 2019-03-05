@@ -14,13 +14,12 @@ from functools import partial
 from subprocess import check_output
 from datetime import datetime
 
-from tf_yarn import Experiment, TFYarnExecutor, TaskSpec
+from tf_yarn import Experiment, TFYarnExecutor, TaskSpec, packaging
 import winequality
 
 logging.basicConfig(level="INFO")
 
 USER = getpass.getuser()
-FS = check_output("hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
 
 """
 1. Download winequality-*.csv from the Wine Quality dataset at UCI
@@ -29,19 +28,13 @@ FS = check_output("hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
 2. Upload it to HDFS
 3. Pass a full URI to either of the CSV files to the example
 """
-WINE_EQUALITY_FILE = f"{FS}/user/{USER}/tf_yarn_test/winequality-red.csv"
-
-"""
-You need to package tf-yarn in order to ship it to the executors
-First create a pex from root dir
-pex . -o examples/tf-yarn.pex
-"""
-PEX_FILE = f"tf-yarn.pex"
+WINE_EQUALITY_FILE = f"{packaging.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
 
 """
 Output path of the learned model on hdfs
 """
-HDFS_DIR = f"{FS}/user/{USER}/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}"
+HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
+            f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
 def experiment_fn() -> Experiment:
@@ -75,7 +68,9 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-    with TFYarnExecutor(PEX_FILE) as tf_yarn_executor:
+    zip_hdfs, env_name = packaging.upload_env_to_hdfs()
+    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    with TFYarnExecutor(zip_hdfs) as tf_yarn_executor:
         tf_yarn_executor.run_on_yarn(
             experiment_fn,
             task_specs={
@@ -83,6 +78,7 @@ if __name__ == "__main__":
                 "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
             },
             files={
+                **editable_requirements,
                 os.path.basename(winequality.__file__): winequality.__file__,
             }
         )

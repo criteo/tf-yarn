@@ -1,4 +1,5 @@
 tensorflow==1.12.0
+pex==1.5.2
 conda-pack
 dill==0.2.8
 skein==0.3.1

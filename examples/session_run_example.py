@@ -18,7 +18,7 @@ from tf_yarn import event
 """
 You need to package tf-yarn in order to ship it to the executors
 First create a pex from root dir
-pex tf-yarn -o tf-yarn/examples/tf-yarn.pex
+pex . -o examples/tf-yarn.pex
 """
 PEX_FILE = f"tf-yarn.pex"
 

@@ -1,5 +1,6 @@
 import getpass
 import hashlib
+import importlib
 import logging
 import uuid
 import os
@@ -15,6 +16,7 @@ from typing import (
 )
 import warnings
 from contextlib import suppress, contextmanager
+from functools import partial
 from sys import version_info as v
 import tempfile
 from threading import Thread
@@ -54,7 +56,8 @@ from tf_yarn.metrics import OneShotMetricsLogger
 __all__ = [
     "Experiment", "RunFailed", "run_on_yarn",
     "skein_global_daemon", "standalone_client_mode"
-    "single_server_topology", "ps_strategy_topology"
+    "single_server_topology", "ps_strategy_topology",
+    "get_safe_experiment_fn"
 ]
 
 KV_CLUSTER_INSTANCES = 'cluster_instances'
@@ -458,6 +461,28 @@ def standalone_client_mode(
     finally:
         if cluster:
             event.broadcast(cluster.app, "stop", "1")
+
+
+def get_safe_experiment_fn(full_fn_name: str, *args):
+    """
+    tf-yarn serializes the provided experiment function with dill.dumps.
+    This is good for interactive experiments but can sometimes fail
+    because the function is not serializable.
+    You can use this wrapper function
+    if you ship your experiment function (via conda, pex) manually to the workers.
+
+    full_fn_name
+        the name of the function ( with the full path to package and module)
+        i.e. tf_yarn.my_module.my_experiment_fn
+
+    args
+        arguments to be provided to this function
+
+    """
+    module_name, fn_name = full_fn_name.rsplit('.', 1)
+    module = importlib.import_module(module_name)
+    experiment_fn = getattr(module, fn_name)
+    return partial(experiment_fn, *args)
 
 
 def _send_config_proto(

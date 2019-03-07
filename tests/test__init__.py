@@ -1,12 +1,17 @@
+import sys
+import os
 from unittest import mock
 from tf_yarn import (
     NodeLabel,
     _run_on_cluster,
     _setup_cluster_tasks,
-    SkeinCluster
+    get_safe_experiment_fn,
+    SkeinCluster,
+    Experiment
 )
 import skein
 import pytest
+import tensorflow as tf
 
 
 sock_addrs = {
@@ -82,3 +87,38 @@ def test_kill_skein_on_exception():
                 pass
             mock_app.shutdown.assert_called_once_with(
                 skein.model.FinalStatus.FAILED)
+
+
+def _experiment_fn(model_dir):
+    print(f"create experiment with model_dir={model_dir}")
+
+    def model_fn():
+        return tf.estimator.EstimatorSpec()
+
+    def train_fn():
+        return None
+
+    def eval_fn():
+        return None
+
+    return Experiment(
+        tf.estimator.LinearClassifier(feature_columns=[], model_dir=model_dir),
+        tf.estimator.TrainSpec(train_fn),
+        tf.estimator.EvalSpec(eval_fn))
+
+
+def test_get_safe_experiment_fn():
+    with mock.patch('importlib.import_module') as mock_import_module:
+        module = mock.Mock()
+        module.experiment_fn = _experiment_fn
+        mock_import_module.return_value = module
+        experiment_fn = get_safe_experiment_fn("testpackage.testmodule.experiment_fn",
+                                               "test_model_dir")
+        print(f"got function .. {experiment_fn}")
+        print(f"execute function ..")
+        print(experiment_fn)
+        experiment = experiment_fn()
+        print(experiment)
+        assert isinstance(experiment, Experiment) is True
+        assert experiment.estimator.model_dir == "test_model_dir"
+        mock_import_module.assert_called_once_with("testpackage.testmodule")

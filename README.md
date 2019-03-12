@@ -131,21 +131,31 @@ tfYarnExecutor.run_on_yarn(
 
 ### Configuring the Python interpreter and packages
 
-tf-yarn ships an isolated Python environment to the containers. We use conda for that which by default
-comes with a Python interpreter. The conda environment includes TensorFlow and a few of the tf-yarn
-dependencies (see `requirements.txt` for the full list).
+tf-yarn needs to ship an isolated virtual environment to the containers. 
 
-Additional pip-installable packages can be added via the `pip_packages` argument
-to `run_on_yarn`:
+You can use the packaging module to generate a package on hdfs based on your current installed virtual environment.
+(You should have installed the dependencies from `requirements.txt` first `pip install -r requirements.txt`)
+This works if you use conda and virtual environments.
+
+By default the generated package is a [pex][pex] package.
 
 ```python
+pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
 tfYarnExecutor = TFYarnExecutor(
-    pip_packages=["keras"]
+    pyenv_zip_path=pyenv_zip_path
 )
 ```
 
-You can also provide you own full prepackaged conda environment with [conda pack][conda pack] or your own virtual environment using [pex][pex]
-(make sure that you also include all the dependencies from `requirements.txt`):
+By specifiying your own packaging.CONDA_PACKER to `upload_env_to_hdfs` it will use [conda-pack][conda-pack] to create the package.
+
+You can also directly use the command line tools provided by [conda-pack][conda-pack] and [pex][pex]
+
+For pex you can run this command in the root directory to create the package (it includes all requirements from setup.py)
+```
+pex . -o myarchive.pex
+```
+
+You can then run tf-yarn with your generated package:
 
 ```python
 with TFYarnExecutor(
@@ -153,7 +163,7 @@ with TFYarnExecutor(
 ) as tfYarnExecutor:
 ```
 
-[conda pack]: https://conda.github.io/conda-pack/
+[conda-pack]: https://conda.github.io/conda-pack/
 [pex]: https://pex.readthedocs.io/en/stable/
 
 ### Running on GPU

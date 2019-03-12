@@ -90,22 +90,10 @@ TASK_SPEC_NONE = ps_strategy_topology()
 
 
 def _setup_pyenvs(
-        pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-        python: str = f"{v.major}.{v.minor}.{v.micro}",
-        pip_packages: List[str] = None,
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
         standalone_client_mode: bool = False
 ) -> Dict[NodeLabel, PythonEnvDescription]:
-    if not pyenv_zip_path:
-        warnings.warn(
-                "Auto generation of conda environment is deprecated and will be removed in "
-                "version 0.2.0, consider creating to pack yourself your environment and "
-                "use the pyenv_zip_path argument")
-        conda_envs = _make_conda_envs(python, pip_packages or [])
-        pyenvs = {node_label: gen_pyenv_from_existing_archive(
-                                     zipped_path,
-                                     standalone_client_mode)
-                  for node_label, zipped_path in conda_envs.items()}
-    elif isinstance(pyenv_zip_path, str):
+    if isinstance(pyenv_zip_path, str):
         pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(
                                     pyenv_zip_path,
                                     standalone_client_mode)}
@@ -153,30 +141,6 @@ def _maybe_zip_task_files(files, tempdir):
     return task_files
 
 
-def _make_conda_envs(python, pip_packages) -> Dict[NodeLabel, str]:
-    fp = hashlib.md5(str(pip_packages).encode()).hexdigest()
-    base_packages = [
-        "dill==" + dill.__version__,
-        "skein==" + skein.__version__
-    ]
-    # TODO: use internal PyPI for CPU-optimized TF.
-    # TODO: make the user responsible for constructing this mapping.
-    return {
-        NodeLabel.CPU: create_and_pack_conda_env(
-            f"py{python}-{fp}-cpu",
-            python,
-            pip_packages + base_packages + ["tensorflow==" + tf.__version__]
-        ),
-        NodeLabel.GPU: create_and_pack_conda_env(
-            f"py{python}-{fp}-gpu",
-            python,
-            pip_packages + base_packages + [
-                "tensorflow-gpu==" + tf.__version__
-            ]
-        )
-    }
-
-
 def _setup_cluster_tasks(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient,
@@ -195,9 +159,7 @@ class TFYarnExecutor():
 
     def __init__(
             self,
-            pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-            python: str = f"{v.major}.{v.minor}.{v.micro}",
-            pip_packages: List[str] = None,
+            pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
             queue: str = "default",
             acls: ACLs = None,
             file_systems: List[str] = None
@@ -208,23 +170,7 @@ class TFYarnExecutor():
             It can be a zip conda env or a pex archive
             In case of GPU/CPU cluster, provide a dictionnary with both
             environments.
-
-        python
-            Python version in the MAJOR.MINOR.MICRO format. Defaults to the
-            version of ``sys.executable``.
-
-        pip_packages
-            Python packages to install in the environment. The packages
-            are installed via pip, therefore all of the following forms
-            are supported::
-
-        SomeProject>=1,<2
-            git+https://github.com/org/SomeProject
-            http://SomeProject.org/archives/SomeProject-1.0.4.tar.gz
-            path/to/SomeProject
-
-            See `Installing Packages <https://packaging.python.org/tutorials \
-                                          /installing-packages>`_ for more examples.
+            See README.md -> Configuring the Python interpreter and packages
 
         queue
             YARN queue to use.
@@ -240,8 +186,6 @@ class TFYarnExecutor():
             in addition to ``fs.defaultFS``.
         """
         self.pyenv_zip_path = pyenv_zip_path
-        self.python = python
-        self.pip_packages = pip_packages
         self.queue = queue
         self.acls = acls
         self.file_systems = file_systems
@@ -411,8 +355,6 @@ class TFYarnExecutor():
         """
         self.pyenvs = _setup_pyenvs(
             self.pyenv_zip_path,
-            self.python,
-            self.pip_packages,
             standalone_client_mode=False)
         cluster = self._setup_skein_cluster(
             StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
@@ -472,8 +414,6 @@ class TFYarnExecutor():
         try:
             self.pyenvs = _setup_pyenvs(
                 self.pyenv_zip_path,
-                self.python,
-                self.pip_packages,
                 standalone_client_mode=True)
             cluster = self._setup_skein_cluster(
                 StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),

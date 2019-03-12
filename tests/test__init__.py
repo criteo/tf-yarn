@@ -1,22 +1,12 @@
 from unittest import mock
 from tf_yarn import (
     NodeLabel,
-    _make_conda_envs,
     _setup_cluster_tasks,
     TFYarnExecutor,
     SkeinCluster
 )
 import skein
 import pytest
-
-
-@mock.patch("tf_yarn.create_and_pack_conda_env")
-def test_make_conda(mock_packer):
-    mock_packer.return_value = "env.zip"
-    res = _make_conda_envs("python3.6", ["awesomepkg"])
-    assert res.keys() == {NodeLabel.CPU, NodeLabel.GPU}
-    assert res[NodeLabel.CPU] == "env.zip"
-    assert res[NodeLabel.GPU] == "env.zip"
 
 
 sock_addrs = {
@@ -82,7 +72,7 @@ def test_kill_skein_on_exception():
     with mock.patch('tf_yarn._setup_pyenvs'):
         with mock.patch('tf_yarn.dill.dumps') as mock_dill:
             mock_dill.side_effect = dill_raise_exception
-            executor = TFYarnExecutor()
+            executor = TFYarnExecutor("")
             mock_app = mock.MagicMock(skein.ApplicationClient)
             cluster = SkeinCluster(
                 client=None, app=mock_app, cluster_spec=dict(),

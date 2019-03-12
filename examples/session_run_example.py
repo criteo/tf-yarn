@@ -8,6 +8,7 @@ It should :
 """
 import sys
 
+import logging
 import numpy as np
 import tensorflow as tf
 
@@ -23,11 +24,12 @@ PEX_FILE = "tf-yarn.pex"
 
 NODE_NAME = "worker"
 
+logging.basicConfig(level="INFO")
+
+logger = logging.getLogger(__name__)
+
 
 def main():
-    tf.logging.set_verbosity(tf.logging.DEBUG)
-    print(sys.argv)
-
     with TFYarnExecutor(pyenv_zip_path=PEX_FILE) as tfYarnExecutor:
         session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
         with tfYarnExecutor.standalone_client_mode(
@@ -54,8 +56,8 @@ def main():
             logger.info("cluster_spec:" + str(cluster_spec_dict))
             logger.info("connecting to target:" + first_task)
 
-            with tf.Session(f"grpc://{first_task}", config=tf_session_config) as sess:
-                result = session.run(mean, feed_dict={x: np.random.random(size)})
+            with tf.Session(f"grpc://{first_task}", config=session_config) as sess:
+                result = sess.run(mean, feed_dict={x: np.random.random(size)})
                 print(f"mean = {result}")
 
 

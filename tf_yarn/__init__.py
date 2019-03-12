@@ -468,6 +468,7 @@ class TFYarnExecutor():
             optional file with log config, setups logging by default with INFO verbosity,
             if you specify a file here don't forget to also ship it to the containers via files arg
         """
+        cluster = None
         try:
             self.pyenvs = _setup_pyenvs(
                 self.pyenv_zip_path,
@@ -485,7 +486,8 @@ class TFYarnExecutor():
 
             yield cluster.cluster_spec
         finally:
-            event.broadcast(cluster.app, "stop", "1")
+            if cluster:
+                event.broadcast(cluster.app, "stop", "1")
 
     def _send_config_proto(
             self,

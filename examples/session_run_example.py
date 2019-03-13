@@ -13,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 
 from tf_yarn import event
-from tf_yarn import TaskSpec, TFYarnExecutor
+from tf_yarn import TaskSpec, TFYarnExecutor, packaging
 
 NODE_NAME = "worker"
 

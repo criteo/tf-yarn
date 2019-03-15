@@ -10,6 +10,7 @@ import sys
 
 import logging
 import numpy as np
+import skein
 import tensorflow as tf
 
 from tf_yarn import event
@@ -34,7 +35,11 @@ def main():
             tf_session_config=session_config,
             files={
                 **editable_requirements,
-            }) as cluster_spec:
+            },
+            acls=skein.model.ACLs(
+                enable=True,
+                view_users=['*']
+            )) as cluster_spec:
         size = 10000
         x = tf.placeholder(tf.float32, size)
 

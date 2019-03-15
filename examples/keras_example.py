@@ -8,7 +8,7 @@ import gzip
 import logging
 import subprocess
 import os
-
+import skein
 import numpy as np
 import tensorflow as tf
 
@@ -99,7 +99,12 @@ def main():
         files={
             **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
-        }
+        },
+        acls=skein.model.ACLs(
+            enable=True,
+            view_users=['*']
+        )
+
     )
 
 

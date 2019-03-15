@@ -6,7 +6,7 @@ import os
 import pwd
 import getpass
 from subprocess import check_output
-
+import skein
 import tensorflow as tf
 
 from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn, skein_global_daemon
@@ -57,4 +57,8 @@ if __name__ == "__main__":
             },
             files={
                 **editable_requirements,
-            })
+            },
+            acls=skein.model.ACLs(
+                enable=True,
+                view_users=['*']
+            ))

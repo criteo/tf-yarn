@@ -40,33 +40,33 @@ def experiment_fn():
 ```
 
 An experiment can be scheduled on YARN using the `run_on_yarn` function which
-takes two required arguments: an `experiment_fn`, and a dictionary specifying
-how much resources to allocate for each of the distributed TensorFlow task
-types. The example uses the [Wine Quality][wine-quality] dataset from UCI ML
-repository. With just under 5000 training instances available, there is no need
-for multi-node training, meaning that a `"chief"` task complemented by an
+takes three required arguments: python environment(s), `experiment_fn`,
+and a dictionary specifying how much resources to allocate for each of the
+distributed TensorFlow task types. The example uses the [Wine Quality][wine-quality]
+dataset from UCI ML repository. With just under 5000 training instances available,
+there is no need for multi-node training, meaning that a `"chief"` task complemented by an
 `"evaluator"` would manage just fine. Note that each task will be executed
 in its own YARN container.
 
 ```python
-from tf_yarn import TaskSpec, TFYarnExecutor
+from tf_yarn import TaskSpec, run_on_yarn 
 
-with TFYarnExecutor() as tfYarnExecutor:
-    tfYarnExecutor.run_on_yarn(
-        experiment_fn,
-        task_specs={
-            "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-            "evaluator": TaskSpec(memory=2**10, vcores=1),
-            "tensorboard": TaskSpec(memory=2**10, vcores=1)
-        }
-    )
+run_on_yarn(
+    "path_to_python_env",
+    experiment_fn,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
+        "evaluator": TaskSpec(memory=2**10, vcores=1),
+        "tensorboard": TaskSpec(memory=2**10, vcores=1)
+    }
+)
 ```
 
 The final bit is to forward the `winequality.py` module to the YARN containers,
 in order for the tasks to be able to import them:
 
 ```python
-tfYarnExecutor.run_on_yarn(
+run_on_yarn(
     ...,
     files={
         os.path.basename(winequality.__file__): winequality.__file__,
@@ -141,7 +141,7 @@ By default the generated package is a [pex][pex] package.
 
 ```python
 pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-tfYarnExecutor = TFYarnExecutor(
+run_on_yarn(
     pyenv_zip_path=pyenv_zip_path
 )
 ```
@@ -158,9 +158,9 @@ pex . -o myarchive.pex
 You can then run tf-yarn with your generated package:
 
 ```python
-with TFYarnExecutor(
+run_on_yarn(
     pyenv_zip_path="myarchive.pex"
-) as tfYarnExecutor:
+)
 ```
 
 [conda-pack]: https://conda.github.io/conda-pack/
@@ -188,15 +188,15 @@ to run on the GPU ones:
 ```python
 from tf_yarn import NodeLabel
 
-with TFYarnExecutor(queue="ml-gpu") as tfYarnExecutor:
-    tfYarnExecutor.run_on_yarn(
-        experiment_fn,
-        task_specs={
-            "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
-            "evaluator": TaskSpec(memory=2**10, vcores=1),
-            "tensorboard": TaskSpec(memory=2**10, vcores=1)
-        }
-    )
+run_on_yarn(
+    experiment_fn,
+    task_specs={
+        "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
+        "evaluator": TaskSpec(memory=2**10, vcores=1),
+        "tensorboard": TaskSpec(memory=2**10, vcores=1)
+    },
+    queue="ml-gpu"
+)
 ```
 
 [node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
@@ -211,17 +211,17 @@ to `run_on_yarn`. This would instruct `skein` to acquire a delegation token for
 these namenodes in addition to ``fs.defaultFS``:
 
 ```python
-with TFYarnExecutor(
+run_on_yarn(
     ...,
     file_systems=["hdfs://preprod"]
-) as tfYarnExecutor:
+)
 ```
 
 Depending on the cluster configuration, you might need to point libhdfs to a
 different configuration folder. For instance:
 
 ```python
-tfYarnExecutor.run_on_yarn(
+run_on_yarn(
     ...,
     env={"HADOOP_CONF_DIR": "/etc/hadoop/conf.all"}
 )
@@ -236,7 +236,7 @@ Tensorboard is automatically spawned when using a default task_specs. Thus runni
 If you use a custom task_specs, you must add explicitly a Tensorboard task to your configuration.
 
 ```python
-tfYarnExecutor.run_on_yarn(
+run_on_yarn(
     ...,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),

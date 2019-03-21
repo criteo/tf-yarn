@@ -52,7 +52,7 @@ from tf_yarn.evaluator_metrics import (
 from tf_yarn.metrics import OneShotMetricsLogger
 
 __all__ = [
-    "Experiment", "TFYarnExecutor", "RunFailed", "run_on_yarn",
+    "Experiment", "RunFailed", "run_on_yarn",
     "skein_global_daemon", "standalone_client_mode"
     "single_server_topology", "ps_strategy_topology"
 ]
@@ -666,64 +666,3 @@ def app_logs(app: skein.ApplicationClient) -> str:
                 exc_info=True)
         time.sleep(1)
     return subprocess.check_output(command).decode()
-
-
-# deprecated, please use run_on_yarn directly
-class TFYarnExecutor():
-
-    def __init__(
-        self,
-        pyenv_zip_path: Union[str, Dict[NodeLabel, str]] = None,
-        python: str = f"{v.major}.{v.minor}.{v.micro}",
-        pip_packages: List[str] = None,
-        queue: str = "default",
-        acls: ACLs = None,
-        file_systems: List[str] = None
-    ) -> None:
-        if pyenv_zip_path is not None:
-            self.pyenv_zip_path = pyenv_zip_path
-        else:
-            self.pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-
-        self.queue = queue
-        self.acls = acls
-        self.file_systems = file_systems
-
-    def __enter__(self):
-        skein.Client.start_global_daemon()
-        return self
-
-    def __exit__(self, *args):
-        try:
-            client = skein.Client.from_global_daemon()
-        except skein.exceptions.DaemonNotRunningError:
-            return
-        else:
-            if not [app for app in client.get_applications() if app.user == os.environ['USER']]:
-                skein.Client.stop_global_daemon()
-
-    # deprecated, please use run_on_yarn directly
-    def run_on_yarn(
-        self,
-        experiment_fn: ExperimentFn,
-        task_specs: Dict[str, TaskSpec] = None,
-        *,
-        files: Dict[str, str] = None,
-        env: Dict[str, str] = {},
-        log_conf_file: str = None,
-        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-        path_to_log_hdfs: str = None
-    ) -> Optional[Metrics]:
-        return run_on_yarn(
-            pyenv_zip_path=self.pyenv_zip_path,
-            experiment_fn=experiment_fn,
-            task_specs=task_specs,
-            files=files,
-            env=env,
-            queue=self.queue,
-            acls=self.acls,
-            file_systems=self.file_systems,
-            log_conf_file=log_conf_file,
-            eval_monitor_log_thresholds=eval_monitor_log_thresholds,
-            path_to_log_hdfs=path_to_log_hdfs
-        )

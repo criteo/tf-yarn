@@ -117,7 +117,7 @@ generally a good idea to give `"ps"` tasks >1 vcores to allow for concurrent I/O
 processing.
 
 ```python
-tfYarnExecutor.run_on_yarn(
+run_on_yarn(
     ...,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),

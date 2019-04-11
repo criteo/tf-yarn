@@ -16,7 +16,7 @@
     <!-- Use python3 for pex binaries -->
     <python.interpreter>python3.6</python.interpreter>
     <!-- Run tests for python3 -->
-    <tox.envlist>py36-test,lint,mypy</tox.envlist>
+    <tox.envlist>py36-test,lint,mypy,env-check</tox.envlist>
     <!-- Run tests for python3 and pypy -->
     <!-- <tox.envlist>py3-test,pypy-test,lint</tox.envlist> -->
   </properties>

@@ -24,7 +24,7 @@ a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
 Here is a stripped down `experiment_fn` from
-[`examples/linear_classifier_experiment.py`](examples/linear_classifier_experiment.py)
+[`examples/linear_classifier_example.py`](examples/linear_classifier_example.py)
 to give you an idea of how it might look:
 
 ```python

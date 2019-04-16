@@ -43,16 +43,16 @@ def main():
         size = 10000
         x = tf.placeholder(tf.float32, size)
 
-    with tf.device(f"/job:{NODE_NAME}/task:1"):
-        with tf.name_scope("scope_of_task1"):
-            first_batch = tf.slice(x, [5000], [-1])
-            mean1 = tf.reduce_mean(first_batch)
+        with tf.device(f"/job:{NODE_NAME}/task:1"):
+            with tf.name_scope("scope_of_task1"):
+                first_batch = tf.slice(x, [5000], [-1])
+                mean1 = tf.reduce_mean(first_batch)
 
-    with tf.device(f"/job:{NODE_NAME}/task:0"):
-        with tf.name_scope("scope_of_task0"):
-            second_batch = tf.slice(x, [0], [5000])
-            mean2 = tf.reduce_mean(second_batch)
-            mean = (mean1 + mean2) / 2
+        with tf.device(f"/job:{NODE_NAME}/task:0"):
+            with tf.name_scope("scope_of_task0"):
+                second_batch = tf.slice(x, [0], [5000])
+                mean2 = tf.reduce_mean(second_batch)
+                mean = (mean1 + mean2) / 2
 
         cluster_spec_dict = cluster_spec.as_dict()
         first_task = next(iter(cluster_spec_dict.values()))[0]

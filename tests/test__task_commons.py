@@ -47,14 +47,15 @@ def test__prepare_container():
 
         # fill client mock
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
+        host_port = ('localhost', 1234)
         instances = [('worker', 10), ('chief', 1)]
         mocked_client.kv.wait.return_value = json.dumps(instances).encode()
         mocked_client_call.return_value = mocked_client
-        client, cluster_spec, cluster_tasks = _prepare_container()
+        (client, cluster_spec, cluster_tasks) = _prepare_container(host_port)
 
         # checks
         mocked_logs.assert_called_once()
-        mocked_cluster_spec.assert_called_once_with(mocked_client, cluster_tasks)
+        mocked_cluster_spec.assert_called_once_with(host_port, mocked_client, cluster_tasks)
         assert client == mocked_client
         assert cluster_tasks == list(iter_tasks(instances))
 

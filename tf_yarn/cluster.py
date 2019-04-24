@@ -33,6 +33,7 @@ def get_task_description() -> typing.Tuple[str, int]:
 
 
 def start_cluster(
+    host_port: typing.Tuple[str, int],
     client: skein.ApplicationClient,
     all_tasks: typing.List[str]
 ) -> typing.Dict[str, typing.List[str]]:
@@ -43,10 +44,10 @@ def start_cluster(
     # preempting the server.
     # See https://github.com/tensorflow/tensorflow/issues/21492
     cluster_spec: typing.Dict = dict()
-    with _internal.reserve_sock_addr() as (host, port):
-        event.init_event(client, get_task(), f"{socket.gethostbyname(host)}:{port}")
-        cluster_spec = aggregate_spec(client, all_tasks)
-        return cluster_spec
+    host, port = host_port
+    event.init_event(client, get_task(), f"{socket.gethostbyname(host)}:{port}")
+    cluster_spec = aggregate_spec(client, all_tasks)
+    return cluster_spec
 
 
 def setup_tf_config(cluster_spec):

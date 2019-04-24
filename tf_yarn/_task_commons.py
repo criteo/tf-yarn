@@ -41,14 +41,16 @@ def _setup_container_logs(client):
 
 
 def _prepare_container(
+    host_port: Tuple[str, int]
 ) -> Tuple[skein.ApplicationClient, Dict[str, List[str]], List[str]]:
+    """Keep socket open while preparing container """
     tf.logging.info("Python " + sys.version)
     tf.logging.info("Skein " + skein.__version__)
     tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
     client = skein.ApplicationClient.from_current()
     _setup_container_logs(client)
     cluster_tasks = list(iter_tasks(json.loads(client.kv.wait(KV_CLUSTER_INSTANCES).decode())))
-    cluster_spec = cluster.start_cluster(client, cluster_tasks)
+    cluster_spec = cluster.start_cluster(host_port, client, cluster_tasks)
     return client, cluster_spec, cluster_tasks
 
 

@@ -69,6 +69,9 @@ def reserve_sock_addr() -> Iterator[Tuple[str, int]]:
     The reservation is done by binding a TCP socket to port 0 with
     ``SO_REUSEPORT`` flag set (requires Linux >=3.9). The socket is
     then kept open until the generator is closed.
+
+    To reduce probability of 'hijacking' port, socket should stay open
+    and should be closed _just before_ starting of ``tf.train.Server``
     """
     so_reuseport = get_so_reuseport()
     if so_reuseport is None:

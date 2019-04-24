@@ -50,17 +50,13 @@ def test_start_cluster_worker(task_name, task_index):
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ))
-        mock_reserve = stack.enter_context(
-            mock.patch(f"{MODULE_TO_TEST}._internal.reserve_sock_addr"))
         mock_event = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.event"))
 
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
 
-        mock_reserve.return_value.__enter__.return_value = CURRENT_HOST, CURRENT_PORT
         mock_event.wait.side_effect = lambda client, key: CLUSTER_SPEC[key]
         mock_client = mock.Mock(spec=skein.ApplicationClient)
-        cluster.start_cluster(mock_client, [task, "worker:0"])
-
+        cluster.start_cluster((CURRENT_HOST, CURRENT_PORT), mock_client, [task, "worker:0"])
         mock_event.init_event.assert_called_once_with(mock_client, task,
                                                       f"{CURRENT_HOST}:{CURRENT_PORT}")
 

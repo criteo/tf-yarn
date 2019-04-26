@@ -54,7 +54,7 @@ from tf_yarn import packaging
 
 pyenv_zip_path = packaging.upload_env_to_hdfs()
 run_on_yarn(
-    pyenv_zip_path=pyenv_zip_path,
+    pyenv_zip_path,
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
@@ -193,7 +193,7 @@ from tf_yarn import packaging
 
 pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
 run_on_yarn(
-    pyenv_zip_path=pyenv_zip_path
+    pyenv_zip_path
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),

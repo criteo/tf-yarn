@@ -88,8 +88,8 @@ def main():
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
     run_on_yarn(
-        pyenv_zip_path=pyenv_zip_path,
-        experiment_fn=experiment_fn,
+        pyenv_zip_path,
+        experiment_fn,
         task_specs={
             "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
             "worker": TaskSpec(memory=2 * 2 ** 10, vcores=4, instances=5),

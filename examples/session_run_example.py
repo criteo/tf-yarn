@@ -28,7 +28,7 @@ def main():
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
     session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
     with standalone_client_mode(
-            pyenv_zip_path=pyenv_zip_path,
+            pyenv_zip_path,
             task_specs={
                 NODE_NAME: TaskSpec(memory=4 * 2**10, vcores=32, instances=2)
             },

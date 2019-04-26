@@ -50,8 +50,8 @@ if __name__ == "__main__":
     # and share one single skein JAVA process
     with skein.Client() as client:
         run_on_yarn(
-            pyenv_zip_path=pyenv_zip_path,
-            experiment_fn=experiment_fn,
+            pyenv_zip_path,
+            experiment_fn,
             task_specs={
                 "chief": TaskSpec(memory=64, vcores=1)
             },

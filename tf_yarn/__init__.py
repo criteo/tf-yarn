@@ -55,7 +55,7 @@ from tf_yarn.metrics import OneShotMetricsLogger
 
 __all__ = [
     "Experiment", "RunFailed", "run_on_yarn",
-    "skein_global_daemon", "standalone_client_mode"
+    "standalone_client_mode"
     "single_server_topology", "ps_strategy_topology",
     "get_safe_experiment_fn"
 ]
@@ -161,27 +161,11 @@ def _setup_cluster_tasks(
     return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
 
 
-@contextmanager
-def skein_global_daemon():
-    """
-    Allows to run multiple learnings with one single skein daemon
-    Permits to save resource when many learnings are launched in parallel
-    """
-    skein.Client.start_global_driver()
-    yield
-    try:
-        client = skein.Client.from_global_driver()
-    except skein.exceptions.DaemonNotRunningError:
-        return
-    else:
-        if not [app for app in client.get_applications() if app.user == getpass.getuser()]:
-            skein.Client.stop_global_driver()
-
-
 def _setup_skein_cluster(
         pyenvs: Dict[NodeLabel, PythonEnvDescription],
         task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
         *,
+        skein_client: skein.Client = None,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
         queue: str = "default",
@@ -221,15 +205,14 @@ def _setup_skein_cluster(
             acls=acls,
             file_systems=file_systems
         )
-        try:
-            client = skein.Client.from_global_daemon()
-        except skein.exceptions.DaemonNotRunningError:
-            client = skein.Client()
+
+        if skein_client is None:
+            skein_client = skein.Client()
 
         task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
         events: Dict[str, Dict[str, str]] = \
             {task: {} for task in iter_tasks(task_instances)}
-        app = client.submit_and_connect(spec)
+        app = skein_client.submit_and_connect(spec)
 
         # Start a thread which collects all events posted by all tasks in kv store
         event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
@@ -237,7 +220,7 @@ def _setup_skein_cluster(
 
         cluster_spec = _setup_cluster_tasks(task_instances, app, standalone_client_mode)
 
-        return SkeinCluster(client, app, task_instances, cluster_spec, event_listener, events)
+        return SkeinCluster(skein_client, app, task_instances, cluster_spec, event_listener, events)
 
 
 def _run_on_cluster(
@@ -266,6 +249,7 @@ def run_on_yarn(
     experiment_fn: ExperimentFn,
     task_specs: Dict[str, TaskSpec] = None,
     *,
+    skein_client: skein.Client = None,
     files: Dict[str, str] = None,
     env: Dict[str, str] = {},
     queue: str = "default",
@@ -301,6 +285,9 @@ def run_on_yarn(
     experiment_fn
         A function constructing the estimator alongside the train
         and eval specs.
+
+    skein_client
+        Skein client used to submit yarn jobs
 
     task_specs
         Resources to allocate for each task type. The keys
@@ -361,6 +348,7 @@ def run_on_yarn(
         standalone_client_mode=False)
     cluster = _setup_skein_cluster(
         pyenvs=pyenvs,
+        skein_client=skein_client,
         task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
         files=files,
         env=env,
@@ -380,6 +368,7 @@ def standalone_client_mode(
         task_specs: Dict[str, TaskSpec] = None,
         tf_session_config: Optional[tf.ConfigProto] = None,
         *,
+        skein_client: skein.Client = None,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
         queue: str = "default",
@@ -402,6 +391,9 @@ def standalone_client_mode(
         It can be a zip conda env or a pex archive
         In case of GPU/CPU cluster, provide a dictionnary with both
         environments.
+
+    skein_client
+        Skein client to submit yarn jobs
 
     task_specs
         Resources to allocate for each task type. The keys
@@ -447,6 +439,7 @@ def standalone_client_mode(
             standalone_client_mode=True)
         cluster = _setup_skein_cluster(
             pyenvs=pyenvs,
+            skein_client=skein_client,
             task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
             files=files,
             env=env,

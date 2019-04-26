@@ -49,10 +49,12 @@ there is no need for multi-node training, meaning that a `"chief"` task compleme
 in its own YARN container.
 
 ```python
-from tf_yarn import TaskSpec, run_on_yarn 
+from tf_yarn import TaskSpec, run_on_yarn
+from tf_yarn import packaging
 
+pyenv_zip_path = packaging.upload_env_to_hdfs()
 run_on_yarn(
-    "path_to_python_env",
+    pyenv_zip_path=pyenv_zip_path,
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4),
@@ -187,8 +189,11 @@ to run on the GPU ones:
 
 ```python
 from tf_yarn import NodeLabel
+from tf_yarn import packaging
 
+pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
 run_on_yarn(
+    pyenv_zip_path=pyenv_zip_path
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),

@@ -9,7 +9,7 @@ from subprocess import check_output
 import skein
 import tensorflow as tf
 
-from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn, skein_global_daemon
+from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
 
 logging.basicConfig(level="INFO")
 
@@ -46,9 +46,9 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
-    # skein_global_daemon is useful when multiple learnings run in parallel
-    # and share one single skein daemon
-    with skein_global_daemon():
+    # skein.Client is useful when multiple learnings run in parallel
+    # and share one single skein JAVA process
+    with skein.Client() as client:
         run_on_yarn(
             pyenv_zip_path=pyenv_zip_path,
             experiment_fn=experiment_fn,
@@ -61,4 +61,6 @@ if __name__ == "__main__":
             acls=skein.model.ACLs(
                 enable=True,
                 view_users=['*']
-            ))
+            ),
+            skein_client=client
+        )

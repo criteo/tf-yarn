@@ -167,15 +167,15 @@ def skein_global_daemon():
     Allows to run multiple learnings with one single skein daemon
     Permits to save resource when many learnings are launched in parallel
     """
-    skein.Client.start_global_daemon()
+    skein.Client.start_global_driver()
     yield
     try:
-        client = skein.Client.from_global_daemon()
+        client = skein.Client.from_global_driver()
     except skein.exceptions.DaemonNotRunningError:
         return
     else:
         if not [app for app in client.get_applications() if app.user == getpass.getuser()]:
-            skein.Client.stop_global_daemon()
+            skein.Client.stop_global_driver()
 
 
 def _setup_skein_cluster(
@@ -204,7 +204,7 @@ def _setup_skein_cluster(
                 _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
                             str(task_spec.termination_timeout_seconds))
             services[task_type] = skein.Service(
-                commands=[gen_task_cmd(pyenv, log_conf_file)],
+                script=gen_task_cmd(pyenv, log_conf_file),
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
                 instances=task_spec.instances,
@@ -219,7 +219,8 @@ def _setup_skein_cluster(
             services,
             queue=queue,
             acls=acls,
-            file_systems=file_systems)
+            file_systems=file_systems
+        )
         try:
             client = skein.Client.from_global_daemon()
         except skein.exceptions.DaemonNotRunningError:

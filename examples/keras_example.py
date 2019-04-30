@@ -85,6 +85,13 @@ def main():
                 start_delay_secs=0,
                 throttle_secs=30))
 
+    # forcing call to model_to_estimator._save_first_checkpoint l457
+    # https://github.com/tensorflow/estimator/blob/ \
+    # 1d55f01d8af871a35ef83fc3354b9feaa671cbe1/tensorflow_estimator/python/estimator/keras.py
+    # otherwise there is a race condition
+    # when all workers try to save the first checkpoint at the same time
+    experiment_fn()
+
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
     run_on_yarn(

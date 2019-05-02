@@ -30,7 +30,7 @@ def main():
     with standalone_client_mode(
             pyenv_zip_path,
             task_specs={
-                NODE_NAME: TaskSpec(memory=4 * 2**10, vcores=32, instances=2)
+                NODE_NAME: TaskSpec(memory="2 GiB", vcores=4, instances=2)
             },
             tf_session_config=session_config,
             files={

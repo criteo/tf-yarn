@@ -75,8 +75,8 @@ if __name__ == "__main__":
         pyenv_zip_path,
         experiment_fn,
         task_specs={
-            "chief": TaskSpec(memory=2 * 2 ** 10, vcores=4),
-            "evaluator": TaskSpec(memory=2 ** 10, vcores=1)
+            "chief": TaskSpec(memory="2 GiB", vcores=4),
+            "evaluator": TaskSpec(memory="2 GiB", vcores=1)
         },
         files={
             **editable_requirements,

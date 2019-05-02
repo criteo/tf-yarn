@@ -53,7 +53,7 @@ if __name__ == "__main__":
             pyenv_zip_path,
             experiment_fn,
             task_specs={
-                "chief": TaskSpec(memory=64, vcores=1)
+                "chief": TaskSpec(memory="1 GiB", vcores=1)
             },
             files={
                 **editable_requirements,

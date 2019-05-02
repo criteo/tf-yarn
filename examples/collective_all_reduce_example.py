@@ -63,7 +63,7 @@ if __name__ == "__main__":
     with standalone_client_mode(
             pyenv_zip_path,
             task_specs={
-                "worker": TaskSpec(memory=4 * 2**10, vcores=4, instances=2)
+                "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2)
             },
             files=editable_requirements,
             acls=skein.model.ACLs(

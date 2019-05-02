@@ -1,5 +1,7 @@
+import skein
+
 from enum import Enum
-from typing import Dict, NamedTuple
+from typing import Dict, NamedTuple, Union
 
 GB = 2**10
 MAX_MEMORY_CONTAINER = 48 * GB
@@ -17,12 +19,35 @@ class NodeLabel(Enum):
     GPU = "gpu"
 
 
-class TaskSpec(NamedTuple):
-    memory: int
-    vcores: int
-    instances: int = 1
-    label: NodeLabel = NodeLabel.CPU
-    termination_timeout_seconds: int = -1
+class TaskSpec(object):
+    __slots__ = ('_resources', 'instances', 'label', 'termination_timeout_seconds')
+
+    def __init__(self,
+                 memory: Union[int, str],
+                 vcores: int,
+                 instances: int = 1,
+                 label: NodeLabel = NodeLabel.CPU,
+                 termination_timeout_seconds: int = -1):
+        self._resources = skein.model.Resources(memory, vcores)
+        self.instances = instances
+        self.label = label
+        self.termination_timeout_seconds = termination_timeout_seconds
+
+    @property
+    def memory(self) -> int:
+        return self._resources.memory
+
+    @memory.setter
+    def memory(self, value: Union[int, str]):
+        self._resources = skein.model.Resources(value, self._resources.vcores)
+
+    @property
+    def vcores(self) -> int:
+        return self._resources.vcores
+
+    @vcores.setter
+    def vcores(self, value: int):
+        self._resources = skein.model.Resources(self._resources.memory, value)
 
 
 def _check_general_topology(task_specs: Dict[str, TaskSpec]) -> None:

@@ -4,10 +4,10 @@ from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-DESCRIPTION = "Distributed TensorFlow on a YARN cluster."
+DESCRIPTION = "Distributed TensorFlow on a YARN cluster"
 
 try:
-    LONG_DESCRIPTION = open(os.path.join(here, "README")).read()
+    LONG_DESCRIPTION = open(os.path.join(here, "README.md")).read()
 except IOError:
     LONG_DESCRIPTION = ""
 

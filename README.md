@@ -1,10 +1,16 @@
-tf-yarnᵝ
-========
+# tf-yarnᵝ
 
-![tf-yarn](skein.png)
+![tf-yarn](https://github.com/criteo/tf-yarn/blob/master/skein.png?raw=true)
 
-Installation
-------------
+## Installation
+
+### Install with Pip
+
+```bash
+$ pip install tf-yarn
+```
+
+### Install from source
 
 ```bash
 $ git clone https://github.com/criteo/tf-yarn
@@ -14,17 +20,14 @@ $ pip install .
 
 Note that tf-yarn only supports Python ≥3.6.
 
-[skein-criteo-forks]: https://github.com/criteo-forks/skein
-
-Quickstart
-----------
+## Quickstart
 
 The core abstraction in tf-yarn is called an `ExperimentFn`. It is
 a function returning a triple of an `Estimator`, and two specs --
 `TrainSpec` and `EvalSpec`.
 
 Here is a stripped down `experiment_fn` from
-[`examples/linear_classifier_example.py`](examples/linear_classifier_example.py)
+[`examples/linear_classifier_example.py`][linear_classifier_example]
 to give you an idea of how it might look:
 
 ```python
@@ -76,9 +79,10 @@ run_on_yarn(
 )
 ```
 
+[linear_classifier_example]: https://github.com/criteo/tf-yarn/blob/master/examples/linear_classifier_example.py
 [wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
 
-### Distributed TensorFlow 101
+## Distributed TensorFlow 101
 
 The following is a brief summary of the core distributed TensorFlow
 concepts relevant to [training estimators][train-and-evaluate]. Please refer
@@ -111,7 +115,7 @@ the evaluation in parallel with the training.
 [distributed-tf]: https://www.tensorflow.org/deploy/distributed
 [train-and-evaluate]: https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate
 
-### Training with multiple workers
+## Training with multiple workers
 
 Multi-worker clusters require at least a single parameter server aka `"ps"` task
 to store the variables being updated by the `"chief"` and `"worker"` tasks. It is
@@ -131,7 +135,7 @@ run_on_yarn(
 )
 ```
 
-### Configuring the Python interpreter and packages
+## Configuring the Python interpreter and packages
 
 tf-yarn needs to ship an isolated virtual environment to the containers. 
 
@@ -168,7 +172,7 @@ run_on_yarn(
 [conda-pack]: https://conda.github.io/conda-pack/
 [pex]: https://pex.readthedocs.io/en/stable/
 
-### Running on GPU
+## Running on GPU
 
 YARN does not have first-class support for GPU resources. A common workaround is
 to use [node labels][node-labels] where CPU-only nodes are unlabelled, while
@@ -206,7 +210,7 @@ run_on_yarn(
 
 [node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
 
-### Accessing HDFS in the presence of [federation][federation]
+## Accessing HDFS in the presence of [federation][federation]
 
 `skein` the library underlying `tf_yarn` automatically acquires a delegation token
 for ``fs.defaultFS`` on security-enabled clusters. This should be enough for most
@@ -234,7 +238,7 @@ run_on_yarn(
 
 [federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
 
-### Tensorboard
+## Tensorboard
 
 You can use Tensorboard with TF Yarn.
 Tensorboard is automatically spawned when using a default task_specs. Thus running as a separate container on YARN.
@@ -260,7 +264,7 @@ Both instances and termination_timeout_seconds are optional parameters.
 The full access URL of each tensorboard instance is advertised as a _url_event_ starting with "Tensorboard is listening at...".
 Typically, you will see it appearing on the standard output of a _run_on_yarn_ call.
 
-#### Environment variables
+### Environment variables
 The following optional environment variables can be passed to the tensorboard task:
 * TF_BOARD_MODEL_DIR: to configure a model directory. Note that the experiment model dir, if specified, has higher priority. Defaults: None
 * TF_BOARD_EXTRA_ARGS: appends command line arguments to the mandatory ones (--logdir and --port): defaults: None 

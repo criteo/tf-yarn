@@ -2,5 +2,5 @@ pex==1.5.2
 tensorflow==1.12.2
 conda-pack
 dill==0.2.8
-skein==0.7.1
+skein==0.7.2
 pandas

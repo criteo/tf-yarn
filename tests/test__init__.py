@@ -1,17 +1,16 @@
-import sys
-import os
 from unittest import mock
 from tf_yarn import (
-    NodeLabel,
     _run_on_cluster,
     _setup_cluster_tasks,
     get_safe_experiment_fn,
     SkeinCluster,
-    Experiment
+    Experiment,
+    run_on_yarn
 )
 import skein
 import pytest
 import tensorflow as tf
+from tf_yarn.topologies import TaskSpec
 
 
 sock_addrs = {
@@ -122,3 +121,38 @@ def test_get_safe_experiment_fn():
         assert isinstance(experiment, Experiment) is True
         assert experiment.estimator.model_dir == "test_model_dir"
         mock_import_module.assert_called_once_with("testpackage.testmodule")
+
+
+@pytest.mark.parametrize("nb_retries,nb_failures", [(0, 0), (1, 0), (1, 1), (2, 2)])
+def test_retry_run_on_yarn(nb_retries, nb_failures):
+    cpt = 0
+
+    def fail(*args, **kwargs):
+        if cpt < nb_failures:
+            raise Exception("")
+        else:
+            pass
+
+    with mock.patch('tf_yarn._setup_pyenvs'), \
+            mock.patch('tf_yarn._setup_skein_cluster') as mock_setup_skein_cluster, \
+            mock.patch('tf_yarn._run_on_cluster') as mock_run_on_cluster:
+        mock_run_on_cluster.side_effect = fail
+
+        gb = 2**10
+
+        try:
+            run_on_yarn(
+                "path/to/env", lambda: Experiment(None, None, None),
+                task_specs={
+                    "chief": TaskSpec(memory=16 * gb, vcores=16),
+                    "worker": TaskSpec(memory=16 * gb, vcores=16, instances=1),
+                    "ps": TaskSpec(memory=16 * gb, vcores=16, instances=1)
+                },
+                nb_retries=nb_retries
+            )
+        except Exception:
+            pass
+
+        nb_calls = min(nb_retries, nb_failures) + 1
+        assert mock_run_on_cluster.call_count == nb_calls
+        assert mock_setup_skein_cluster.call_count == nb_calls

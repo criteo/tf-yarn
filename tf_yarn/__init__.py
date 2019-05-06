@@ -1,5 +1,3 @@
-import getpass
-import hashlib
 import importlib
 import logging
 import uuid
@@ -14,10 +12,8 @@ from typing import (
     Union,
     List
 )
-import warnings
 from contextlib import suppress, contextmanager
 from functools import partial
-from sys import version_info as v
 import tempfile
 from threading import Thread
 from datetime import timedelta
@@ -30,15 +26,12 @@ import tensorflow as tf
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
 
-from tf_yarn import packaging
 from tf_yarn.topologies import (
-    single_server_topology,
     ps_strategy_topology,
     TaskSpec, NodeLabel)
 from ._internal import (
     zip_path,
     StaticDefaultDict,
-    create_and_pack_conda_env,
     iter_tasks
 )
 from ._env import (
@@ -52,6 +45,7 @@ from tf_yarn.evaluator_metrics import (
     add_monitor_to_experiment,
     EvaluatorMetricsLogger)
 from tf_yarn.metrics import OneShotMetricsLogger
+from tf_yarn.event import broadcast
 
 __all__ = [
     "Experiment", "RunFailed", "run_on_yarn",
@@ -213,7 +207,6 @@ def _setup_skein_cluster(
         events: Dict[str, Dict[str, str]] = \
             {task: {} for task in iter_tasks(task_instances)}
         app = skein_client.submit_and_connect(spec)
-
         # Start a thread which collects all events posted by all tasks in kv store
         event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
         event_listener.start()
@@ -257,7 +250,8 @@ def run_on_yarn(
     file_systems: List[str] = None,
     log_conf_file: str = None,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    path_to_log_hdfs: str = None
+    path_to_log_hdfs: str = None,
+    nb_retries: int = 0
 ) -> Optional[Metrics]:
     """Run an experiment on YARN.
 
@@ -338,28 +332,47 @@ def run_on_yarn(
     path_to_log_hdfs
         Optional path. If specified, tf-yarn will copy hadoop logs into this path
 
+    nb_retries
+        Number of times the yarn application is retried in case of failures
+
     Raises
     ------
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
+    if nb_retries < 0:
+        raise ValueError(f'nb_retries must be greater or equal to 0. Got {nb_retries}')
+
     pyenvs = _setup_pyenvs(
         pyenv_zip_path,
         standalone_client_mode=False)
-    cluster = _setup_skein_cluster(
-        pyenvs=pyenvs,
-        skein_client=skein_client,
-        task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
-        files=files,
-        env=env,
-        queue=queue,
-        acls=acls,
-        file_systems=file_systems,
-        log_conf_file=log_conf_file,
-        standalone_client_mode=False
-    )
-    return _run_on_cluster(
-        experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+
+    n_tries_max = nb_retries + 1
+    while True:
+        try:
+            cluster = _setup_skein_cluster(
+                pyenvs=pyenvs,
+                skein_client=skein_client,
+                task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+                files=files,
+                env=env,
+                queue=queue,
+                acls=acls,
+                file_systems=file_systems,
+                log_conf_file=log_conf_file,
+                standalone_client_mode=False
+            )
+
+            return _run_on_cluster(
+                experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+        except Exception:
+            n_tries_max -= 1
+            if n_tries_max == 0:
+                raise
+            logger.exception(f"Retrying user application ... {n_tries_max} remaining attempts")
+
+    # Necessary for type checking
+    return None
 
 
 @contextmanager
@@ -454,7 +467,7 @@ def standalone_client_mode(
         yield cluster.cluster_spec
     finally:
         if cluster:
-            event.broadcast(cluster.app, "stop", "1")
+            broadcast(cluster.app, "stop", "1")
 
 
 def get_safe_experiment_fn(full_fn_name: str, *args):

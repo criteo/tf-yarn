@@ -70,12 +70,12 @@ def test__setup_cluster_tasks(
 
 
 def test_kill_skein_on_exception():
-    def dill_raise_exception(*args, **kwargs):
+    def cloudpickle_raise_exception(*args, **kwargs):
         raise Exception("Cannot serialize your method!")
 
     with mock.patch('tf_yarn._setup_pyenvs'):
-        with mock.patch('tf_yarn.dill.dumps') as mock_dill:
-            mock_dill.side_effect = dill_raise_exception
+        with mock.patch('tf_yarn.cloudpickle.dumps') as mock_cloudpickle:
+            mock_cloudpickle.side_effect = cloudpickle_raise_exception
             mock_app = mock.MagicMock(skein.ApplicationClient)
             cluster = SkeinCluster(
                 client=None, app=mock_app, cluster_spec=dict(),

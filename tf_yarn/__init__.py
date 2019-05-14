@@ -19,7 +19,7 @@ from threading import Thread
 from datetime import timedelta
 import subprocess
 
-import dill
+import cloudpickle
 import json
 import skein
 import tensorflow as tf
@@ -95,8 +95,8 @@ def _setup_pyenvs(
 ) -> Dict[NodeLabel, PythonEnvDescription]:
     if isinstance(pyenv_zip_path, str):
         pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(
-                                    pyenv_zip_path,
-                                    standalone_client_mode)}
+            pyenv_zip_path,
+            standalone_client_mode)}
     else:
         pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path, standalone_client_mode)
                   for label, env_zip_path in pyenv_zip_path.items()}
@@ -228,7 +228,7 @@ def _run_on_cluster(
 
     with _shutdown_on_exception(cluster.app, path_hdfs_logs):
         # Attempt serialization early to avoid allocating unnecesary resources
-        serialized_fn = dill.dumps(new_experiment_fn, recurse=True)
+        serialized_fn = cloudpickle.dumps(new_experiment_fn)
         with cluster.client:
             return _execute_and_await_termination(
                 cluster,
@@ -472,7 +472,7 @@ def standalone_client_mode(
 
 def get_safe_experiment_fn(full_fn_name: str, *args):
     """
-    tf-yarn serializes the provided experiment function with dill.dumps.
+    tf-yarn serializes the provided experiment function with cloudpickle.dumps.
     This is good for interactive experiments but can sometimes fail
     because the function is not serializable.
     You can use this wrapper function
@@ -495,7 +495,7 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
 def _send_config_proto(
         cluster: SkeinCluster,
         tf_session_config: tf.ConfigProto):
-    serialized_fn = dill.dumps(tf_session_config, recurse=True)
+    serialized_fn = cloudpickle.dumps(tf_session_config)
     cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
 
 
@@ -683,7 +683,7 @@ def _handle_events(
         train_eval_time_per_node
     )
     return ((os.linesep + os.linesep.join(header)
-            + os.linesep * (1 + bool(details))
+             + os.linesep * (1 + bool(details))
              + os.linesep.join(details)), metrics)
 
 

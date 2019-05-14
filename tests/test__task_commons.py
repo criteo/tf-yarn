@@ -6,7 +6,7 @@ import pytest
 import os
 import time
 import json
-import dill
+import cloudpickle
 import skein
 import tensorflow as tf
 
@@ -67,7 +67,7 @@ def test__get_experiment_object():
     def experiment_f():
         return experiment_obj
 
-    mocked_client.kv.wait.return_value = dill.dumps(experiment_f)
+    mocked_client.kv.wait.return_value = cloudpickle.dumps(experiment_f)
     returned_object = _get_experiment(mocked_client)
     assert returned_object == experiment_obj
 
@@ -82,7 +82,7 @@ def test__get_experiment_exception():
         def experiment_f():
             raise Exception()
 
-        mocked_client.kv.wait.return_value = dill.dumps(experiment_f)
+        mocked_client.kv.wait.return_value = cloudpickle.dumps(experiment_f)
         with pytest.raises(Exception):
             returned_object = _get_experiment(mocked_client)
         mocked_event.start_event.assert_called_once()

@@ -7,7 +7,7 @@ import re
 import sys
 from typing import List, Tuple, Dict, Optional
 
-import dill
+import cloudpickle
 import skein
 import tensorflow as tf
 
@@ -58,7 +58,7 @@ def _get_experiment(
     client: skein.ApplicationClient
 ) -> Experiment:
     try:
-        experiment = dill.loads(client.kv.wait(KV_EXPERIMENT_FN))()
+        experiment = cloudpickle.loads(client.kv.wait(KV_EXPERIMENT_FN))()
     except Exception as e:
         task = cluster.get_task()
         event.start_event(client, task)
@@ -135,7 +135,7 @@ def _shutdown_container(
     # matching ``device_filters`` if set. The implementation assumes
     # that ``device_filers`` are symmetric.
     exception = thread.exception if thread is not None and isinstance(thread, MonitoredThread) \
-                                 else None
+        else None
     task = cluster.get_task()
     event.stop_event(client, task, exception)
     if cluster_tasks is None:

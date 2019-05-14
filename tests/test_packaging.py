@@ -38,7 +38,7 @@ def test_get_empty_editable_requirements():
         _create_venv(tempdir)
         subprocess.check_call([
                         f"{tempdir}/bin/python", "-m", "pip", "install",
-                        "dill", _get_editable_package_name(), "pip==18.1"
+                        "cloudpickle", _get_editable_package_name(), "pip==18.1"
                         ])
         editable_requirements = packaging.get_editable_requirements(f"{tempdir}/bin/python")
         assert len(editable_requirements) == 0
@@ -78,7 +78,7 @@ def test_get_non_editable_requirements():
         non_editable_requirements = packaging.get_non_editable_requirements(f"{tempdir}/bin/python")
         print(f"non_editable_packages: {non_editable_requirements}")
         assert len(non_editable_requirements) == 1
-        assert non_editable_requirements[0]["name"] == "dill"
+        assert non_editable_requirements[0]["name"] == "cloudpickle"
 
 
 def _create_venv(tempdir: str):
@@ -86,7 +86,8 @@ def _create_venv(tempdir: str):
 
 
 def _pip_install(tempdir: str):
-    subprocess.check_call([f"{tempdir}/bin/python", "-m", "pip", "install", "dill", "pip==18.1"])
+    subprocess.check_call([f"{tempdir}/bin/python", "-m", "pip", "install",
+                           "cloudpickle", "pip==18.1"])
     pkg = _get_editable_package_name()
     print("pgk=" + pkg)
     subprocess.check_call([f"{tempdir}/bin/python", "-m", "pip", "install", "-e", pkg])

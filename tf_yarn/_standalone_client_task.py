@@ -15,7 +15,7 @@ def main() -> None:
         tf_session_config = cloudpickle.loads(client.kv.wait(KV_TF_SESSION_CONFIG))
         tf.logging.info(f"tf_server_conf {tf_session_config}")
 
-    cluster.start_tf_server(cluster_spec, tf_session_config)
+    tf.contrib.distribute.run_standard_tensorflow_server()
     event.wait(client, "stop")
 
 

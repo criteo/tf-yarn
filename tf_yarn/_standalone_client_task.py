@@ -1,4 +1,4 @@
-import dill
+import cloudpickle
 import tensorflow as tf
 
 from . import event
@@ -12,7 +12,7 @@ def main() -> None:
     with reserve_sock_addr() as host_port:
         client, cluster_spec, cluster_tasks = _prepare_container(host_port)
         cluster.setup_tf_config(cluster_spec)
-        tf_session_config = dill.loads(client.kv.wait(KV_TF_SESSION_CONFIG))
+        tf_session_config = cloudpickle.loads(client.kv.wait(KV_TF_SESSION_CONFIG))
         tf.logging.info(f"tf_server_conf {tf_session_config}")
 
     cluster.start_tf_server(cluster_spec, tf_session_config)

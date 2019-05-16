@@ -154,7 +154,7 @@ def get_env_name(env_var_name) -> str:
 CONDA_PACKER = Packer(
     get_env_name('CONDA_DEFAULT_ENV'),
     'zip',
-    lambda path, reqs: conda_pack.pack(path)
+    lambda output, reqs: conda_pack.pack(output=output)
 )
 PEX_PACKER = Packer(
     get_env_name('VIRTUAL_ENV'),

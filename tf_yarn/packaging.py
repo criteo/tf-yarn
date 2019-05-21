@@ -28,6 +28,8 @@ from tf_yarn import _criteo
 
 CRITEO_PYPI_URL = "http://build-nexus.prod.crto.in/repository/pypi/simple"
 
+CONDA_DEFAULT_ENV = 'CONDA_DEFAULT_ENV'
+
 _logger = logging.getLogger(__name__)
 
 
@@ -152,7 +154,7 @@ def get_env_name(env_var_name) -> str:
 
 
 CONDA_PACKER = Packer(
-    get_env_name('CONDA_DEFAULT_ENV'),
+    get_env_name(CONDA_DEFAULT_ENV),
     'zip',
     lambda output, reqs: conda_pack.pack(output=output)
 )
@@ -208,8 +210,14 @@ def _dump_archive_metadata(archive_on_hdfs: str,
 
 def upload_env_to_hdfs(
         archive_on_hdfs: str = None,
-        packer=PEX_PACKER
+        packer=None
 ) -> typing.Tuple[str, str]:
+    if packer is None:
+        if _is_conda_env():
+            packer = CONDA_PACKER
+        else:
+            packer = PEX_PACKER
+
     pex_file = get_current_pex_filepath()
     env_name = os.path.basename(pex_file).split(
         '.')[0] if pex_file else packer.env_name
@@ -290,3 +298,7 @@ def _get_tmp_dir():
     _logger.debug(f"local tmp_dir {tmp_dir}")
     os.makedirs(tmp_dir, exist_ok=True)
     return tmp_dir
+
+
+def _is_conda_env():
+    return os.environ.get(CONDA_DEFAULT_ENV) is not None

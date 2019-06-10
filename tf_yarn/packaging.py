@@ -218,9 +218,12 @@ def upload_env_to_hdfs(
         else:
             packer = PEX_PACKER
 
-    pex_file = get_current_pex_filepath()
-    env_name = os.path.basename(pex_file).split(
-        '.')[0] if pex_file else packer.env_name
+    if _running_from_pex():
+        pex_file = sys.argv[0]
+        env_name = os.path.splitext(os.path.basename(pex_file))[0]
+    else:
+        env_name = packer.env_name
+
     if not archive_on_hdfs:
         archive_on_hdfs = (f"{get_default_fs()}/user/{getpass.getuser()}"
                            f"/envs/{env_name}.{packer.extension}")
@@ -229,7 +232,7 @@ def upload_env_to_hdfs(
             raise ValueError(f"{archive_on_hdfs} has the wrong extension"
                              f", .{packer.extension} is expected")
 
-    if not pex_file:
+    if not _running_from_pex():
         upload_env_to_hdfs_from_venv(archive_on_hdfs, packer)
     else:
         tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
@@ -270,18 +273,8 @@ def upload_env_to_hdfs_from_venv(
         _logger.info(f"{archive_on_hdfs} already exists on hdfs")
 
 
-def get_current_pex_filepath() -> typing.Optional[str]:
-    """
-    If we run from a pex, returns the path
-    """
-    pex_paths = [path for path in sys.path if path.endswith('.pex')]
-    if pex_paths:
-        return pex_paths[0]
-    return None
-
-
 def get_editable_requirements_from_current_venv():
-    if get_current_pex_filepath():
+    if _running_from_pex():
         return dict()
     files = {}
     for requirement_dir in get_editable_requirements():
@@ -302,3 +295,11 @@ def _get_tmp_dir():
 
 def _is_conda_env():
     return os.environ.get(CONDA_DEFAULT_ENV) is not None
+
+
+def _running_from_pex() -> bool:
+    try:
+        import _pex
+        return True
+    except ModuleNotFoundError:
+        return False

@@ -200,17 +200,17 @@ def test_upload_env_to_hdfs_should_throw_error_if_wrong_extension():
 
 
 def test_upload_env_to_hdfs_in_a_pex():
-    home_path = '/home/j.doe'
     home_hdfs_path = '/user/j.doe'
     with contextlib.ExitStack() as stack:
-        mock_pex_filepath = stack.enter_context(
-            mock.patch(f"{MODULE_TO_TEST}.get_current_pex_filepath"))
+        mock_running_from_pex = stack.enter_context(
+            mock.patch(f"{MODULE_TO_TEST}._running_from_pex"))
+        mock_running_from_pex.return_value = True
+        stack.enter_context(mock.patch.object(sys, 'argv', ["./myapp"]))
         mock_tf = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf"))
         mock__get_archive_metadata_path = stack.enter_context(
             mock.patch(f"{MODULE_TO_TEST}._get_archive_metadata_path")
         )
         mock__get_archive_metadata_path.return_value = f"{home_hdfs_path}/blah.json"
-        mock_pex_filepath.return_value = f"{home_path}/myapp.pex"
         # Metadata already exists on hdfs
         mock_tf.gfile.Exists.return_value = True
 
@@ -218,7 +218,7 @@ def test_upload_env_to_hdfs_in_a_pex():
 
         mock_tf.gfile.MakeDirs.assert_called_once_with(home_hdfs_path)
         mock_tf.gfile.Copy.assert_called_once_with(
-            f'{home_path}/myapp.pex', f'{home_hdfs_path}/blah.pex', overwrite=True)
+            f'./myapp', f'{home_hdfs_path}/blah.pex', overwrite=True)
         # Check metadata has been cleaned
         mock_tf.gfile.Remove.assert_called_once_with(f'{home_hdfs_path}/blah.json')
         # check envname

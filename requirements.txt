@@ -1,4 +1,4 @@
-pex==1.5.2
+pex==1.6.7
 tensorflow==1.12.2
 conda-pack
 cloudpickle==1.0.0

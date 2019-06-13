@@ -59,5 +59,8 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=CLASSIFIERS,
     keywords="tensorflow yarn",
-    url="https://github.com/criteo/tf-yarn"
+    url="https://github.com/criteo/tf-yarn",
+    entry_points={'console_scripts': [
+        'check_hadoop_env = tf_yarn.bin.check_hadoop_env:main',
+    ]}
 )

@@ -18,7 +18,26 @@ $ cd tf-yarn
 $ pip install .
 ```
 
-Note that tf-yarn only supports Python ≥3.6.
+### Prerequisites
+
+tf-yarn only supports Python ≥3.6.
+
+Make sure to have Tensorflow working with HDFS by setting up all the environment variables as described [here](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/hadoop.md).
+
+You can run the `check_hadoop_env` script to check that your setup is OK (it has been installed by tf_yarn):
+
+```
+$ check_hadoop_env
+# You should see something like
+# INFO:tf_yarn.bin.check_hadoop_env:results will be written in /home/.../shared/Dev/tf-yarn/check_hadoop_env.log
+# INFO:tf_yarn.bin.check_hadoop_env:check_env: True
+# INFO:tf_yarn.bin.check_hadoop_env:write dummy file to hdfs hdfs://root/tmp/a1df7b99-fa47-4a86-b5f3-9bc09019190f/hello_tf_yarn.txt
+# INFO:tf_yarn.bin.check_hadoop_env:check_local_hadoop_tensorflow: True
+# INFO:root:Launching remote check
+# ...
+# INFO:tf_yarn.bin.check_hadoop_env:remote_check: True
+# INFO:tf_yarn.bin.check_hadoop_env:Hadoop setup: OK
+```
 
 ## Quickstart
 

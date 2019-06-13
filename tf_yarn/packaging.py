@@ -7,9 +7,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import typing
+from typing import (
+    Optional,
+    Tuple,
+    Dict,
+    NamedTuple,
+    Callable,
+    Collection
+)
 import uuid
 import zipfile
+import warnings
 import tensorflow as tf
 
 try:
@@ -70,7 +78,7 @@ def zip_path(py_dir: str, include_base_name=True):
     return py_archive
 
 
-def pack_in_pex(requirements: typing.Dict[str, str], output: str
+def pack_in_pex(requirements: Dict[str, str], output: str
                 ) -> str:
     """
     Pack current environment using a pex.
@@ -126,7 +134,7 @@ def _get_packages(editable: bool, executable: str = sys.executable):
             ["distribute", "wheel", "pip", "setuptools"]]
 
 
-def pack_current_venv_in_pex(output: str, reqs: typing.Dict[str, str]) -> str:
+def pack_current_venv_in_pex(output: str, reqs: Dict[str, str]) -> str:
     """
     Pack current environment using a pex
 
@@ -136,10 +144,10 @@ def pack_current_venv_in_pex(output: str, reqs: typing.Dict[str, str]) -> str:
     return pack_in_pex(reqs, output)
 
 
-class Packer(typing.NamedTuple):
+class Packer(NamedTuple):
     env_name: str
     extension: str
-    pack: typing.Callable[[str, typing.Dict[str, str]], str]
+    pack: Callable[[str, Dict[str, str]], str]
 
 
 def get_env_name(env_var_name) -> str:
@@ -182,7 +190,7 @@ def _get_archive_metadata_path(archive_on_hdfs: str) -> str:
 
 
 def _is_archive_up_to_date(archive_on_hdfs: str,
-                           current_packages_list: typing.Dict[str, str]
+                           current_packages_list: Dict[str, str]
                            ) -> bool:
     if not tf.gfile.Exists(archive_on_hdfs):
         return False
@@ -196,7 +204,7 @@ def _is_archive_up_to_date(archive_on_hdfs: str,
 
 
 def _dump_archive_metadata(archive_on_hdfs: str,
-                           current_packages_list: typing.Dict[str, str]
+                           current_packages_list: Dict[str, str]
                            ):
     archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
     with tempfile.TemporaryDirectory() as tempdir:
@@ -210,8 +218,10 @@ def _dump_archive_metadata(archive_on_hdfs: str,
 
 def upload_env_to_hdfs(
         archive_on_hdfs: str = None,
-        packer=None
-) -> typing.Tuple[str, str]:
+        packer=None,
+        additional_packages: Optional[Dict[str, str]] = None,
+        ignored_packages: Optional[Collection[str]] = None
+) -> Tuple[str, str]:
     if packer is None:
         if _is_conda_env():
             packer = CONDA_PACKER
@@ -233,7 +243,10 @@ def upload_env_to_hdfs(
                              f", .{packer.extension} is expected")
 
     if not _running_from_pex():
-        upload_env_to_hdfs_from_venv(archive_on_hdfs, packer)
+        upload_env_to_hdfs_from_venv(
+            archive_on_hdfs, packer,
+            additional_packages, ignored_packages
+        )
     else:
         tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
         tf.gfile.Copy(pex_file, archive_on_hdfs, overwrite=True)
@@ -248,10 +261,23 @@ def upload_env_to_hdfs(
 
 def upload_env_to_hdfs_from_venv(
         archive_on_hdfs: str,
-        packer=PEX_PACKER
+        packer=PEX_PACKER,
+        additional_packages: Optional[Dict[str, str]] = None,
+        ignored_packages: Optional[Collection[str]] = None
 ):
     current_packages = {package["name"]: package["version"]
                         for package in get_non_editable_requirements()}
+
+    if packer is PEX_PACKER:
+        if additional_packages and len(additional_packages) > 0:
+            current_packages.update(additional_packages)
+
+        if ignored_packages and len(ignored_packages) > 0:
+            for name in ignored_packages:
+                current_packages.pop(name)
+    else:
+        warnings.warn("Parameters additional_packages and ignored_packages"
+                      " are only supported with PEX packer")
 
     if not _is_archive_up_to_date(archive_on_hdfs, current_packages):
         _logger.info(

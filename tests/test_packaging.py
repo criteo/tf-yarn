@@ -169,7 +169,6 @@ def test_dump_metadata(mock_tf):
 
 
 def test_upload_env():
-    mock_packer = mock.MagicMock(spec=packaging.Packer)
     with contextlib.ExitStack() as stack:
         # Mock all objects
         mock_is_archive = stack.enter_context(
@@ -179,19 +178,34 @@ def test_upload_env():
         mock_tf = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf"))
         stack.enter_context(mock.patch(f"{MODULE_TO_TEST}._dump_archive_metadata"))
         stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.shutil.rmtree"))
+        mock_packer = stack.enter_context(
+            mock.patch(f"{MODULE_TO_TEST}.pack_in_pex")
+        )
 
         # Regenerate archive
         mock_is_archive.return_value = False
         mock_get_packages.return_value = [{"name": "a", "version": "1.0"},
                                           {"name": "b", "version": "2.0"}]
-        mock_packer.pack.return_value = MYARCHIVE_FILENAME
-        mock_packer.extension = "pex"
-        packaging.upload_env_to_hdfs(MYARCHIVE_FILENAME, mock_packer)
-        mock_packer.pack.assert_called_once_with(output=Any(str), reqs={"a": "1.0",
-                                                                        "b": "2.0"})
+
+        mock_packer.return_value = MYARCHIVE_FILENAME
+
+        packaging.upload_env_to_hdfs(MYARCHIVE_FILENAME, packaging.PEX_PACKER)
+        mock_packer.assert_called_once_with(
+            {"a": "1.0", "b": "2.0"}, Any(str)
+        )
         mock_tf.gfile.Copy.assert_called_once_with(MYARCHIVE_FILENAME,
                                                    MYARCHIVE_FILENAME,
                                                    overwrite=True)
+
+        mock_packer.reset_mock()
+        packaging.upload_env_to_hdfs(
+            MYARCHIVE_FILENAME, packaging.PEX_PACKER,
+            additional_packages={"c": "3.0"},
+            ignored_packages={"a"}
+        )
+        mock_packer.assert_called_once_with(
+            {"c": "3.0", "b": "2.0"}, Any(str)
+        )
 
 
 def test_upload_env_to_hdfs_should_throw_error_if_wrong_extension():

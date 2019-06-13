@@ -190,14 +190,21 @@ to run on the GPU ones:
 2. Set `TaskSpec.label` to `NodeLabel.GPU` for relevant task types.
    A good rule of a thumb is to run compute heavy `"chief"` and `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
+3. Generate two python environements: one with Tensorflow for CPUs and one
+   with Tensorflow for GPUs. Parameters additional_packages and ignored_packages
+   of upload_env_to_hdfs are only supported with PEX packet
 
 ```python
 from tf_yarn import NodeLabel
 from tf_yarn import packaging
 
-pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
+pyenv_zip_path_cpu, _ = packaging.upload_env_to_hdfs()
+pyenv_zip_path_gpu, _ = packaging.upload_env_to_hdfs(
+    additional_packages={"tensorflow-gpu", "2.0.0a0"},
+    ignored_packages={"tensorflow"}
+)
 run_on_yarn(
-    pyenv_zip_path
+    {NodeLabel.CPU: pyenv_zip_path_cpu, NodeLabel.GPU: pyenv_zip_path_gpu}
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),

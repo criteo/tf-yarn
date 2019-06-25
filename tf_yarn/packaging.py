@@ -5,6 +5,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+from subprocess import Popen, CalledProcessError, PIPE
 import sys
 import tempfile
 from typing import (
@@ -13,11 +14,11 @@ from typing import (
     Dict,
     NamedTuple,
     Callable,
-    Collection
+    Collection,
+    List
 )
 import uuid
 import zipfile
-import warnings
 import tensorflow as tf
 
 try:
@@ -78,6 +79,13 @@ def zip_path(py_dir: str, include_base_name=True):
     return py_archive
 
 
+def format_requirements(requirements: Dict[str, str]) -> List[str]:
+    if requirements is None:
+        return list()
+    else:
+        return [name + "==" + version for name, version in requirements.items()]
+
+
 def pack_in_pex(requirements: Dict[str, str], output: str
                 ) -> str:
     """
@@ -87,8 +95,7 @@ def pack_in_pex(requirements: Dict[str, str], output: str
     :param output: location of the pex
     :return: destination of the archive, name of the pex
     """
-    requirements_to_install = [name + "==" + version
-                               for name, version in requirements.items()]
+    requirements_to_install = format_requirements(requirements)
 
     fetchers = []
     if _criteo.is_criteo():
@@ -134,7 +141,7 @@ def _get_packages(editable: bool, executable: str = sys.executable):
             ["distribute", "wheel", "pip", "setuptools"]]
 
 
-def pack_current_venv_in_pex(output: str, reqs: Dict[str, str]) -> str:
+def pack_current_venv_in_pex(output: str, reqs: Dict[str, str], new_env_diff: bool = False) -> str:
     """
     Pack current environment using a pex
 
@@ -144,10 +151,68 @@ def pack_current_venv_in_pex(output: str, reqs: Dict[str, str]) -> str:
     return pack_in_pex(reqs, output)
 
 
+def pack_venv_in_conda(env_path: str, reqs: Dict[str, str], new_env_diff: bool) -> str:
+    if not new_env_diff:
+        conda_pack.pack(output=env_path)
+        return env_path
+    else:
+        return create_and_pack_conda_env(env_path, reqs)
+
+
+def create_and_pack_conda_env(env_path: str, reqs: Dict[str, str], ) -> str:
+    try:
+        _call(["conda"])
+    except CalledProcessError:
+        raise RuntimeError("conda is not available in $PATH")
+
+    env_path_split = env_path.split('.', 1)
+    env_name = env_path_split[0]
+    compression_format = env_path_split[1] if len(env_path_split) > 1 else ".zip"
+    archive_path = f"{env_name}.{compression_format}"
+
+    if os.path.exists(env_name):
+        shutil.rmtree(env_name)
+
+    _logger.info("Creating new env " + env_name)
+    python_version = sys.version_info
+    _call([
+        "conda", "create", "-p", env_name, "-y", "-q", "--copy",
+        f"python={python_version.major}.{python_version.minor}.{python_version.micro}"
+    ], env=dict(os.environ))
+
+    env_python_bin = os.path.join(env_name, "bin", "python")
+    if not os.path.exists(env_python_bin):
+        raise RuntimeError(
+            "Failed to create Python binary at " + env_python_bin)
+
+    _logger.info("Installing packages into " + env_name)
+    _call([env_python_bin, "-m", "pip", "install"] +
+          format_requirements(reqs))
+
+    if os.path.exists(archive_path):
+        os.remove(archive_path)
+
+    conda_pack.pack(prefix=env_name, output=archive_path)
+    return archive_path
+
+
+def _call(cmd, **kwargs):
+    _logger.info(" ".join(cmd))
+    proc = Popen(cmd, stdout=PIPE, stderr=PIPE, **kwargs)
+    out, err = proc.communicate()
+    if proc.returncode:
+        _logger.error(out)
+        _logger.error(err)
+        raise CalledProcessError(proc.returncode, cmd)
+    else:
+        _logger.debug(out)
+        _logger.debug(err)
+
+
 class Packer(NamedTuple):
     env_name: str
     extension: str
-    pack: Callable[[str, Dict[str, str]], str]
+    pack: Callable[[str, Dict[str, str], bool], str]
 
 
 def get_env_name(env_var_name) -> str:
@@ -164,7 +229,7 @@ def get_env_name(env_var_name) -> str:
 CONDA_PACKER = Packer(
     get_env_name(CONDA_DEFAULT_ENV),
     'zip',
-    lambda output, reqs: conda_pack.pack(output=output)
+    pack_venv_in_conda
 )
 PEX_PACKER = Packer(
     get_env_name('VIRTUAL_ENV'),
@@ -268,16 +333,17 @@ def upload_env_to_hdfs_from_venv(
     current_packages = {package["name"]: package["version"]
                         for package in get_non_editable_requirements()}
 
-    if packer is PEX_PACKER:
-        if additional_packages and len(additional_packages) > 0:
-            current_packages.update(additional_packages)
+    new_env_diff = False
 
-        if ignored_packages and len(ignored_packages) > 0:
-            for name in ignored_packages:
+    if additional_packages and len(additional_packages) > 0:
+        current_packages.update(additional_packages)
+        new_env_diff = True
+
+    if ignored_packages and len(ignored_packages) > 0:
+        for name in ignored_packages:
+            if name in current_packages:
                 current_packages.pop(name)
-    else:
-        warnings.warn("Parameters additional_packages and ignored_packages"
-                      " are only supported with PEX packer")
+                new_env_diff = True
 
     if not _is_archive_up_to_date(archive_on_hdfs, current_packages):
         _logger.info(
@@ -287,7 +353,7 @@ def upload_env_to_hdfs_from_venv(
         tmp_dir = _get_tmp_dir()
         archive_local = packer.pack(
             output=f"{tmp_dir}/{packer.env_name}.{packer.extension}",
-            reqs=current_packages
+            reqs=current_packages, new_env_diff=new_env_diff
         )
         tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
         tf.gfile.Copy(archive_local, archive_on_hdfs, overwrite=True)

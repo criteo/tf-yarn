@@ -2,9 +2,11 @@ import contextlib
 import json
 import os
 import subprocess
+from subprocess import check_output
 import sys
 import tempfile
 from unittest import mock
+import zipfile
 
 import pytest
 
@@ -237,3 +239,29 @@ def test_upload_env_to_hdfs_in_a_pex():
         mock_tf.gfile.Remove.assert_called_once_with(f'{home_hdfs_path}/blah.json')
         # check envname
         assert 'myapp' == result[1]
+
+
+def conda_is_available():
+    p = subprocess.run(["conda"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    return p.returncode == 0
+
+
+@pytest.mark.skipif(not conda_is_available(), reason="conda is not available")
+def test_create_conda_env():
+    with tempfile.TemporaryDirectory() as tempdir:
+        env_path = os.path.join(tempdir, "conda_env.zip")
+        env_zip_path = packaging.create_and_pack_conda_env(
+            env_path=env_path,
+            reqs={"pycodestyle": "2.5.0"}
+        )
+        assert os.path.isfile(env_zip_path)
+        env_path, _zip = os.path.splitext(env_zip_path)
+        assert os.path.isdir(env_path)
+
+        env_unzipped_path = os.path.join(tempdir, "conda_env_unzipped")
+        with zipfile.ZipFile(env_zip_path) as zf:
+            zf.extractall(env_unzipped_path)
+
+        env_python_bin = os.path.join(env_unzipped_path, "bin", "python")
+        os.chmod(env_python_bin, 0o755)
+        check_output([env_python_bin, "-m", "pycodestyle", "--version"])

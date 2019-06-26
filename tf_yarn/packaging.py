@@ -20,6 +20,7 @@ from typing import (
 import uuid
 import zipfile
 import tensorflow as tf
+import __main__
 
 try:
     import conda_pack
@@ -294,8 +295,8 @@ def upload_env_to_hdfs(
             packer = PEX_PACKER
 
     if _running_from_pex():
-        pex_file = sys.argv[0]
-        env_name = os.path.splitext(os.path.basename(pex_file))[0]
+        pex_file = get_current_pex_filepath()
+        env_name = os.path.basename(pex_file).split('.')[0]
     else:
         env_name = packer.env_name
 
@@ -363,6 +364,13 @@ def upload_env_to_hdfs_from_venv(
         shutil.rmtree(tmp_dir)
     else:
         _logger.info(f"{archive_on_hdfs} already exists on hdfs")
+
+
+def get_current_pex_filepath() -> str:
+    """
+    If we run from a pex, returns the path
+    """
+    return os.path.abspath(os.path.dirname(__main__.__file__))
 
 
 def get_editable_requirements_from_current_venv():

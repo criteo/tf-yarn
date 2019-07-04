@@ -1,4 +1,5 @@
 import getpass
+import imp
 import json
 import logging
 import os
@@ -41,6 +42,8 @@ CRITEO_PYPI_URL = "http://build-nexus.prod.crto.in/repository/pypi/simple"
 CUSTOM_WHEELS_DIR = "custom_wheels"
 
 CONDA_DEFAULT_ENV = 'CONDA_DEFAULT_ENV'
+
+EDITABLE_PACKAGES_INDEX = 'editable_packages_index'
 
 _logger = logging.getLogger(__name__)
 
@@ -380,13 +383,32 @@ def get_current_pex_filepath() -> str:
     return os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(_pex.__file__))))
 
 
-def get_editable_requirements_from_current_venv():
+def get_editable_requirements_from_current_venv(
+    executable: str = sys.executable,
+    editable_packages_dir: str = os.getcwd()
+):
+    editable_requirements: Dict[str, str] = {}
     if _running_from_pex():
-        return dict()
-    files = {}
-    for requirement_dir in get_editable_requirements():
-        files[os.path.basename(requirement_dir)] = requirement_dir
-    return files
+        try:
+            package_names = open(
+                f"{editable_packages_dir}/{EDITABLE_PACKAGES_INDEX}"
+            ).read().splitlines()
+        except FileNotFoundError:
+            editable_requirements = {}
+        else:
+            for package_name in package_names:
+                try:
+                    _, path, _ = imp.find_module(package_name)
+                    editable_requirements[os.path.basename(path)] = path
+                except ImportError:
+                    _logger.error(f"Could not import package {package_name}"
+                                  f" repo exists={os.path.exists(package_name)}")
+    else:
+        editable_requirements = {os.path.basename(requirement_dir): requirement_dir
+                                 for requirement_dir in get_editable_requirements(executable)}
+
+    _logger.info(f"found editable requirements {editable_requirements}")
+    return editable_requirements
 
 
 def get_default_fs():

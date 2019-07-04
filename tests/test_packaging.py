@@ -4,6 +4,7 @@ import os
 import subprocess
 from subprocess import check_output
 import sys
+import shutil
 import tempfile
 from unittest import mock
 import zipfile
@@ -276,3 +277,24 @@ def test_create_conda_env():
         env_python_bin = os.path.join(env_unzipped_path, "bin", "python")
         os.chmod(env_python_bin, 0o755)
         check_output([env_python_bin, "-m", "pycodestyle", "--version"])
+
+
+def test_get_editable_requirements_from_current_venv():
+    with mock.patch(f"{MODULE_TO_TEST}._running_from_pex") as mock_running_from_pex:
+        mock_running_from_pex.return_value = True
+        with tempfile.TemporaryDirectory() as tempdir:
+            pkg = _get_editable_package_name()
+            _create_editable_files(tempdir, os.path.basename(pkg))
+            shutil.copytree(pkg, f"{tempdir}/{os.path.basename(pkg)}")
+
+            editable_requirements = packaging.get_editable_requirements_from_current_venv(
+                editable_packages_dir=tempdir
+            )
+            print(editable_requirements)
+            assert editable_requirements == {os.path.basename(pkg): pkg}
+
+
+def _create_editable_files(tempdir, pkg):
+    with open(f"{tempdir}/{packaging.EDITABLE_PACKAGES_INDEX}", "w") as file:
+        for repo in [pkg, "not-existing-pgk"]:
+            file.write(repo + "\n")

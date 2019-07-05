@@ -5,14 +5,12 @@ python:
   - "3.6"
 
 install:
-  - cd ~/tf-yarn
-  - pip install -r requirements.txt
-  - pip install -v --no-deps -e .
+  - pip install .
   - pip install pytest
   - pip freeze
 
 script:
-  - pytest tf-yarn/tests -vv
+  - pytest tests
 
 notifications:
   email: false

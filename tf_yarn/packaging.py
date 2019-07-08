@@ -370,7 +370,8 @@ def get_current_pex_filepath() -> str:
     """
     If we run from a pex, returns the path
     """
-    return os.path.abspath(os.path.dirname(__main__.__file__))
+    import _pex
+    return os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(_pex.__file__))))
 
 
 def get_editable_requirements_from_current_venv():

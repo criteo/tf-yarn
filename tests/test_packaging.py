@@ -245,10 +245,11 @@ def test_upload_env_to_hdfs_in_a_pex():
 
 
 def test_get_current_pex_filepath():
-    with mock.patch(f'{MODULE_TO_TEST}.__main__') as mock__main__:
-        mock__main__.__file__ = './current_directory/filename'
-        assert packaging.get_current_pex_filepath() == \
-            os.path.join(os.getcwd(), 'current_directory')
+    mock_pex = mock.Mock()
+    mock_pex.__file__ = './current_directory/filename.pex/.bootstrap/_pex/__init__.pyc'
+    sys.modules['_pex'] = mock_pex
+    assert packaging.get_current_pex_filepath() == \
+        os.path.join(os.getcwd(), 'current_directory/filename.pex')
 
 
 def conda_is_available():

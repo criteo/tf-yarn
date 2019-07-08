@@ -47,7 +47,7 @@ setup(
     packages=["tf_yarn"],
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.4.1"),
+    version=_check_add_criteo_environment("0.4.2"),
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

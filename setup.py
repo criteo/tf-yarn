@@ -1,6 +1,5 @@
 import os
-
-from setuptools import setup
+import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -42,12 +41,12 @@ def _check_add_criteo_environment(package_name):
     return package_name
 
 
-setup(
+setuptools.setup(
     name="tf_yarn",
-    packages=["tf_yarn"],
+    packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.4.2"),
+    version=_check_add_criteo_environment("0.4.3"),
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

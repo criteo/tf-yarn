@@ -152,12 +152,12 @@ def pack_current_venv_in_pex(output: str, reqs: Dict[str, str], new_env_diff: bo
     return pack_in_pex(reqs, output)
 
 
-def pack_venv_in_conda(env_path: str, reqs: Dict[str, str], new_env_diff: bool) -> str:
+def pack_venv_in_conda(output: str, reqs: Dict[str, str], new_env_diff: bool) -> str:
     if not new_env_diff:
-        conda_pack.pack(output=env_path)
-        return env_path
+        conda_pack.pack(output=output)
+        return output
     else:
-        return create_and_pack_conda_env(env_path, reqs)
+        return create_and_pack_conda_env(output, reqs)
 
 
 def create_and_pack_conda_env(env_path: str, reqs: Dict[str, str], ) -> str:

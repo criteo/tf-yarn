@@ -83,7 +83,11 @@ def single_server_topology(
     memory: int = MAX_MEMORY_CONTAINER,
     vcores: int = MAX_VCORES_CONTAINER
 ) -> Dict[str, TaskSpec]:
-    topology = {"chief": TaskSpec(memory=memory, vcores=vcores)}
+    topology = {
+        "chief": TaskSpec(memory=memory, vcores=vcores),
+        "evaluator": TaskSpec(memory=memory, vcores=vcores),
+        "tensorboard": TaskSpec(memory=memory, vcores=vcores)
+    }
     _check_general_topology(topology)
     return topology
 

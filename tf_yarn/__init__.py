@@ -27,11 +27,10 @@ from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
 
 from tf_yarn.topologies import (
-    ps_strategy_topology,
+    single_server_topology,
     TaskSpec, NodeLabel)
 from ._internal import (
     zip_path,
-    StaticDefaultDict,
     iter_tasks
 )
 from ._env import (
@@ -85,7 +84,7 @@ class Metrics(NamedTuple):
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
 
 
-TASK_SPEC_NONE = ps_strategy_topology()
+TASK_SPEC_NONE = single_server_topology()
 
 
 def _setup_pyenvs(
@@ -235,7 +234,7 @@ def _run_on_cluster(
 def run_on_yarn(
     pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
     experiment_fn: ExperimentFn,
-    task_specs: Dict[str, TaskSpec] = None,
+    task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
     *,
     skein_client: skein.Client = None,
     files: Dict[str, str] = None,
@@ -348,7 +347,7 @@ def run_on_yarn(
             cluster = _setup_skein_cluster(
                 pyenvs=pyenvs,
                 skein_client=skein_client,
-                task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+                task_specs=task_specs,
                 files=files,
                 env=env,
                 queue=queue,
@@ -376,7 +375,7 @@ def run_on_yarn(
 @contextmanager
 def standalone_client_mode(
         pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
-        task_specs: Dict[str, TaskSpec] = None,
+        task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
         tf_session_config: Optional[tf.ConfigProto] = None,
         *,
         skein_client: skein.Client = None,
@@ -455,7 +454,7 @@ def standalone_client_mode(
         cluster = _setup_skein_cluster(
             pyenvs=pyenvs,
             skein_client=skein_client,
-            task_specs=StaticDefaultDict(task_specs, default=TASK_SPEC_NONE),
+            task_specs=task_specs,
             files=files,
             env=env,
             queue=queue,

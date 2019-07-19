@@ -118,26 +118,6 @@ def zip_path(path: str, tempdir: str):
     return zip_path
 
 
-class StaticDefaultDict(dict):
-    """A ``dict`` with a static default value.
-
-    Unlike ``collections.defaultdict`` this implementation does not
-    implicitly update the mapping when queried with a missing key::
-
-        >>> d = StaticDefaultDict(default=42)
-        >>> d["foo"]
-        42
-        >>> d
-        {}
-    """
-    def __init__(self, *args, default, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.default = default
-
-    def __missing__(self, key):
-        return self.default
-
-
 def create_and_pack_conda_env(
     name: str,
     python: str,

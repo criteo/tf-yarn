@@ -15,7 +15,6 @@ from tf_yarn._internal import (
     reserve_sock_addr,
     xset_environ,
     zip_path,
-    StaticDefaultDict,
     create_and_pack_conda_env,
 )
 
@@ -75,13 +74,6 @@ def test_zip_path(tmpdir):
 
             assert zf.read("foo/bar.txt") == s.encode()
             assert zf.read("boo.bin") == b
-
-
-def test_static_default_dict():
-    d = StaticDefaultDict({"foo": 42}, default=100500)
-    assert d["foo"] == 42
-    assert d["bar"] == 100500
-    assert "bar" not in d
 
 
 def conda_is_available():

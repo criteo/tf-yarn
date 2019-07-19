@@ -70,7 +70,6 @@ class SkeinCluster(NamedTuple):
     client: skein.Client
     app: skein.ApplicationClient
     tasks: List[Tuple[str, int]]
-    cluster_spec: tf.train.ClusterSpec
     event_listener: Thread
     events: Dict[str, Dict[str, str]]
 
@@ -141,7 +140,7 @@ def _maybe_zip_task_files(files, tempdir):
     return task_files
 
 
-def _setup_cluster_tasks(
+def _setup_cluster_spec(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient,
     standalone_client_mode: bool
@@ -165,8 +164,7 @@ def _setup_skein_cluster(
         queue: str = "default",
         acls: ACLs = None,
         file_systems: List[str] = None,
-        log_conf_file: str = None,
-        standalone_client_mode: bool = False
+        log_conf_file: str = None
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
         "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
@@ -207,34 +205,31 @@ def _setup_skein_cluster(
         events: Dict[str, Dict[str, str]] = \
             {task: {} for task in iter_tasks(task_instances)}
         app = skein_client.submit_and_connect(spec)
+
         # Start a thread which collects all events posted by all tasks in kv store
         event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
         event_listener.start()
 
-        cluster_spec = _setup_cluster_tasks(task_instances, app, standalone_client_mode)
-
-        return SkeinCluster(skein_client, app, task_instances, cluster_spec, event_listener, events)
+        return SkeinCluster(skein_client, app, task_instances, event_listener, events)
 
 
 def _run_on_cluster(
     experiment_fn: ExperimentFn,
     cluster: SkeinCluster,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    path_hdfs_logs: str = None
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
 ) -> Optional[Metrics]:
     def _new_experiment_fn():
         return add_monitor_to_experiment(experiment_fn())
     new_experiment_fn = _new_experiment_fn
 
-    with _shutdown_on_exception(cluster.app, path_hdfs_logs):
-        # Attempt serialization early to avoid allocating unnecesary resources
-        serialized_fn = cloudpickle.dumps(new_experiment_fn)
-        with cluster.client:
-            return _execute_and_await_termination(
-                cluster,
-                serialized_fn,
-                eval_monitor_log_thresholds
-            )
+    # Attempt serialization early to avoid allocating unnecesary resources
+    serialized_fn = cloudpickle.dumps(new_experiment_fn)
+    with cluster.client:
+        return _execute_and_await_termination(
+            cluster,
+            serialized_fn,
+            eval_monitor_log_thresholds
+        )
 
 
 def run_on_yarn(
@@ -359,12 +354,15 @@ def run_on_yarn(
                 queue=queue,
                 acls=acls,
                 file_systems=file_systems,
-                log_conf_file=log_conf_file,
-                standalone_client_mode=False
+                log_conf_file=log_conf_file
             )
+            with _shutdown_on_exception(cluster.app, path_to_log_hdfs):
+                _setup_cluster_spec(cluster.tasks, cluster.app, False)
 
-            return _run_on_cluster(
-                experiment_fn, cluster, eval_monitor_log_thresholds, path_to_log_hdfs)
+                return _run_on_cluster(
+                    experiment_fn,
+                    cluster,
+                    eval_monitor_log_thresholds)
         except Exception:
             n_tries_max -= 1
             if n_tries_max == 0:
@@ -387,7 +385,8 @@ def standalone_client_mode(
         queue: str = "default",
         acls: ACLs = None,
         file_systems: List[str] = None,
-        log_conf_file: str = None):
+        log_conf_file: str = None,
+        path_to_log_hdfs: str = None):
     """
     https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
             /contrib/distribute/README.md#standalone-client-mode
@@ -444,6 +443,9 @@ def standalone_client_mode(
     log_conf_file
         optional file with log config, setups logging by default with INFO verbosity,
         if you specify a file here don't forget to also ship it to the containers via files arg
+
+    path_to_log_hdfs
+        Optional path. If specified, tf-yarn will copy hadoop logs into this path
     """
     cluster = None
     try:
@@ -459,12 +461,15 @@ def standalone_client_mode(
             queue=queue,
             acls=acls,
             file_systems=file_systems,
-            log_conf_file=log_conf_file,
-            standalone_client_mode=True
+            log_conf_file=log_conf_file
         )
-        _send_config_proto(cluster, tf_session_config)
 
-        yield cluster.cluster_spec
+        with _shutdown_on_exception(cluster.app, path_to_log_hdfs):
+            cluster_spec = _setup_cluster_spec(cluster.tasks, cluster.app, True)
+
+            _send_config_proto(cluster, tf_session_config)
+
+            yield cluster_spec
     finally:
         if cluster:
             broadcast(cluster.app, "stop", "1")

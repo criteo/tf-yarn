@@ -1,12 +1,13 @@
 from unittest import mock
 from tf_yarn import (
     _run_on_cluster,
-    _setup_cluster_tasks,
+    _setup_cluster_spec,
     get_safe_experiment_fn,
     SkeinCluster,
     Experiment,
     run_on_yarn
 )
+import traceback
 import skein
 import pytest
 import tensorflow as tf
@@ -51,7 +52,7 @@ sock_addrs = {
      True
      )
 ])
-def test__setup_cluster_tasks(
+def test_setup_cluster_spec(
         mock_skein_app,
         tasks_instances,
         expected_spec,
@@ -62,9 +63,11 @@ def test__setup_cluster_tasks(
             kv_store[f'{task_type}:{i}/init'] = sock_addrs[task_type][i].encode()
 
     mock_skein_app.kv.wait = kv_store.get
-    cluster_spec = _setup_cluster_tasks(tasks_instances,
-                                        mock_skein_app,
-                                        standalone_client_mode)
+    cluster_spec = _setup_cluster_spec(
+        tasks_instances,
+        mock_skein_app,
+        standalone_client_mode
+    )
 
     assert cluster_spec.as_dict() == expected_spec
 
@@ -73,19 +76,22 @@ def test_kill_skein_on_exception():
     def cloudpickle_raise_exception(*args, **kwargs):
         raise Exception("Cannot serialize your method!")
 
-    with mock.patch('tf_yarn._setup_pyenvs'):
-        with mock.patch('tf_yarn.cloudpickle.dumps') as mock_cloudpickle:
-            mock_cloudpickle.side_effect = cloudpickle_raise_exception
-            mock_app = mock.MagicMock(skein.ApplicationClient)
-            cluster = SkeinCluster(
-                client=None, app=mock_app, cluster_spec=dict(),
-                event_listener=None, events=None, tasks=[])
-            try:
-                _run_on_cluster(lambda: None, cluster)
-            except Exception:
-                pass
-            mock_app.shutdown.assert_called_once_with(
-                skein.model.FinalStatus.FAILED)
+    with mock.patch('tf_yarn._setup_skein_cluster') as mock_setup_skein_cluster:
+        with mock.patch('tf_yarn._setup_pyenvs'):
+            with mock.patch('tf_yarn.cloudpickle.dumps') as mock_cloudpickle:
+                mock_cloudpickle.side_effect = cloudpickle_raise_exception
+                mock_app = mock.MagicMock(skein.ApplicationClient)
+                mock_setup_skein_cluster.return_value = SkeinCluster(
+                    client=None, app=mock_app,
+                    event_listener=None, events=None,
+                    tasks=[])
+                try:
+                    run_on_yarn(None, None, {})
+                except Exception:
+                    print(traceback.format_exc())
+                    pass
+                mock_app.shutdown.assert_called_once_with(
+                    skein.model.FinalStatus.FAILED)
 
 
 def _experiment_fn(model_dir):

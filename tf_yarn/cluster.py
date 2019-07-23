@@ -25,6 +25,22 @@ def get_task() -> str:
     return os.environ["SKEIN_CONTAINER_ID"].replace("_", ":", 1)
 
 
+def get_task_type(task: str) -> str:
+    return task.split(':')[0]
+
+
+def is_worker(task_type: str) -> bool:
+    return task_type == 'worker'
+
+
+def is_evaluator(task_type: str) -> bool:
+    return task_type == 'evaluator'
+
+
+def is_chief(task_type: str) -> bool:
+    return task_type == 'chief'
+
+
 def get_task_description() -> typing.Tuple[str, int]:
     task = get_task()
     task_type, task_str = task.split(":", 1)

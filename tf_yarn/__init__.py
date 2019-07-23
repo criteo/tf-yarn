@@ -38,7 +38,7 @@ from ._env import (
     gen_task_cmd,
     PythonEnvDescription
 )
-from .cluster import aggregate_spec
+from tf_yarn import cluster
 from tf_yarn.experiment import Experiment
 from tf_yarn.evaluator_metrics import (
     add_monitor_to_experiment,
@@ -150,7 +150,7 @@ def _setup_cluster_spec(
         tasks_not_in_cluster.append('chief')
     cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
     app.kv[KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
-    return tf.train.ClusterSpec(aggregate_spec(app, list(iter_tasks(cluster_instances))))
+    return tf.train.ClusterSpec(cluster.aggregate_spec(app, list(iter_tasks(cluster_instances))))
 
 
 def _setup_skein_cluster(
@@ -214,7 +214,7 @@ def _setup_skein_cluster(
 
 def _run_on_cluster(
     experiment_fn: ExperimentFn,
-    cluster: SkeinCluster,
+    skein_cluster: SkeinCluster,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
 ) -> Optional[Metrics]:
     def _new_experiment_fn():
@@ -223,9 +223,9 @@ def _run_on_cluster(
 
     # Attempt serialization early to avoid allocating unnecesary resources
     serialized_fn = cloudpickle.dumps(new_experiment_fn)
-    with cluster.client:
+    with skein_cluster.client:
         return _execute_and_await_termination(
-            cluster,
+            skein_cluster,
             serialized_fn,
             eval_monitor_log_thresholds
         )
@@ -344,7 +344,7 @@ def run_on_yarn(
     n_tries_max = nb_retries + 1
     while True:
         try:
-            cluster = _setup_skein_cluster(
+            skein_cluster = _setup_skein_cluster(
                 pyenvs=pyenvs,
                 skein_client=skein_client,
                 task_specs=task_specs,
@@ -355,12 +355,12 @@ def run_on_yarn(
                 file_systems=file_systems,
                 log_conf_file=log_conf_file
             )
-            with _shutdown_on_exception(cluster.app, path_to_log_hdfs):
-                _setup_cluster_spec(cluster.tasks, cluster.app, False)
+            with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
+                _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
 
                 return _run_on_cluster(
                     experiment_fn,
-                    cluster,
+                    skein_cluster,
                     eval_monitor_log_thresholds)
         except Exception:
             n_tries_max -= 1
@@ -451,7 +451,7 @@ def standalone_client_mode(
         pyenvs = _setup_pyenvs(
             pyenv_zip_path,
             standalone_client_mode=True)
-        cluster = _setup_skein_cluster(
+        skein_cluster = _setup_skein_cluster(
             pyenvs=pyenvs,
             skein_client=skein_client,
             task_specs=task_specs,
@@ -463,15 +463,15 @@ def standalone_client_mode(
             log_conf_file=log_conf_file
         )
 
-        with _shutdown_on_exception(cluster.app, path_to_log_hdfs):
-            cluster_spec = _setup_cluster_spec(cluster.tasks, cluster.app, True)
+        with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
+            cluster_spec = _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, True)
 
-            _send_config_proto(cluster, tf_session_config)
+            _send_config_proto(skein_cluster, tf_session_config)
 
             yield cluster_spec
     finally:
-        if cluster:
-            broadcast(cluster.app, "stop", "1")
+        if skein_cluster:
+            broadcast(skein_cluster.app, "stop", "1")
 
 
 def get_safe_experiment_fn(full_fn_name: str, *args):
@@ -497,10 +497,10 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
 
 
 def _send_config_proto(
-        cluster: SkeinCluster,
+        skein_cluster: SkeinCluster,
         tf_session_config: tf.ConfigProto):
     serialized_fn = cloudpickle.dumps(tf_session_config)
-    cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
+    skein_cluster.app.kv[KV_TF_SESSION_CONFIG] = serialized_fn
 
 
 @contextmanager
@@ -528,32 +528,33 @@ def _shutdown_on_exception(app: skein.ApplicationClient,
 
 
 def _execute_and_await_termination(
-    cluster: SkeinCluster,
+    skein_cluster: SkeinCluster,
     serialized_fn: bytes,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     poll_every_secs: int = 10
 ) -> Optional[Metrics]:
-    cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
+    skein_cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
     eval_metrics_logger = EvaluatorMetricsLogger(
-        [task for task in iter_tasks(cluster.tasks) if task.startswith('evaluator')],
-        cluster.app,
+        [task for task in iter_tasks(skein_cluster.tasks) if task.startswith('evaluator')],
+        skein_cluster.app,
         eval_monitor_log_thresholds
     )
     one_shot_metrics_logger = OneShotMetricsLogger(
-        cluster.app,
-        {task: ['url'] for task in iter_tasks(cluster.tasks) if task.startswith('tensorboard')}
+        skein_cluster.app,
+        {task: ['url'] for task in iter_tasks(skein_cluster.tasks)
+         if task.startswith('tensorboard')}
     )
     state = None
     while True:
-        report = cluster.client.application_report(cluster.app.id)
+        report = skein_cluster.client.application_report(skein_cluster.app.id)
         logger.info(
-            f"Application report for {cluster.app.id} (state: {report.state})")
+            f"Application report for {skein_cluster.app.id} (state: {report.state})")
         if state != report.state:
             logger.info(_format_app_report(report))
 
         if report.final_status != "undefined":
-            cluster.event_listener.join()
-            log_events, metrics = _handle_events(cluster.events)
+            skein_cluster.event_listener.join()
+            log_events, metrics = _handle_events(skein_cluster.events)
             logger.info(log_events)
             if report.final_status == "failed":
                 raise RunFailed
@@ -606,15 +607,6 @@ def _aggregate_events(
 def _handle_events(
     events: Dict[str, Dict[str, str]]
 ) -> Tuple[str, Metrics]:
-    def is_worker(task: str) -> bool:
-        return task == 'worker'
-
-    def is_evaluator(task: str) -> bool:
-        return task == 'evaluator'
-
-    def is_chief(task: str) -> bool:
-        return task == 'chief'
-
     header = []
     details = []
     min_training_start_time = timedelta.max
@@ -644,25 +636,25 @@ def _handle_events(
                                                           - float(stages['container_start_time'])))
 
         train_eval_time_per_node[task] = None
-        task_type = task.split(':')[0]
+        task_type = cluster.get_task_type(task)
         if 'train_eval_start_time' in stages and 'train_eval_stop_time' in stages and not exception:
             start_time = timedelta(seconds=float(stages['train_eval_start_time']))
             stop_time = timedelta(seconds=float(stages['train_eval_stop_time']))
             train_eval_time_per_node[task] = stop_time - start_time
-            if is_worker(task_type) or is_chief(task_type):
+            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
                 if start_time < min_training_start_time:
                     min_training_start_time = start_time
                 if stop_time > max_training_stop_time:
                     max_training_stop_time = stop_time
-            elif is_evaluator(task_type):
+            elif cluster.is_evaluator(task_type):
                 if start_time < min_eval_start_time:
                     min_eval_start_time = start_time
                 if stop_time > max_eval_stop_time:
                     max_eval_stop_time = stop_time
         else:
-            if is_worker(task_type) or is_chief(task_type):
+            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
                 valid_training_time = False
-            elif is_evaluator(task_type):
+            elif cluster.is_evaluator(task_type):
                 valid_eval_time = False
 
         header.append(f"{task:>16}  {sock_addr}  {status}  {logs}"

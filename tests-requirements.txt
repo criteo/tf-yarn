@@ -1,2 +1,3 @@
-pytest
+coverage
 hadoop-test-cluster
+pytest

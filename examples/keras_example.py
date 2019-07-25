@@ -2,7 +2,6 @@
     Full example of using TF-Yarn to run Keras on YARN.
 """
 import sys
-import subprocess
 import getpass
 import gzip
 import logging

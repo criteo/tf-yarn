@@ -446,7 +446,6 @@ def standalone_client_mode(
     path_to_log_hdfs
         Optional path. If specified, tf-yarn will copy hadoop logs into this path
     """
-    cluster = None
     try:
         pyenvs = _setup_pyenvs(
             pyenv_zip_path,

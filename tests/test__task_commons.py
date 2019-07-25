@@ -12,9 +12,10 @@ import tensorflow as tf
 
 from tf_yarn.__init__ import Experiment
 from tf_yarn._internal import iter_tasks, MonitoredThread
-from tf_yarn._task_commons import matches_device_filters, \
-    _prepare_container, _get_experiment, _execute_dispatched_function, \
-    wait_for_connected_tasks, _shutdown_container
+from tf_yarn._task_commons import (
+    matches_device_filters,  _prepare_container, _get_experiment,
+    _execute_dispatched_function, wait_for_connected_tasks, _shutdown_container,
+)
 
 
 MODULE_TO_TEST = "tf_yarn._task_commons"
@@ -77,14 +78,13 @@ def test__get_experiment_exception():
         stack.enter_context(patch(f'{MODULE_TO_TEST}.cluster'))
         mocked_event = stack.enter_context(patch(f'{MODULE_TO_TEST}.event'))
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
-        experiment_obj = 'obj'
 
         def experiment_f():
             raise Exception()
 
         mocked_client.kv.wait.return_value = cloudpickle.dumps(experiment_f)
         with pytest.raises(Exception):
-            returned_object = _get_experiment(mocked_client)
+            _get_experiment(mocked_client)
         mocked_event.start_event.assert_called_once()
         mocked_event.stop_event.assert_called_once()
 

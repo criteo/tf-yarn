@@ -1,5 +1,11 @@
 # tf-yarnᵝ
 
+tf-yarn is a Python library we have built at Criteo for training TensorFlow models on a YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
+
+It supports running on one worker or on multiple workers with different distribution strategies, it can run on CPUs or GPUs and also runs with the recently added standalone client mode, and this with just a few lines of code.
+
+Its API provides an easy entry point for working with Estimators. Keras is currently supported via the [model_to_estimator](https://www.tensorflow.org/api_docs/python/tf/keras/estimator/model_to_estimator) conversion function, and low-level distributed TensorFlow via standalone client mode API. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
+
 ![tf-yarn](https://github.com/criteo/tf-yarn/blob/master/skein.png?raw=true)
 
 ## Installation
@@ -39,36 +45,37 @@ $ check_hadoop_env
 # INFO:tf_yarn.bin.check_hadoop_env:Hadoop setup: OK
 ```
 
-## Quickstart
+## tf-yarn API's
 
-The core abstraction in tf-yarn is called an `ExperimentFn`. It is
-a function returning a triple of an `Estimator`, and two specs --
-`TrainSpec` and `EvalSpec`.
+tf-yarn comes with two API's to launch a training — run_on_yarn and standalone_client_mode.
 
-Here is a stripped down `experiment_fn` from
-[`examples/linear_classifier_example.py`][linear_classifier_example]
-to give you an idea of how it might look:
+### run_on_yarn
+
+The only abstraction tf-yarn adds on top of the ones already present in
+TensorFlow is `experiment_fn`. It is a function returning a triple of one `Estimator` and two specs -- `TrainSpec` and `EvalSpec`.
+
+Here is a stripped down `experiment_fn` from one of the provided [examples][linear_classifier_example] to give you an idea of how it might look:
 
 ```python
 from tf_yarn import Experiment
 
 def experiment_fn():
-    # ...
-    estimator = tf.estimator.LinearClassifier(...)
-    return Experiment(
-        estimator,
-        tf.estimator.TrainSpec(train_input_fn),
-        tf.estimator.EvalSpec(eval_input_fn)
+  # ...
+  estimator = tf.estimator.DNNClassifier(...)
+  return Experiment(
+    estimator,
+    tf.estimator.TrainSpec(train_input_fn, max_steps=...),
+    tf.estimator.EvalSpec(eval_input_fn)
+ )
 ```
 
-An experiment can be scheduled on YARN using the `run_on_yarn` function which
-takes three required arguments: python environment(s), `experiment_fn`,
-and a dictionary specifying how much resources to allocate for each of the
-distributed TensorFlow task types. The example uses the [Wine Quality][wine-quality]
-dataset from UCI ML repository. With just under 5000 training instances available,
-there is no need for multi-node training, meaning that a `"chief"` task complemented by an
-`"evaluator"` would manage just fine. Note that each task will be executed
-in its own YARN container.
+An experiment can be scheduled on YARN using the run_on_yarn function which takes three required arguments:
+
+- `pyenv_zip_path` which contains the tf-yarn modules and dependencies like TensorFlow to be shipped to the cluster. pyenv_zip_path can be generated easily with a helper function based on the current installed virtual environment;
+- `experiment_fn` as described above;
+- `task_specs` dictionary specifying how much resources to allocate for each of the distributed TensorFlow task type.
+
+The example uses the [Wine Quality][wine-quality] dataset from UCI ML repository. With just under 5000 training instances available, there is no need for multi-node training, meaning that a chief complemented by an evaluator would manage just fine. Note that each task will be executed in its own YARN container.
 
 ```python
 from tf_yarn import TaskSpec, run_on_yarn
@@ -79,9 +86,9 @@ run_on_yarn(
     pyenv_zip_path,
     experiment_fn,
     task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-        "evaluator": TaskSpec(memory=2**10, vcores=1),
-        "tensorboard": TaskSpec(memory=2**10, vcores=1)
+        "chief": TaskSpec(memory="2 GiB", vcores=4),
+        "evaluator": TaskSpec(memory="2 GiB", vcores=1),
+        "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
     }
 )
 ```
@@ -98,26 +105,70 @@ run_on_yarn(
 )
 ```
 
+Under the hood, the experiment function is shipped to each container, evaluated and then passed to the `train_and_evaluate` function.
+
+```python
+experiment = experiment_fn()
+tf.estimator.train_and_evaluate(
+  experiment.estimator,
+  experiment.train_spec,
+  experiment.eval_spec
+)
+```
+
 [linear_classifier_example]: https://github.com/criteo/tf-yarn/blob/master/examples/linear_classifier_example.py
 [wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
 
-## Distributed TensorFlow 101
+### standalone_client_mode
 
-The following is a brief summary of the core distributed TensorFlow
-concepts relevant to [training estimators][train-and-evaluate]. Please refer
-to the [official documentation][distributed-tf] for the full version.
+[Standalone client mode](https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/distribute/README.md?#standalone-client-mode) keeps most of the previous concepts. Instead of calling `train_and_evaluate` on each worker, one just spawns the TensorFlow server on each worker and then locally runs `train_and_evaluate` on the client. TensorFlow will take care of sending the graph to each worker. This removes the burden of having to ship manually the experiment function to the containers.
 
-Distributed TensorFlow operates in terms of tasks. A task has a type which
-defines its purpose in the distributed TensorFlow cluster. ``"worker"`` tasks
-headed by the `"chief"` worker do model training. The `"chief"` additionally
-handles checkpointing, saving/restoring the model, etc. The model itself is
-stored on one or more `"ps"` tasks. These tasks typically do not compute
-anything. Their sole purpose is serving the variables of the model. Finally,
-the `"evaluator"` task is responsible for periodically evaluating the model.
+Here is the previous example in Standalone client mode:
 
-At the minimum, a cluster must have a single `"chief"` task. However, it
-is a good idea to complement it by the `"evaluator"` to allow for running
-the evaluation in parallel with the training.
+```python
+from tensorflow.contrib.distribute import DistributeConfig, ParameterServerStrategy
+from tf_yarn import standalone_client_mode, TaskSpec
+
+with standalone_client_mode(
+     task_specs={
+       "worker": TaskSpec(memory=4 * 2**10, vcores=4, instances=2),
+       "ps": TaskSpec(memory=4 * 2**10, vcores=4, instances=1)}
+) as cluster_spec:
+    distrib_config = DistributeConfig(
+      train_distribute=ParameterServerStrategy(),
+      remote_cluster=cluster_spec
+    )
+    estimator = tf.estimator.DNNClassifier(
+      ...
+      config=tf.estimator.RunConfig(
+        experimental_distribute=distrib_config
+      )
+    )
+
+    tf.estimator.train_and_evaluate(
+      estimator,
+      tf.estimator.TrainSpec(...),
+      tf.estimator.EvalSpec(...))
+```
+
+`standalone_client_mode`  takes care of creating the `ClusterSpec` as described before. We activate `ParameterServerStrategy` in the `RunConfig` and then call `train_and_evaluate`.
+
+In addition to training estimators, Standalone client mode also gives access to TensorFlow’s low-level API. Have a look at the [examples](https://github.com/criteo/tf-yarn/blob/master/examples/session_run_example.py) for more information.
+
+## Distributed TensorFlow
+
+The following is a brief summary of the core distributed TensorFlow concepts relevant to training [estimators](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate) with the ParameterServerStrategy, as it is the distribution strategy activated by default when training Estimators on multiple nodes.
+
+Distributed TensorFlow operates in terms of tasks.
+A task has a type which defines its purpose in the distributed TensorFlow cluster:
+- `worker` tasks headed by the `chief` doing model training
+- `chief` task additionally handling checkpoints, saving/restoring the model, etc.
+- `ps`  tasks (aka parameter servers) storing the model itself. These tasks typically do not compute anything.
+Their sole purpose is serving the model variables
+- `evaluator` task periodically evaluating the model from the saved checkpoint
+
+The types of tasks can depend on the distribution strategy, for example, ps tasks are only used by ParameterServerStrategy.
+The following picture presents an example of a cluster setup with 2 workers, 1 chief, 1 ps and 1 evaluator.
 
 ```
 +-----------+              +---------+   +----------+   +----------+
@@ -131,38 +182,52 @@ the evaluation in parallel with the training.
                +---------+   +------+
 ```
 
-[distributed-tf]: https://www.tensorflow.org/deploy/distributed
-[train-and-evaluate]: https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate
+The cluster is defined by a ClusterSpec, a mapping from task types to their associated network addresses. For instance, for the above example, it looks like that:
+
+```
+{
+  "chief": ["chief.example.com:2125"],
+  "worker": ["worker0.example.com:6784",
+             "worker1.example.com:6475"],
+  "ps": ["ps0.example.com:7419"],
+  "evaluator": ["evaluator.example.com:8347"]
+}
+```
+Starting a task in the cluster requires a ClusterSpec. This means that the spec should be fully known before starting any of the tasks.
+
+Once the cluster is known, we need to export the ClusterSpec through the [TF_CONFIG](https://cloud.google.com/ml-engine/docs/tensorflow/distributed-training-details) environment variable and start the TensorFlow server on each container.
+
+Then we can run the [train-and-evaluate](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate) function on each container.
+We just launch the same function as in local training mode, TensorFlow will automatically detect that we have set up a ClusterSpec and start a distributed learning.
+
+You can find more information about distributed Tensorflow [here](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/distributed.md) and about distributed training Estimators [here](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate).
 
 ## Training with multiple workers
 
-Multi-worker clusters require at least a single parameter server aka `"ps"` task
-to store the variables being updated by the `"chief"` and `"worker"` tasks. It is
-generally a good idea to give `"ps"` tasks >1 vcores to allow for concurrent I/O
-processing.
+Activating the previous example in tf-yarn is just changing the cluster_spec by adding the additional `worker` and `ps` instances: 
 
 ```python
 run_on_yarn(
     ...,
     task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-        "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=8),
-        "ps": TaskSpec(memory=2 * 2**10, vcores=8),
-        "evaluator": TaskSpec(memory=2**10, vcores=1),
-        "tensorboard": TaskSpec(memory=2**10, vcores=1)
+        "chief": TaskSpec(memory="2 GiB", vcores=4),
+        "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2),
+        "ps": TaskSpec(memory="2 GiB", vcores=8),
+        "evaluator": TaskSpec(memory="2 GiB", vcores=1),
+        "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
     }
 )
 ```
 
 ## Configuring the Python interpreter and packages
 
-tf-yarn needs to ship an isolated virtual environment to the containers. 
+tf-yarn needs to ship an isolated virtual environment to the containers.
 
-You can use the packaging module to generate a package on hdfs based on your current installed virtual environment.
+You can use the packaging module to generate a package on hdfs based on your current installed Virtual Environment.
 (You should have installed the dependencies from `requirements.txt` first `pip install -r requirements.txt`)
-This works if you use conda and virtual environments.
+This works if you use Anaconda and also with [Virtual Environments](https://docs.python.org/3/tutorial/venv.html).
 
-By default the generated package is a [pex][pex] package.
+By default the generated package is a [pex][pex] package. The packaging module will generate the pex package, upload it to hdfs and you can start tf_yarn by providing the hdfs path.
 
 ```python
 pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
@@ -171,9 +236,9 @@ run_on_yarn(
 )
 ```
 
-By specifiying your own packaging.CONDA_PACKER to `upload_env_to_hdfs` it will use [conda-pack][conda-pack] to create the package.
+If you hosting evironment is Anaconda `upload_env_to_hdfs` the packaging module will use [conda-pack][conda-pack] to create the package.
 
-You can also directly use the command line tools provided by [conda-pack][conda-pack] and [pex][pex]
+You can also directly use the command line tools provided by [conda-pack][conda-pack] and [pex][pex] to generate the packages.
 
 For pex you can run this command in the root directory to create the package (it includes all requirements from setup.py)
 ```
@@ -210,15 +275,17 @@ to run on the GPU ones:
    A good rule of a thumb is to run compute heavy `"chief"` and `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
 3. Generate two python environements: one with Tensorflow for CPUs and one
-   with Tensorflow for GPUs. Parameters additional_packages and ignored_packages
-   of upload_env_to_hdfs are only supported with PEX packet
+   with Tensorflow for GPUs. You need to provide a custom path in archive_on_hdfs
+   as the default one is already use by the CPU pyenv_zip_path
 
 ```python
+import getpass
 from tf_yarn import NodeLabel
 from tf_yarn import packaging
 
 pyenv_zip_path_cpu, _ = packaging.upload_env_to_hdfs()
 pyenv_zip_path_gpu, _ = packaging.upload_env_to_hdfs(
+    archive_on_hdfs=f"{packaging.get_default_fs()}/user/{getpass.getuser()}/envs/tf_yarn_gpu_env.pex",
     additional_packages={"tensorflow-gpu", "2.0.0a0"},
     ignored_packages={"tensorflow"}
 )
@@ -226,9 +293,9 @@ run_on_yarn(
     {NodeLabel.CPU: pyenv_zip_path_cpu, NodeLabel.GPU: pyenv_zip_path_gpu}
     experiment_fn,
     task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4, label=NodeLabel.GPU),
-        "evaluator": TaskSpec(memory=2**10, vcores=1),
-        "tensorboard": TaskSpec(memory=2**10, vcores=1)
+        "chief": TaskSpec(memory="2 GiB", vcores=4, label=NodeLabel.GPU),
+        "evaluator": TaskSpec(memory="1 GiB", vcores=1),
+        "tensorboard": TaskSpec(memory="1 GiB", vcores=1)
     },
     queue="ml-gpu"
 )
@@ -274,11 +341,11 @@ If you use a custom task_specs, you must add explicitly a Tensorboard task to yo
 run_on_yarn(
     ...,
     task_specs={
-        "chief": TaskSpec(memory=2 * 2**10, vcores=4),
-        "worker": TaskSpec(memory=2 * 2**10, vcores=4, instances=8),
-        "ps": TaskSpec(memory=2 * 2**10, vcores=8),
-        "evaluator": TaskSpec(memory=2**10, vcores=1),
-        "tensorboard": TaskSpec(memory=2**10, vcores=1, instances=1, termination_timeout_seconds=30)
+        "chief": TaskSpec(memory="2 GiB", vcores=4),
+        "worker": TaskSpec(memory="2 GiB", vcores=4, instances=8),
+        "ps": TaskSpec(memory="2 GiB", vcores=8),
+        "evaluator": TaskSpec(memory="2 GiB", vcores=1),
+        "tensorboard": TaskSpec(memory="2 GiB", vcores=1, instances=1, termination_timeout_seconds=30)
     }
 )
 ```

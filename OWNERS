@@ -1,0 +1,7 @@
+inherited: true
+# sre-core-services owns the common part of the repo but most apps
+# are owned by their team. You should ask for review to the right team
+# (look at OWNERS file in the directory of the file you modify)
+# see https://confluence.criteois.com/x/0fORFw for details
+owners:
+- group/engine-prediction-service

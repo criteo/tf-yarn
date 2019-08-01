@@ -34,6 +34,8 @@ from pex.pex_builder import PEXBuilder
 from pex.resolvable import Resolvable
 from pex.resolver import resolve_multi, Unsatisfiable, Untranslateable
 from pex.resolver_options import ResolverOptionsBuilder
+from pex.pex_info import PexInfo
+from pex.interpreter import PythonInterpreter
 
 from tf_yarn import _criteo
 
@@ -92,13 +94,16 @@ def format_requirements(requirements: Dict[str, str]) -> List[str]:
         return [name + "==" + version for name, version in requirements.items()]
 
 
-def pack_in_pex(requirements: Dict[str, str], output: str
+def pack_in_pex(requirements: Dict[str, str],
+                output: str,
+                ignored_packages: Collection[str] = []
                 ) -> str:
     """
     Pack current environment using a pex.
 
     :param requirements: list of requirements (ex ['tensorflow==0.1.10'])
     :param output: location of the pex
+    :param ignored_packages: packages to be exluded from pex
     :return: destination of the archive, name of the pex
     """
     requirements_to_install = format_requirements(requirements)
@@ -116,11 +121,22 @@ def pack_in_pex(requirements: Dict[str, str], output: str
         fetchers=fetchers)
     resolvables = [Resolvable.get(req, resolver_option_builder) for
                    req in requirements_to_install]
-    pex_builder = PEXBuilder(copy=True)
+
+    interpreter = PythonInterpreter.get()
+    pex_info = PexInfo.default(interpreter)
+    pex_info.ignore_errors = True
+    pex_builder = PEXBuilder(
+        copy=True,
+        interpreter=interpreter,
+        pex_info=pex_info)
 
     try:
         resolveds = resolve_multi(resolvables, use_manylinux=True)
         for resolved in resolveds:
+            if resolved.distribution.key in ignored_packages:
+                _logger.debug("Ignoring requirement %s", resolved.distribution)
+                continue
+
             _logger.debug("Add requirement %s", resolved.distribution)
             pex_builder.add_distribution(resolved.distribution)
             pex_builder.add_requirement(resolved.requirement)
@@ -151,18 +167,20 @@ def _get_packages(editable: bool, executable: str = sys.executable):
             ["distribute", "wheel", "pip", "setuptools"]]
 
 
-def pack_current_venv_in_pex(output: str, reqs: Dict[str, str], new_env_diff: bool = False) -> str:
-    """
-    Pack current environment using a pex
-
-    :param output: location of the pex
-    :return: destination in hdfs, name of the pex
-    """
-    return pack_in_pex(reqs, output)
+def pack_current_venv_in_pex(
+        output: str,
+        reqs: Dict[str, str],
+        additional_packages: Dict[str, str],
+        ignored_packages: Collection[str]) -> str:
+    return pack_in_pex(reqs, output, ignored_packages)
 
 
-def pack_venv_in_conda(output: str, reqs: Dict[str, str], new_env_diff: bool) -> str:
-    if not new_env_diff:
+def pack_venv_in_conda(
+        output: str,
+        reqs: Dict[str, str],
+        additional_packages: Dict[str, str],
+        ignored_packages: Collection[str]) -> str:
+    if len(additional_packages) == 0 and len(ignored_packages) == 0:
         conda_pack.pack(output=output)
         return output
     else:
@@ -222,7 +240,7 @@ def _call(cmd, **kwargs):
 class Packer(NamedTuple):
     env_name: str
     extension: str
-    pack: Callable[[str, Dict[str, str], bool], str]
+    pack: Callable[[str, Dict[str, str], Dict[str, str], Collection[str]], str]
 
 
 def get_env_name(env_var_name) -> str:
@@ -294,8 +312,8 @@ def _dump_archive_metadata(archive_on_hdfs: str,
 def upload_env_to_hdfs(
         archive_on_hdfs: str = None,
         packer=None,
-        additional_packages: Optional[Dict[str, str]] = None,
-        ignored_packages: Optional[Collection[str]] = None
+        additional_packages: Dict[str, str] = {},
+        ignored_packages: Collection[str] = []
 ) -> Tuple[str, str]:
     if packer is None:
         if _is_conda_env():
@@ -337,23 +355,19 @@ def upload_env_to_hdfs(
 def upload_env_to_hdfs_from_venv(
         archive_on_hdfs: str,
         packer=PEX_PACKER,
-        additional_packages: Optional[Dict[str, str]] = None,
-        ignored_packages: Optional[Collection[str]] = None
+        additional_packages: Dict[str, str] = {},
+        ignored_packages: Collection[str] = []
 ):
     current_packages = {package["name"]: package["version"]
                         for package in get_non_editable_requirements()}
 
-    new_env_diff = False
-
-    if additional_packages and len(additional_packages) > 0:
+    if len(additional_packages) > 0:
         current_packages.update(additional_packages)
-        new_env_diff = True
 
-    if ignored_packages and len(ignored_packages) > 0:
+    if len(ignored_packages) > 0:
         for name in ignored_packages:
             if name in current_packages:
                 current_packages.pop(name)
-                new_env_diff = True
 
     if not _is_archive_up_to_date(archive_on_hdfs, current_packages):
         _logger.info(
@@ -363,7 +377,9 @@ def upload_env_to_hdfs_from_venv(
         tmp_dir = _get_tmp_dir()
         archive_local = packer.pack(
             output=f"{tmp_dir}/{packer.env_name}.{packer.extension}",
-            reqs=current_packages, new_env_diff=new_env_diff
+            reqs=current_packages,
+            additional_packages=additional_packages,
+            ignored_packages=ignored_packages
         )
         tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
         tf.gfile.Copy(archive_local, archive_on_hdfs, overwrite=True)

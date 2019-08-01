@@ -194,7 +194,7 @@ def test_upload_env():
 
         packaging.upload_env_to_hdfs(MYARCHIVE_FILENAME, packaging.PEX_PACKER)
         mock_packer.assert_called_once_with(
-            {"a": "1.0", "b": "2.0"}, Any(str)
+            {"a": "1.0", "b": "2.0"}, Any(str), []
         )
         mock_tf.gfile.Copy.assert_called_once_with(MYARCHIVE_FILENAME,
                                                    MYARCHIVE_FILENAME,
@@ -204,10 +204,10 @@ def test_upload_env():
         packaging.upload_env_to_hdfs(
             MYARCHIVE_FILENAME, packaging.PEX_PACKER,
             additional_packages={"c": "3.0"},
-            ignored_packages={"a"}
+            ignored_packages=["a"]
         )
         mock_packer.assert_called_once_with(
-            {"c": "3.0", "b": "2.0"}, Any(str)
+            {"c": "3.0", "b": "2.0"}, Any(str), ["a"]
         )
 
 

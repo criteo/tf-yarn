@@ -29,16 +29,13 @@ from skein.model import FinalStatus, ApplicationReport, ACLs
 from tf_yarn.topologies import (
     single_server_topology,
     TaskSpec, NodeLabel)
-from ._internal import (
-    zip_path,
-    iter_tasks
-)
+from ._internal import iter_tasks
 from ._env import (
     gen_pyenv_from_existing_archive,
     gen_task_cmd,
     PythonEnvDescription
 )
-from tf_yarn import cluster
+from tf_yarn import cluster, packaging
 from tf_yarn.experiment import Experiment
 from tf_yarn.evaluator_metrics import (
     add_monitor_to_experiment,
@@ -107,7 +104,7 @@ def _setup_task_env(
         env: Dict[str, str] = {}
 ):
     task_files = _maybe_zip_task_files(files or {}, tempdir)
-    task_files[__package__] = zip_path(here, tempdir)
+    task_files[__package__] = packaging.zip_path(here, False, tempdir)
 
     _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
 
@@ -133,7 +130,7 @@ def _maybe_zip_task_files(files, tempdir):
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = zip_path(source, tempdir)
+            source = packaging.zip_path(source, False, tempdir)
 
         task_files[target] = source
     return task_files

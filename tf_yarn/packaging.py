@@ -50,7 +50,14 @@ EDITABLE_PACKAGES_INDEX = 'editable_packages_index'
 _logger = logging.getLogger(__name__)
 
 
-def zip_path(py_dir: str, include_base_name=True):
+def _get_tmp_dir():
+    tmp_dir = f"/tmp/{uuid.uuid1()}"
+    _logger.debug(f"local tmp_dir {tmp_dir}")
+    os.makedirs(tmp_dir, exist_ok=True)
+    return tmp_dir
+
+
+def zip_path(py_dir: str, include_base_name=True, tmp_dir: str = _get_tmp_dir()):
     """
     Zip current directory
 
@@ -60,7 +67,6 @@ def zip_path(py_dir: str, include_base_name=True):
         for pyspark zip files it should be True)
     :return: destination of the archive
     """
-    tmp_dir = _get_tmp_dir()
     py_archive = os.path.join(
         tmp_dir,
         os.path.basename(py_dir) + '.zip'
@@ -70,8 +76,8 @@ def zip_path(py_dir: str, include_base_name=True):
         for root, dirs, files in os.walk(py_dir):
             for file in files:
                 # do not include .pyc files, it makes the import
-                # fails for no obvious reason
-                if file.endswith(".py"):
+                # fail for no obvious reason
+                if not file.endswith(".pyc"):
                     zipf.write(
                         os.path.join(root, file),
                         os.path.join(
@@ -429,13 +435,6 @@ def get_editable_requirements_from_current_venv(
 
 def get_default_fs():
     return subprocess.check_output("hdfs getconf -confKey fs.defaultFS".split()).strip().decode()
-
-
-def _get_tmp_dir():
-    tmp_dir = f"/tmp/{uuid.uuid1()}"
-    _logger.debug(f"local tmp_dir {tmp_dir}")
-    os.makedirs(tmp_dir, exist_ok=True)
-    return tmp_dir
 
 
 def _is_conda_env():

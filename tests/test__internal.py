@@ -6,7 +6,6 @@ import sys
 import tempfile
 import zipfile
 from subprocess import check_output
-from zipfile import ZipFile, is_zipfile
 
 import pytest
 
@@ -14,7 +13,6 @@ from tf_yarn._internal import (
     MonitoredThread,
     reserve_sock_addr,
     xset_environ,
-    zip_path,
     create_and_pack_conda_env,
 )
 
@@ -53,27 +51,6 @@ def test_xset_environ_failure(monkeypatch):
         xset_environ(foo="boo")
 
     assert os.environ["foo"] == "bar"
-
-
-def test_zip_path(tmpdir):
-    s = "Hello, world!"
-    tmpdir.mkdir("foo").join("bar.txt").write_text(s, encoding="utf-8")
-    b = 0xffff.to_bytes(4, "little")
-    tmpdir.join("boo.bin").write_binary(b)
-
-    with tempfile.TemporaryDirectory() as tempdirpath:
-        zipped_path = zip_path(str(tmpdir), tempdirpath)
-        assert os.path.isfile(zipped_path)
-        assert zipped_path.endswith(".zip")
-        assert is_zipfile(zipped_path)
-        with ZipFile(zipped_path) as zf:
-            zipped = {zi.filename for zi in zf.filelist}
-            assert "foo/" in zipped
-            assert "foo/bar.txt" in zipped
-            assert "boo.bin" in zipped
-
-            assert zf.read("foo/bar.txt") == s.encode()
-            assert zf.read("boo.bin") == b
 
 
 def conda_is_available():

@@ -294,6 +294,29 @@ def test_get_editable_requirements_from_current_venv():
             assert editable_requirements == {os.path.basename(pkg): pkg}
 
 
+def test_zip_path(tmpdir):
+    s = "Hello, world!"
+    tmpdir.mkdir("foo").join("bar.txt").write_text(s, encoding="utf-8")
+    tmpdir.mkdir("py-lib").join("bar.py").write_text(s, encoding="utf-8")
+    b = 0xffff.to_bytes(4, "little")
+    tmpdir.join("boo.bin").write_binary(b)
+
+    with tempfile.TemporaryDirectory() as tempdirpath:
+        zipped_path = packaging.zip_path(str(tmpdir), False, tempdirpath)
+        assert os.path.isfile(zipped_path)
+        assert zipped_path.endswith(".zip")
+        assert zipfile.is_zipfile(zipped_path)
+        with zipfile.ZipFile(zipped_path) as zf:
+            zipped = {zi.filename for zi in zf.filelist}
+            assert "foo/bar.txt" in zipped
+            assert "py-lib/bar.py" in zipped
+            assert "boo.bin" in zipped
+
+            assert zf.read("foo/bar.txt") == s.encode()
+            assert zf.read("py-lib/bar.py") == s.encode()
+            assert zf.read("boo.bin") == b
+
+
 def _create_editable_files(tempdir, pkg):
     with open(f"{tempdir}/{packaging.EDITABLE_PACKAGES_INDEX}", "w") as file:
         for repo in [pkg, "not-existing-pgk"]:

@@ -101,23 +101,6 @@ def xset_environ(**kwargs):
     os.environ.update(kwargs)
 
 
-def zip_path(path: str, tempdir: str):
-    assert os.path.exists(path) and os.path.isdir(path)
-
-    zip_path = os.path.join(tempdir, os.path.basename(path) + ".zip")
-    created = shutil.make_archive(
-        zip_path,
-        "zip",
-        root_dir=path)
-
-    try:
-        shutil.move(created, zip_path)
-    except OSError as e:
-        os.remove(created)  # Cleanup on failure.
-        raise e from None
-    return zip_path
-
-
 def create_and_pack_conda_env(
     name: str,
     python: str,

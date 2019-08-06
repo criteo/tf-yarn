@@ -6,8 +6,8 @@ here = os.path.abspath(os.path.dirname(__file__))
 DESCRIPTION = "Distributed TensorFlow on a YARN cluster"
 
 try:
-    LONG_DESCRIPTION = open(os.path.join(here, "README.md")).read()
-except IOError:
+    LONG_DESCRIPTION = open(os.path.join(here, "README.md"), encoding="utf-8").read()
+except Exception:
     LONG_DESCRIPTION = ""
 
 

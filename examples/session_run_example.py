@@ -35,11 +35,8 @@ def main():
             tf_session_config=session_config,
             files={
                 **editable_requirements,
-            },
-            acls=skein.model.ACLs(
-                enable=True,
-                view_users=['*']
-            )) as cluster_spec:
+            }
+    ) as cluster_spec:
         size = 10000
         x = tf.placeholder(tf.float32, size)
 

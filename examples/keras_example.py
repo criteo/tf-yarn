@@ -105,12 +105,7 @@ def main():
         files={
             **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
-        },
-        acls=skein.model.ACLs(
-            enable=True,
-            view_users=['*']
-        )
-
+        }
     )
 
 

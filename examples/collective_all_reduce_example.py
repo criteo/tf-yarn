@@ -61,15 +61,12 @@ if __name__ == "__main__":
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
 
     with standalone_client_mode(
-            pyenv_zip_path,
-            task_specs={
-                "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2)
-            },
-            files=editable_requirements,
-            acls=skein.model.ACLs(
-                enable=True,
-                view_users=['*']
-            )) as cluster_spec:
+        pyenv_zip_path,
+        task_specs={
+            "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2)
+        },
+        files=editable_requirements
+    ) as cluster_spec:
 
         distrib_config = tf.contrib.distribute.DistributeConfig(
             train_distribute=tf.contrib.distribute.CollectiveAllReduceStrategy(),

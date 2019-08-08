@@ -58,9 +58,5 @@ if __name__ == "__main__":
             files={
                 **editable_requirements,
             },
-            acls=skein.model.ACLs(
-                enable=True,
-                view_users=['*']
-            ),
             skein_client=client
         )

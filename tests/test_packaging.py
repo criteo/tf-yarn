@@ -11,7 +11,10 @@ import zipfile
 
 import pytest
 
+from pex.pex_info import PexInfo
+
 from tf_yarn import packaging
+
 
 MODULE_TO_TEST = "tf_yarn.packaging"
 PYTHON_SYSTEM_EXEC = '/bin/python3.6'
@@ -231,13 +234,30 @@ def test_upload_env_to_hdfs_in_a_pex():
             mock.patch(f"{MODULE_TO_TEST}._get_archive_metadata_path")
         )
         mock__get_archive_metadata_path.return_value = f"{home_hdfs_path}/blah.json"
-        # Metadata already exists on hdfs
+
+        # metadata & pex already exists on hdfs
         mock_tf.gfile.Exists.return_value = True
+
+        mock_pex_info = stack.enter_context(
+            mock.patch(f"{MODULE_TO_TEST}.PexInfo")
+        )
+
+        def _from_pex(arg):
+            if arg == f'{home_path}/myapp.pex':
+                return PexInfo({"code_hash": 1})
+            else:
+                return PexInfo({"code_hash": 2})
+
+        mock_pex_info.from_pex.side_effect = _from_pex
 
         result = packaging.upload_env_to_hdfs(f'{home_hdfs_path}/blah.pex')
 
+        # Check existing pex on hdfs is downloaded to compare code_hash with file to upload
+        mock_tf.gfile.Copy.assert_any_call(
+            f'{home_hdfs_path}/blah.pex', mock.ANY)
+        # Check copy pex to remote
         mock_tf.gfile.MakeDirs.assert_called_once_with(home_hdfs_path)
-        mock_tf.gfile.Copy.assert_called_once_with(
+        mock_tf.gfile.Copy.assert_any_call(
             f'{home_path}/myapp.pex', f'{home_hdfs_path}/blah.pex', overwrite=True)
         # Check metadata has been cleaned
         mock_tf.gfile.Remove.assert_called_once_with(f'{home_hdfs_path}/blah.json')

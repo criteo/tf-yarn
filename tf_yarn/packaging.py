@@ -346,16 +346,33 @@ def upload_env_to_hdfs(
             archive_on_hdfs, packer,
             additional_packages, ignored_packages
         )
+    elif tf.gfile.Exists(archive_on_hdfs):
+        with tempfile.TemporaryDirectory() as tempdir:
+            local_copy_path = os.path.join(tempdir, os.path.basename(archive_on_hdfs))
+            tf.gfile.Copy(archive_on_hdfs, local_copy_path)
+            info_from_hdfs = PexInfo.from_pex(local_copy_path)
+            into_to_upload = PexInfo.from_pex(pex_file)
+            if info_from_hdfs.code_hash != into_to_upload.code_hash:
+                _upload_pex(pex_file, archive_on_hdfs)
+            else:
+                _logger.info(f"skip upload of current {pex_file}"
+                             f" as it is already on hdfs {archive_on_hdfs}")
     else:
-        tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
-        tf.gfile.Copy(pex_file, archive_on_hdfs, overwrite=True)
-        # Remove previous metadata
-        archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
-        if tf.gfile.Exists(archive_meta_data):
-            tf.gfile.Remove(archive_meta_data)
+        _upload_pex(pex_file, archive_on_hdfs)
 
     return (archive_on_hdfs,
             env_name)
+
+
+def _upload_pex(pex_file: str, archive_on_hdfs: str):
+    _logger.info(f"upload current {pex_file} to {archive_on_hdfs}")
+
+    tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
+    tf.gfile.Copy(pex_file, archive_on_hdfs, overwrite=True)
+    # Remove previous metadata
+    archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
+    if tf.gfile.Exists(archive_meta_data):
+        tf.gfile.Remove(archive_meta_data)
 
 
 def upload_env_to_hdfs_from_venv(
@@ -380,19 +397,17 @@ def upload_env_to_hdfs_from_venv(
             f"Zipping and uploading your env to {archive_on_hdfs}"
         )
 
-        tmp_dir = _get_tmp_dir()
-        archive_local = packer.pack(
-            output=f"{tmp_dir}/{packer.env_name}.{packer.extension}",
-            reqs=current_packages,
-            additional_packages=additional_packages,
-            ignored_packages=ignored_packages
-        )
-        tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
-        tf.gfile.Copy(archive_local, archive_on_hdfs, overwrite=True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            archive_local = packer.pack(
+                output=f"{tempdir}/{packer.env_name}.{packer.extension}",
+                reqs=current_packages,
+                additional_packages=additional_packages,
+                ignored_packages=ignored_packages
+            )
+            tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
+            tf.gfile.Copy(archive_local, archive_on_hdfs, overwrite=True)
 
-        _dump_archive_metadata(archive_on_hdfs, current_packages)
-
-        shutil.rmtree(tmp_dir)
+            _dump_archive_metadata(archive_on_hdfs, current_packages)
     else:
         _logger.info(f"{archive_on_hdfs} already exists on hdfs")
 

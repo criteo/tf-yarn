@@ -41,13 +41,30 @@ def _check_add_criteo_environment(package_name):
     return package_name
 
 
+def get_tensorflow_version() -> str:
+    version_gpu = "==1.12.0"
+    version_cpu = "==1.12.2"
+    if "BUILD_GPU" in os.environ:
+        if "CRITEO_ENV" in os.environ:
+            return f"tensorflow_gpu{version_gpu}.criteo"
+        else:
+            print("Warning: Public GPU build of tensorflow has not been tested with tf-yarn.")
+            return "tensorflow_gpu"
+    else:
+        return f"tensorflow{version_cpu}"
+
+
+def get_tfyarn_suffix() -> str:
+    return "_gpu" if "BUILD_GPU" in os.environ else ""
+
+
 setuptools.setup(
-    name="tf_yarn",
+    name="tf_yarn" + get_tfyarn_suffix(),
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
     version=_check_add_criteo_environment("0.4.6"),
-    install_requires=REQUIREMENTS,
+    install_requires=REQUIREMENTS + [get_tensorflow_version()],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",
 

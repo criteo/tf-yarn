@@ -35,7 +35,7 @@ from ._env import (
     gen_task_cmd,
     PythonEnvDescription
 )
-from tf_yarn import cluster, packaging
+from tf_yarn import cluster, packaging, mlflow
 from tf_yarn.experiment import Experiment
 from tf_yarn.evaluator_metrics import (
     add_monitor_to_experiment,
@@ -75,10 +75,18 @@ class RunFailed(Exception):
 
 
 class Metrics(NamedTuple):
-    total_training_time: Optional[timedelta]
+    total_training_duration: Optional[timedelta]
     total_eval_duration: Optional[timedelta]
     container_duration: Dict[str, Optional[timedelta]]
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
+
+    def log_mlflow(self):
+        for metric_name, value in self._asdict().items():
+            if isinstance(value, dict):
+                mlflow.log_params({mlflow.format_key(f"{metric_name}_{k}"): v
+                                   for k, v in value.items()})
+            else:
+                mlflow.log_param(metric_name, value)
 
 
 TASK_SPEC_NONE = single_server_topology()
@@ -114,6 +122,11 @@ def _setup_task_env(
         "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
         "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
     }
+
+    if mlflow.use_mlflow:
+        task_env["MLFLOW_RUN_ID"] = mlflow.active_run_id()
+        task_env["MLFLOW_TRACKING_URI"] = mlflow.get_tracking_uri()
+        task_env["GIT_PYTHON_REFRESH"] = "quiet"
 
     return task_files, task_env
 
@@ -569,6 +582,8 @@ def _execute_and_await_termination(
             one_shot_metrics_logger.log()
         time.sleep(poll_every_secs)
         state = report.state
+
+    metrics.log_mlflow()
 
     return metrics
 

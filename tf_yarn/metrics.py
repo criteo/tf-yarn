@@ -2,6 +2,8 @@ import logging
 from typing import List, Dict
 import skein
 
+from tf_yarn import mlflow
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,5 +35,6 @@ class OneShotMetricsLogger(object):
         if value is not None:
             value = value.decode()
             logger.info(f"{value}")
+            mlflow.set_tag(mlflow.format_key(metric), value)
             ret = True
         return ret

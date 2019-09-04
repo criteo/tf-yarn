@@ -1,13 +1,17 @@
+import logging
 import sys
 import tensorflow as tf
 import time
 import skein
-import tf_yarn
-from tf_yarn.experiment import Experiment
-from typing import List, Dict, Tuple
-import logging
-from tf_yarn.cluster import get_task
 import warnings
+
+from typing import List, Dict, Tuple
+
+import tf_yarn
+from tf_yarn.cluster import get_task
+from tf_yarn.experiment import Experiment
+from tf_yarn import mlflow
+
 
 MONITORED_METRICS = {
     'awake_time_ratio': 'Awake/idle ratio',
@@ -58,6 +62,7 @@ class EvaluatorMetricsLogger():
                             (self.log_thresholds[key][0] <= stat <= self.log_thresholds[key][1]):
                         cur_eval_stats.append(f'{value}: {stat}')
                     self.last_metrics[evaluator][key] = stat
+                    mlflow.log_metric(mlflow.format_key(f"{evaluator}_{key}"), stat)
             if len(cur_eval_stats) > 0:
                 logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
 

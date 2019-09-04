@@ -4,6 +4,8 @@ from typing import (
     NamedTuple
 )
 
+from tf_yarn import packaging
+
 
 class PythonEnvDescription(NamedTuple):
     path_to_archive: str
@@ -24,12 +26,14 @@ def gen_pyenv_from_existing_archive(path_to_archive: str,
     containers_module = STANDALONE_CLIENT_MODULE if standalone_client_mode \
         else INDEPENDENT_WORKERS_MODULE
     archive_filename = os.path.basename(path_to_archive)
-    if path_to_archive.endswith('.pex'):
+
+    packer = packaging.detect_packer_from_file(path_to_archive)
+    if packer == packaging.PEX_PACKER:
         return PythonEnvDescription(
             path_to_archive,
             f"./{archive_filename} -m {containers_module} ",
             archive_filename)
-    elif path_to_archive.endswith(".zip"):
+    elif packer == packaging.CONDA_PACKER:
         return PythonEnvDescription(
             path_to_archive,
             f"{CONDA_CMD} -m {containers_module}", CONDA_ENV_NAME)

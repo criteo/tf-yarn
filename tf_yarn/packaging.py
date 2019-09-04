@@ -18,6 +18,7 @@ from typing import (
     Collection,
     List
 )
+from urllib import parse, request
 import uuid
 import zipfile
 import tensorflow as tf
@@ -28,7 +29,6 @@ try:
 except NotImplementedError:
     # conda is not supported on windows
     pass
-from urllib import parse
 from pex.fetcher import Fetcher, PyPIFetcher
 from pex.pex_builder import PEXBuilder
 from pex.resolvable import Resolvable
@@ -315,6 +315,25 @@ def _dump_archive_metadata(archive_on_hdfs: str,
         tf.gfile.Copy(tempfile_path, archive_meta_data)
 
 
+def upload_zip_to_hdfs(
+    zip_file: str,
+    archive_on_hdfs: str = None
+):
+    packer = detect_packer_from_file(zip_file)
+    archive_on_hdfs, _, _ = detect_archive_names(packer, archive_on_hdfs)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        parsed_url = parse.urlparse(zip_file)
+        if parsed_url.scheme == "http":
+            tmp_zip_file = os.path.join(tempdir, os.path.basename(parsed_url.path))
+            request.urlretrieve(zip_file, tmp_zip_file)
+            zip_file = tmp_zip_file
+
+        _upload_zip(zip_file, archive_on_hdfs)
+
+        return archive_on_hdfs
+
+
 def upload_env_to_hdfs(
         archive_on_hdfs: str = None,
         packer=None,
@@ -322,15 +341,30 @@ def upload_env_to_hdfs(
         ignored_packages: Collection[str] = []
 ) -> Tuple[str, str]:
     if packer is None:
-        if _is_conda_env():
-            packer = CONDA_PACKER
-        else:
-            packer = PEX_PACKER
+        packer = detect_packer_from_env()
+    archive_on_hdfs, env_name, pex_file = detect_archive_names(packer, archive_on_hdfs)
 
+    if not _running_from_pex():
+        upload_env_to_hdfs_from_venv(
+            archive_on_hdfs, packer,
+            additional_packages, ignored_packages
+        )
+    else:
+        _upload_zip(pex_file, archive_on_hdfs)
+
+    return (archive_on_hdfs,
+            env_name)
+
+
+def detect_archive_names(
+        packer: Packer,
+        archive_on_hdfs: str = None
+) -> Tuple[str, str, str]:
     if _running_from_pex():
         pex_file = get_current_pex_filepath()
         env_name = os.path.basename(pex_file).split('.')[0]
     else:
+        pex_file = ""
         env_name = packer.env_name
 
     if not archive_on_hdfs:
@@ -341,38 +375,46 @@ def upload_env_to_hdfs(
             raise ValueError(f"{archive_on_hdfs} has the wrong extension"
                              f", .{packer.extension} is expected")
 
-    if not _running_from_pex():
-        upload_env_to_hdfs_from_venv(
-            archive_on_hdfs, packer,
-            additional_packages, ignored_packages
-        )
-    elif tf.gfile.Exists(archive_on_hdfs):
+    return archive_on_hdfs, env_name, pex_file
+
+
+def _upload_zip(zip_file: str, archive_on_hdfs: str):
+    packer = detect_packer_from_file(zip_file)
+    if packer == PEX_PACKER and tf.gfile.Exists(archive_on_hdfs):
         with tempfile.TemporaryDirectory() as tempdir:
             local_copy_path = os.path.join(tempdir, os.path.basename(archive_on_hdfs))
             tf.gfile.Copy(archive_on_hdfs, local_copy_path)
             info_from_hdfs = PexInfo.from_pex(local_copy_path)
-            into_to_upload = PexInfo.from_pex(pex_file)
-            if info_from_hdfs.code_hash != into_to_upload.code_hash:
-                _upload_pex(pex_file, archive_on_hdfs)
-            else:
-                _logger.info(f"skip upload of current {pex_file}"
+            into_to_upload = PexInfo.from_pex(zip_file)
+            if info_from_hdfs.code_hash == into_to_upload.code_hash:
+                _logger.info(f"skip upload of current {zip_file}"
                              f" as it is already on hdfs {archive_on_hdfs}")
-    else:
-        _upload_pex(pex_file, archive_on_hdfs)
+                return
 
-    return (archive_on_hdfs,
-            env_name)
-
-
-def _upload_pex(pex_file: str, archive_on_hdfs: str):
-    _logger.info(f"upload current {pex_file} to {archive_on_hdfs}")
+    _logger.info(f"upload current {zip_file} to {archive_on_hdfs}")
 
     tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
-    tf.gfile.Copy(pex_file, archive_on_hdfs, overwrite=True)
+    tf.gfile.Copy(zip_file, archive_on_hdfs, overwrite=True)
     # Remove previous metadata
     archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
     if tf.gfile.Exists(archive_meta_data):
         tf.gfile.Remove(archive_meta_data)
+
+
+def detect_packer_from_env() -> Packer:
+    if _is_conda_env():
+        return CONDA_PACKER
+    else:
+        return PEX_PACKER
+
+
+def detect_packer_from_file(zip_file: str) -> Packer:
+    if zip_file.endswith('.pex'):
+        return PEX_PACKER
+    elif zip_file.endswith(".zip"):
+        return CONDA_PACKER
+    else:
+        raise ValueError("Archive format unsupported. Must be .pex or conda .zip")
 
 
 def upload_env_to_hdfs_from_venv(

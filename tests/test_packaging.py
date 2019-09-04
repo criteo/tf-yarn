@@ -219,6 +219,30 @@ def test_upload_env_to_hdfs_should_throw_error_if_wrong_extension():
         packaging.upload_env_to_hdfs("myarchive.tar.gz", packer=packaging.CONDA_PACKER)
 
 
+def test_upload_zip_to_hdfs():
+    home_hdfs_path = '/user/j.doe'
+    with mock.patch(f"{MODULE_TO_TEST}.tf") as mock_tf:
+        with mock.patch(f"{MODULE_TO_TEST}.request") as mock_request:
+            with mock.patch(f"{MODULE_TO_TEST}.tempfile") as mock_tempfile:
+
+                mock_tf.gfile.Exists.return_value = False
+                mock_tempfile.TemporaryDirectory.return_value.__enter__.return_value = "/tmp"
+
+                result = packaging.upload_zip_to_hdfs(
+                    "http://myserver/mypex.pex",
+                    f"{home_hdfs_path}/blah.pex"
+                )
+
+                mock_request.urlretrieve.assert_called_once_with(
+                    "http://myserver/mypex.pex",
+                    "/tmp/mypex.pex")
+                mock_tf.gfile.MakeDirs.assert_called_once_with(home_hdfs_path)
+                mock_tf.gfile.Copy.assert_any_call(
+                    "/tmp/mypex.pex", f"{home_hdfs_path}/blah.pex", overwrite=True)
+
+                assert "/user/j.doe/blah.pex" == result
+
+
 def test_upload_env_to_hdfs_in_a_pex():
     home_path = '/home/j.doe'
     home_hdfs_path = '/user/j.doe'

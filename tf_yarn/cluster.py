@@ -22,22 +22,35 @@ def aggregate_spec(client: skein.ApplicationClient,
 
 
 def get_task() -> str:
-    return os.environ["SKEIN_CONTAINER_ID"].replace("_", ":", 1)
+    return os.getenv("SKEIN_CONTAINER_ID", "").replace("_", ":", 1)
 
 
 def get_task_type(task: str) -> str:
-    return task.split(':')[0]
+    parts = task.split(':')
+    if len(parts) > 0:
+        return parts[0]
+    else:
+        return ""
 
 
-def is_worker(task_type: str) -> bool:
+def is_worker(task_type: str = None) -> bool:
+    if not task_type:
+        task_type = get_task_type(get_task())
+
     return task_type == 'worker'
 
 
-def is_evaluator(task_type: str) -> bool:
+def is_evaluator(task_type: str = None) -> bool:
+    if not task_type:
+        task_type = get_task_type(get_task())
+
     return task_type == 'evaluator'
 
 
-def is_chief(task_type: str) -> bool:
+def is_chief(task_type: str = None) -> bool:
+    if not task_type:
+        task_type = get_task_type(get_task())
+
     return task_type == 'chief'
 
 

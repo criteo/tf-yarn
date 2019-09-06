@@ -11,7 +11,7 @@ from typing import (
     Dict
 )
 
-from tf_yarn import mlflow
+from tf_yarn import mlflow, cluster
 
 logger = logging.getLogger(__name__)
 
@@ -81,5 +81,6 @@ class StepPerSecondHook(tf.train.StepCounterHook):
         )
 
     def _log_and_record(self, elapsed_steps: int, elapsed_time: float, global_step: int):
-        steps_per_sec = elapsed_steps / elapsed_time
-        mlflow.log_metric("steps_per_sec", steps_per_sec, step=global_step)
+        if cluster.is_chief():
+            steps_per_sec = elapsed_steps / elapsed_time
+            mlflow.log_metric("steps_per_sec", steps_per_sec, step=global_step)

@@ -98,11 +98,3 @@ class EvalMonitorHook(tf.train.SessionRunHook):
 
     def broadcast(self, key: str, value: str):
         tf_yarn.event.broadcast(self.client, f'{self.task}/{key}', value)
-
-
-def add_monitor_to_experiment(experiment: Experiment):
-    monitored_eval_spec = experiment.eval_spec._replace(
-        hooks=(EvalMonitorHook(), *experiment.eval_spec.hooks)
-    )
-    experiment = experiment._replace(eval_spec=monitored_eval_spec)
-    return experiment

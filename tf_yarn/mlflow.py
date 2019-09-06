@@ -55,6 +55,11 @@ def log_metric(key, value, step=None):
         mlflow.log_metric(key, value, step)
 
 
+def log_metrics(metrics, step=None):
+    if use_mlflow:
+        mlflow.log_metrics(metrics, step)
+
+
 def format_key(key):
     if key:
         return key.replace(":", "_")

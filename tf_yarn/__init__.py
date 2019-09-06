@@ -35,12 +35,8 @@ from ._env import (
     gen_task_cmd,
     PythonEnvDescription
 )
-from tf_yarn import cluster, packaging, mlflow
+from tf_yarn import cluster, metrics, evaluator_metrics, packaging, mlflow
 from tf_yarn.experiment import Experiment
-from tf_yarn.evaluator_metrics import (
-    add_monitor_to_experiment,
-    EvaluatorMetricsLogger)
-from tf_yarn.metrics import OneShotMetricsLogger
 from tf_yarn.event import broadcast
 
 __all__ = [
@@ -72,21 +68,6 @@ class SkeinCluster(NamedTuple):
 
 class RunFailed(Exception):
     """``run_on_yarn`` failed."""
-
-
-class Metrics(NamedTuple):
-    total_training_duration: Optional[timedelta]
-    total_eval_duration: Optional[timedelta]
-    container_duration: Dict[str, Optional[timedelta]]
-    train_eval_time_per_node: Dict[str, Optional[timedelta]]
-
-    def log_mlflow(self):
-        for metric_name, value in self._asdict().items():
-            if isinstance(value, dict):
-                mlflow.log_params({mlflow.format_key(f"{metric_name}_{k}"): v
-                                   for k, v in value.items()})
-            else:
-                mlflow.log_param(metric_name, value)
 
 
 TASK_SPEC_NONE = single_server_topology()
@@ -224,13 +205,47 @@ def _setup_skein_cluster(
         return SkeinCluster(skein_client, app, task_instances, event_listener, events)
 
 
+def _hook_name_already_exists(
+        hook: tf.train.SessionRunHook,
+        hooks: List[tf.train.SessionRunHook]) -> bool:
+    hook_name = type(hook).__name__
+    return len([h for h in hooks
+                if type(h).__name__ == hook_name]) > 0
+
+
+def _add_monitor_to_experiment(experiment: Experiment) -> Experiment:
+    tf.logging.info(f"configured training hooks: {experiment.train_spec.hooks}")
+
+    training_hooks = list(experiment.train_spec.hooks)
+
+    if experiment.config.log_step_count_steps is not None:
+        steps_per_second_hook = metrics.StepPerSecondHook(
+            every_n_steps=experiment.config.log_step_count_steps
+        )
+        if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
+            training_hooks.append(steps_per_second_hook)
+        else:
+            tf.logging.warning("do not add StepPerSecondHook as there is already one configured")
+
+    monitored_train_spec = experiment.train_spec._replace(
+        hooks=training_hooks
+    )
+
+    monitored_eval_spec = experiment.eval_spec._replace(
+        hooks=(evaluator_metrics.EvalMonitorHook(), *experiment.eval_spec.hooks)
+    )
+
+    experiment = experiment._replace(eval_spec=monitored_eval_spec, train_spec=monitored_train_spec)
+    return experiment
+
+
 def _run_on_cluster(
     experiment_fn: ExperimentFn,
     skein_cluster: SkeinCluster,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
-) -> Optional[Metrics]:
+) -> Optional[metrics.Metrics]:
     def _new_experiment_fn():
-        return add_monitor_to_experiment(experiment_fn())
+        return _add_monitor_to_experiment(experiment_fn())
     new_experiment_fn = _new_experiment_fn
 
     # Attempt serialization early to avoid allocating unnecesary resources
@@ -267,7 +282,7 @@ def run_on_yarn(
     path_to_log_hdfs: str = None,
     nb_retries: int = 0,
     name: str = "RunOnYarn"
-) -> Optional[Metrics]:
+) -> Optional[metrics.Metrics]:
     """Run an experiment on YARN.
 
     The implementation allocates a service with the requested number
@@ -563,14 +578,14 @@ def _execute_and_await_termination(
     serialized_fn: bytes,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     poll_every_secs: int = 10
-) -> Optional[Metrics]:
+) -> Optional[metrics.Metrics]:
     skein_cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
-    eval_metrics_logger = EvaluatorMetricsLogger(
+    eval_metrics_logger = evaluator_metrics.EvaluatorMetricsLogger(
         [task for task in iter_tasks(skein_cluster.tasks) if task.startswith('evaluator')],
         skein_cluster.app,
         eval_monitor_log_thresholds
     )
-    one_shot_metrics_logger = OneShotMetricsLogger(
+    one_shot_metrics_logger = metrics.OneShotMetricsLogger(
         skein_cluster.app,
         {task: ['url'] for task in iter_tasks(skein_cluster.tasks)
          if task.startswith('tensorboard')}
@@ -585,8 +600,9 @@ def _execute_and_await_termination(
 
         if report.final_status != "undefined":
             skein_cluster.event_listener.join()
-            log_events, metrics = _handle_events(skein_cluster.events)
+            log_events, result_metrics = _handle_events(skein_cluster.events)
             logger.info(log_events)
+            result_metrics.log_mlflow()
             if report.final_status == "failed":
                 raise RunFailed
             else:
@@ -597,9 +613,7 @@ def _execute_and_await_termination(
         time.sleep(poll_every_secs)
         state = report.state
 
-    metrics.log_mlflow()
-
-    return metrics
+    return result_metrics
 
 
 def _format_app_report(report: ApplicationReport) -> str:
@@ -639,7 +653,7 @@ def _aggregate_events(
 
 def _handle_events(
     events: Dict[str, Dict[str, str]]
-) -> Tuple[str, Metrics]:
+) -> Tuple[str, metrics.Metrics]:
     header = []
     details = []
     min_training_start_time = timedelta.max
@@ -705,7 +719,7 @@ def _handle_events(
     header.append(f'Training time = {training_time}')
     header.append(f'Evaluation time = {eval_time}')
 
-    metrics = Metrics(
+    result_metrics = metrics.Metrics(
         training_time,
         eval_time,
         container_duration,
@@ -713,7 +727,7 @@ def _handle_events(
     )
     return ((os.linesep + os.linesep.join(header)
              + os.linesep * (1 + bool(details))
-             + os.linesep.join(details)), metrics)
+             + os.linesep.join(details)), result_metrics)
 
 
 def app_logs(app: skein.ApplicationClient) -> str:

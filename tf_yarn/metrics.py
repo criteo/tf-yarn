@@ -1,11 +1,34 @@
 import logging
-from typing import List, Dict
 import skein
+import tensorflow as tf
+
+from datetime import timedelta
+
+from typing import (
+    List,
+    Optional,
+    NamedTuple,
+    Dict
+)
 
 from tf_yarn import mlflow
 
-
 logger = logging.getLogger(__name__)
+
+
+class Metrics(NamedTuple):
+    total_training_duration: Optional[timedelta]
+    total_eval_duration: Optional[timedelta]
+    container_duration: Dict[str, Optional[timedelta]]
+    train_eval_time_per_node: Dict[str, Optional[timedelta]]
+
+    def log_mlflow(self):
+        for metric_name, value in self._asdict().items():
+            if isinstance(value, dict):
+                mlflow.log_params({mlflow.format_key(f"{metric_name}_{k}"): v
+                                   for k, v in value.items()})
+            else:
+                mlflow.log_param(metric_name, value)
 
 
 class OneShotMetricsLogger(object):
@@ -38,3 +61,25 @@ class OneShotMetricsLogger(object):
             mlflow.set_tag(mlflow.format_key(metric), value)
             ret = True
         return ret
+
+
+class StepPerSecondHook(tf.train.StepCounterHook):
+
+    def __init__(
+        self,
+        every_n_steps=100,
+        every_n_secs=None,
+        output_dir=None,
+        summary_writer=None
+    ):
+        tf.train.StepCounterHook.__init__(
+            self,
+            every_n_steps=every_n_steps,
+            every_n_secs=every_n_secs,
+            output_dir=output_dir,
+            summary_writer=summary_writer
+        )
+
+    def _log_and_record(self, elapsed_steps: int, elapsed_time: float, global_step: int):
+        steps_per_sec = elapsed_steps / elapsed_time
+        mlflow.log_metric("steps_per_sec", steps_per_sec, step=global_step)

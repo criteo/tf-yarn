@@ -7,6 +7,7 @@ It supports running on one worker or on multiple workers with different distribu
 Its API provides an easy entry point for working with Estimators. Keras is currently supported via the [model_to_estimator](https://www.tensorflow.org/api_docs/python/tf/keras/estimator/model_to_estimator) conversion function, and low-level distributed TensorFlow via standalone client mode API. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
 
 [MLflow](https://www.mlflow.org/docs/latest/quickstart.html) is supported when MLflow package is installed (`pip install mlflow`)
+For more info check out [examples/mlflow_example.py](https://github.com/criteo/tf-yarn/blob/master/examples/mlflow_example.py).
 
 ![tf-yarn](https://github.com/criteo/tf-yarn/blob/master/skein.png?raw=true)
 

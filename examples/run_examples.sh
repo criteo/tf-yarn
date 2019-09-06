@@ -17,6 +17,7 @@ python3.6 -m venv tf-yarn_test_env
 . tf-yarn_test_env/bin/activate
 pip install -e .
 pip install pex==1.6.7
+pip install mlflow
 
 # Setup pex
 pex . -o examples/tf-yarn.pex

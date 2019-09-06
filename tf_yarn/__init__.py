@@ -173,7 +173,8 @@ def _setup_skein_cluster(
         queue: str = "default",
         acls: ACLs = None,
         file_systems: List[str] = None,
-        log_conf_file: str = None
+        log_conf_file: str = None,
+        name: str = "RunOnYarn"
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
         "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
@@ -204,7 +205,8 @@ def _setup_skein_cluster(
             services,
             queue=queue,
             acls=acls,
-            file_systems=file_systems
+            file_systems=file_systems,
+            name=name
         )
 
         if skein_client is None:
@@ -263,7 +265,8 @@ def run_on_yarn(
     log_conf_file: str = None,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     path_to_log_hdfs: str = None,
-    nb_retries: int = 0
+    nb_retries: int = 0,
+    name: str = "RunOnYarn"
 ) -> Optional[Metrics]:
     """Run an experiment on YARN.
 
@@ -347,6 +350,9 @@ def run_on_yarn(
     nb_retries
         Number of times the yarn application is retried in case of failures
 
+    name
+        Name of the yarn application
+
     Raises
     ------
     RunFailed
@@ -371,7 +377,8 @@ def run_on_yarn(
                 queue=queue,
                 acls=acls,
                 file_systems=file_systems,
-                log_conf_file=log_conf_file
+                log_conf_file=log_conf_file,
+                name=name
             )
             with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
@@ -379,7 +386,8 @@ def run_on_yarn(
                 return _run_on_cluster(
                     experiment_fn,
                     skein_cluster,
-                    eval_monitor_log_thresholds)
+                    eval_monitor_log_thresholds
+                )
         except Exception:
             n_tries_max -= 1
             if n_tries_max == 0:
@@ -403,7 +411,9 @@ def standalone_client_mode(
         acls: ACLs = _default_acls_all_access(),
         file_systems: List[str] = None,
         log_conf_file: str = None,
-        path_to_log_hdfs: str = None):
+        path_to_log_hdfs: str = None,
+        name: str = "RunOnYarn"
+):
     """
     https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
             /contrib/distribute/README.md#standalone-client-mode
@@ -463,6 +473,9 @@ def standalone_client_mode(
 
     path_to_log_hdfs
         Optional path. If specified, tf-yarn will copy hadoop logs into this path
+
+    name
+        Name of the yarn application
     """
     try:
         pyenvs = _setup_pyenvs(
@@ -477,7 +490,8 @@ def standalone_client_mode(
             queue=queue,
             acls=acls,
             file_systems=file_systems,
-            log_conf_file=log_conf_file
+            log_conf_file=log_conf_file,
+            name=name
         )
 
         with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):

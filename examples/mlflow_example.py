@@ -9,6 +9,7 @@ import skein
 import tensorflow as tf
 
 from datetime import datetime
+from mlflow.tracking import utils
 
 from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
 import winequality
@@ -69,8 +70,8 @@ def experiment_fn() -> Experiment:
 if __name__ == "__main__":
 
     # you need to install mlflow `pip install mlflow`
-    # and set MLFLOW_TRACKING_URI env variable
-    # os.environ["MLFLOW_TRACKING_URI"] = "https://my-mlflow-server"
+    # and set MLflow tracking uri
+    utils.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
     mlflow.start_run()
 
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()

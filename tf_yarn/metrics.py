@@ -25,10 +25,11 @@ class Metrics(NamedTuple):
     def log_mlflow(self):
         for metric_name, value in self._asdict().items():
             if isinstance(value, dict):
-                mlflow.log_params({mlflow.format_key(f"{metric_name}_{k}"): v
-                                   for k, v in value.items()})
+                mlflow.log_metrics({
+                    mlflow.format_key(f"{metric_name}_{k}"): v.total_seconds() if v else 0
+                    for k, v in value.items()})
             else:
-                mlflow.log_param(metric_name, value)
+                mlflow.log_metric(metric_name, value.total_seconds() if value else 0)
 
 
 class OneShotMetricsLogger(object):

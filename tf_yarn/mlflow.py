@@ -85,6 +85,6 @@ def log_metrics(metrics: Dict[str, Any], step: int = None):
 
 def format_key(key: str) -> str:
     if key:
-        return key.replace(":", "_")
+        return key.replace(":", "_").replace("/", "_")
     else:
         return ""

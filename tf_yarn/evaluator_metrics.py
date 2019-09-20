@@ -28,7 +28,8 @@ class EvaluatorMetricsLogger():
         self,
         evaluator_list: List[str],
         app: skein.ApplicationClient,
-        log_thresholds: Dict[str, Tuple[float, float]] = None
+        log_thresholds: Dict[str, Tuple[float, float]] = None,
+        n_try: int = 0
     ):
         self.last_metrics = {
             evaluator: {metric: None for metric in MONITORED_METRICS}
@@ -36,6 +37,7 @@ class EvaluatorMetricsLogger():
         }
         self.evaluator_list = evaluator_list
         self.app = app
+        self.n_try = n_try
         if log_thresholds:
             key_set = set(log_thresholds)
             self.log_thresholds = {
@@ -62,7 +64,7 @@ class EvaluatorMetricsLogger():
                             (self.log_thresholds[key][0] <= stat <= self.log_thresholds[key][1]):
                         cur_eval_stats.append(f'{value}: {stat}')
                     self.last_metrics[evaluator][key] = stat
-                    mlflow.log_metric(mlflow.format_key(f"{evaluator}_{key}"), stat)
+                    mlflow.log_metric(mlflow.format_key(f"{evaluator}_{key}_{self.n_try}"), stat)
             if len(cur_eval_stats) > 0:
                 logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
 

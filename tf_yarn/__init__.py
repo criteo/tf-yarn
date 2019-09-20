@@ -90,12 +90,15 @@ def _setup_pyenvs(
 def _setup_task_env(
         tempdir: str,
         files: Dict[str, str] = None,
-        env: Dict[str, str] = {}
+        env: Dict[str, str] = {},
+        n_try: int = 0
 ):
     task_files = _maybe_zip_task_files(files or {}, tempdir)
     task_files[__package__] = packaging.zip_path(here, False, tempdir)
 
     _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
+
+    _add_to_env(env, "TF_YARN_N_TRY", str(n_try))
 
     task_env = {
         **env,
@@ -155,14 +158,15 @@ def _setup_skein_cluster(
         acls: ACLs = None,
         file_systems: List[str] = None,
         log_conf_file: str = None,
-        name: str = "RunOnYarn"
+        name: str = "RunOnYarn",
+        n_try: int = 0
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
         "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
         f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
     with tempfile.TemporaryDirectory() as tempdir:
-        task_files, task_env = _setup_task_env(tempdir, files, env)
+        task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
         services = {}
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
@@ -242,7 +246,8 @@ def _add_monitor_to_experiment(experiment: Experiment) -> Experiment:
 def _run_on_cluster(
     experiment_fn: ExperimentFn,
     skein_cluster: SkeinCluster,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None
+    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+    n_try: int = 0
 ) -> Optional[metrics.Metrics]:
     def _new_experiment_fn():
         return _add_monitor_to_experiment(experiment_fn())
@@ -254,7 +259,8 @@ def _run_on_cluster(
         return _execute_and_await_termination(
             skein_cluster,
             serialized_fn,
-            eval_monitor_log_thresholds
+            eval_monitor_log_thresholds,
+            n_try=n_try
         )
 
 
@@ -380,7 +386,7 @@ def run_on_yarn(
         pyenv_zip_path,
         standalone_client_mode=False)
 
-    n_tries_max = nb_retries + 1
+    n_try = 0
     while True:
         try:
             skein_cluster = _setup_skein_cluster(
@@ -393,7 +399,8 @@ def run_on_yarn(
                 acls=acls,
                 file_systems=file_systems,
                 log_conf_file=log_conf_file,
-                name=name
+                name=name,
+                n_try=n_try
             )
             with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
@@ -401,13 +408,15 @@ def run_on_yarn(
                 return _run_on_cluster(
                     experiment_fn,
                     skein_cluster,
-                    eval_monitor_log_thresholds
+                    eval_monitor_log_thresholds,
+                    n_try
                 )
         except Exception:
-            n_tries_max -= 1
-            if n_tries_max == 0:
+            n_try += 1
+            if n_try == nb_retries + 1:
                 raise
-            logger.exception(f"Retrying user application ... {n_tries_max} remaining attempts")
+            logger.exception(f"Retrying user application ... "
+                             f"{nb_retries + 1 - n_try} remaining attempts")
 
     # Necessary for type checking
     return None
@@ -577,6 +586,7 @@ def _execute_and_await_termination(
     skein_cluster: SkeinCluster,
     serialized_fn: bytes,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+    n_try: int = 0,
     poll_every_secs: int = 10
 ) -> Optional[metrics.Metrics]:
     skein_cluster.app.kv[KV_EXPERIMENT_FN] = serialized_fn
@@ -588,8 +598,10 @@ def _execute_and_await_termination(
     one_shot_metrics_logger = metrics.OneShotMetricsLogger(
         skein_cluster.app,
         {task: ['url'] for task in iter_tasks(skein_cluster.tasks)
-         if task.startswith('tensorboard')}
+         if task.startswith('tensorboard')},
+        n_try
     )
+
     state = None
     while True:
         report = skein_cluster.client.application_report(skein_cluster.app.id)
@@ -600,9 +612,10 @@ def _execute_and_await_termination(
 
         if report.final_status != "undefined":
             skein_cluster.event_listener.join()
-            log_events, result_metrics = _handle_events(skein_cluster.events)
+            logger.info("events")
+            logger.info(skein_cluster.events)
+            log_events, result_metrics = _handle_events(skein_cluster.events, n_try)
             logger.info(log_events)
-            result_metrics.log_mlflow()
             if report.final_status == "failed":
                 raise RunFailed
             else:
@@ -613,6 +626,7 @@ def _execute_and_await_termination(
         time.sleep(poll_every_secs)
         state = report.state
 
+    result_metrics.log_mlflow(n_try)
     return result_metrics
 
 
@@ -652,7 +666,8 @@ def _aggregate_events(
 
 
 def _handle_events(
-    events: Dict[str, Dict[str, str]]
+    events: Dict[str, Dict[str, str]],
+    n_try: int
 ) -> Tuple[str, metrics.Metrics]:
     header = []
     details = []

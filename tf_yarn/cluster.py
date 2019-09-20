@@ -21,6 +21,10 @@ def aggregate_spec(client: skein.ApplicationClient,
     return spec
 
 
+def n_try() -> int:
+    return int(os.getenv("TF_YARN_N_TRY", "0"))
+
+
 def get_task() -> str:
     return os.getenv("SKEIN_CONTAINER_ID", "").replace("_", ":", 1)
 

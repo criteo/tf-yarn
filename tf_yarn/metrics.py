@@ -22,14 +22,15 @@ class Metrics(NamedTuple):
     container_duration: Dict[str, Optional[timedelta]]
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
 
-    def log_mlflow(self):
+    def log_mlflow(self, n_try: int):
         for metric_name, value in self._asdict().items():
             if isinstance(value, dict):
                 mlflow.log_metrics({
-                    mlflow.format_key(f"{metric_name}_{k}"): v.total_seconds() if v else 0
-                    for k, v in value.items()})
+                    mlflow.format_key(f"{metric_name}_{k}_{n_try}"): v.total_seconds()
+                    for k, v in value.items() if v})
             else:
-                mlflow.log_metric(metric_name, value.total_seconds() if value else 0)
+                if value:
+                    mlflow.log_metric(f"{metric_name}_{n_try}", value.total_seconds())
 
 
 class OneShotMetricsLogger(object):
@@ -37,10 +38,12 @@ class OneShotMetricsLogger(object):
     def __init__(
             self,
             app: skein.ApplicationClient,
-            keys_per_task: Dict[str, List[str]]
+            keys_per_task: Dict[str, List[str]],
+            n_try: int = 0
     ):
         self.app = app
         self.metrics: List[str] = self.__init_metrics(keys_per_task)
+        self.n_try = n_try
 
     def __init_metrics(self, keys_per_task):
         metrics = []
@@ -56,10 +59,10 @@ class OneShotMetricsLogger(object):
     def __log(self, metric):
         ret = False
         value = self.app.kv.get(metric, None)
-        if value is not None:
+        if value:
             value = value.decode()
             logger.info(f"{value}")
-            mlflow.set_tag(mlflow.format_key(metric), value)
+            mlflow.set_tag(f"{mlflow.format_key(metric)}_{self.n_try}", value)
             ret = True
         return ret
 
@@ -84,4 +87,4 @@ class StepPerSecondHook(tf.train.StepCounterHook):
     def _log_and_record(self, elapsed_steps: int, elapsed_time: float, global_step: int):
         if cluster.is_chief():
             steps_per_sec = elapsed_steps / elapsed_time
-            mlflow.log_metric("steps_per_sec", steps_per_sec, step=global_step)
+            mlflow.log_metric(f"steps_per_sec_{cluster.n_try()}", steps_per_sec, step=global_step)

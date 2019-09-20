@@ -14,7 +14,6 @@ import tensorflow as tf
 from tf_yarn import event, cluster, Experiment
 from tf_yarn.__init__ import KV_CLUSTER_INSTANCES, KV_EXPERIMENT_FN
 from tf_yarn._internal import MonitoredThread, iter_tasks
-from tf_yarn.tensorboard import start_tf_board, get_termination_timeout
 
 
 def _process_arguments() -> None:
@@ -26,7 +25,10 @@ def _process_arguments() -> None:
         base_dir = os.path.dirname(sys.modules["tf_yarn"].__file__)
         log_conf_file = os.path.join(base_dir, "default.log.conf")
     logging.config.fileConfig(log_conf_file, disable_existing_loggers=True)
-    tf.logging.info(f"using log file {log_conf_file}")
+    tf.logging.info(f"Using log file {log_conf_file}")
+    tf.logging.info(f"Python {sys.version}")
+    tf.logging.info(f"Skein {skein.__version__}")
+    tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
 
 
 def _setup_container_logs(client):
@@ -44,14 +46,17 @@ def _prepare_container(
     host_port: Tuple[str, int]
 ) -> Tuple[skein.ApplicationClient, Dict[str, List[str]], List[str]]:
     """Keep socket open while preparing container """
-    tf.logging.info("Python " + sys.version)
-    tf.logging.info("Skein " + skein.__version__)
-    tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
     client = skein.ApplicationClient.from_current()
     _setup_container_logs(client)
-    cluster_tasks = list(iter_tasks(json.loads(client.kv.wait(KV_CLUSTER_INSTANCES).decode())))
+    cluster_tasks = _get_cluster_tasks(client)
     cluster_spec = cluster.start_cluster(host_port, client, cluster_tasks)
     return client, cluster_spec, cluster_tasks
+
+
+def _get_cluster_tasks(
+    client: skein.ApplicationClient
+) -> List[str]:
+    return list(iter_tasks(json.loads(client.kv.wait(KV_CLUSTER_INSTANCES).decode())))
 
 
 def _get_experiment(
@@ -91,15 +96,12 @@ def _execute_dispatched_function(
 ) -> MonitoredThread:
     task_type, task_id = cluster.get_task_description()
     tf.logging.info(f"Starting execution {task_type}:{task_id}")
-    if task_type == 'tensorboard':
-        thread = start_tf_board(client, experiment)
-    else:
-        thread = MonitoredThread(
-            name=f"{task_type}:{task_id}",
-            target=_gen_monitored_train_and_evaluate(client),
-            args=tuple(experiment),
-            daemon=True)
-        thread.start()
+    thread = MonitoredThread(
+        name=f"{task_type}:{task_id}",
+        target=_gen_monitored_train_and_evaluate(client),
+        args=tuple(experiment),
+        daemon=True)
+    thread.start()
     task = cluster.get_task()
     event.start_event(client, task)
     return thread
@@ -138,20 +140,11 @@ def _shutdown_container(
         else None
     task = cluster.get_task()
     event.stop_event(client, task, exception)
-    if cluster_tasks is None:
-        tasks = None
-    else:
-        tasks = [c for c in cluster_tasks if not c.startswith('tensorboard')]
     wait_for_connected_tasks(
         client,
-        tasks,
+        cluster_tasks,
         getattr(run_config.session_config, "device_filters", []))
 
-    if task.startswith('tensorboard'):
-        timeout = get_termination_timeout()
-        if thread is not None:
-            thread.join(timeout)
-        tf.logging.info(f"{task} finished")
     event.broadcast_container_stop_time(client, task)
 
     if exception is not None:

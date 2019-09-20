@@ -1,10 +1,9 @@
 import cloudpickle
 import tensorflow as tf
 
-from . import event
 from tf_yarn._task_commons import _prepare_container, _process_arguments
 from tf_yarn._internal import reserve_sock_addr
-from . import cluster, KV_TF_SESSION_CONFIG
+from tf_yarn import event, cluster, KV_TF_SESSION_CONFIG
 
 
 def main() -> None:

@@ -76,7 +76,8 @@ if __name__ == "__main__":
         experiment_fn,
         task_specs={
             "chief": TaskSpec(memory="2 GiB", vcores=4),
-            "evaluator": TaskSpec(memory="2 GiB", vcores=1)
+            "evaluator": TaskSpec(memory="2 GiB", vcores=1),
+            "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
         },
         files={
             **editable_requirements,

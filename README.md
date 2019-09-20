@@ -297,8 +297,7 @@ run_on_yarn(
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory="2 GiB", vcores=4, label=NodeLabel.GPU),
-        "evaluator": TaskSpec(memory="1 GiB", vcores=1),
-        "tensorboard": TaskSpec(memory="1 GiB", vcores=1)
+        "evaluator": TaskSpec(memory="1 GiB", vcores=1)
     },
     queue="ml-gpu"
 )

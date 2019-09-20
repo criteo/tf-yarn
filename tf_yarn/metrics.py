@@ -8,7 +8,8 @@ from typing import (
     List,
     Optional,
     NamedTuple,
-    Dict
+    Dict,
+    Tuple
 )
 
 from tf_yarn import mlflow, cluster
@@ -33,36 +34,23 @@ class Metrics(NamedTuple):
                     mlflow.log_metric(f"{metric_name}_{n_try}", value.total_seconds())
 
 
-class OneShotMetricsLogger(object):
-
-    def __init__(
-            self,
-            app: skein.ApplicationClient,
-            keys_per_task: Dict[str, List[str]],
-            n_try: int = 0
-    ):
-        self.app = app
-        self.metrics: List[str] = self.__init_metrics(keys_per_task)
-        self.n_try = n_try
-
-    def __init_metrics(self, keys_per_task):
-        metrics = []
-        if keys_per_task is not None:
-            for task, keys in keys_per_task.items():
-                for key in keys:
-                    metrics.append(f"{task}/{key}")
-        return metrics
+class OneShotMetricsLogger(NamedTuple):
+    app: skein.ApplicationClient
+    events: List[Tuple[str, str]]
+    n_try: int = 0
 
     def log(self):
-        self.metrics = [metric for metric in self.metrics if not self.__log(metric)]
+        new_events = [event for event in self.events if not self.__log(*event)]
+        del self.events[:]
+        self.events.extend(new_events)
 
-    def __log(self, metric):
+    def __log(self, key, label):
         ret = False
-        value = self.app.kv.get(metric, None)
+        value = self.app.kv.get(key, None)
         if value:
             value = value.decode()
-            logger.info(f"{value}")
-            mlflow.set_tag(f"{mlflow.format_key(metric)}_{self.n_try}", value)
+            logger.info(f"{label} {value}")
+            mlflow.set_tag(f"{mlflow.format_key(key)}_{self.n_try}", value)
             ret = True
         return ret
 

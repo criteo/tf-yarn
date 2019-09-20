@@ -3,14 +3,16 @@ import threading
 import socket
 
 import skein
-from tensorboard import default
-from tensorboard import program
+import tensorflow as tf
+from tensorboard import default, program
 
-from tf_yarn import event, cluster, Experiment
-from . import _internal
+from typing import Optional, Iterable, Tuple
+
+from tf_yarn import _internal, event, cluster
 
 
 DEFAULT_TERMINATION_TIMEOUT_SECONDS = 30
+URL_EVENT_LABEL = "Tensorboard listening on"
 
 
 def get_termination_timeout():
@@ -22,13 +24,10 @@ def get_termination_timeout():
     return timeout
 
 
-def start_tf_board(client: skein.ApplicationClient,
-                   experiment: Experiment = None):
-    thread = None
-    if experiment:
-        model_dir = experiment.estimator.config.model_dir
-    else:
-        model_dir = os.environ.get('TF_BOARD_MODEL_DIR', None)
+def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
+    model_dir = os.getenv('TF_BOARD_MODEL_DIR', tf_board_model_dir)
+    tf.logging.info(f"Starting tensorboard on {model_dir}")
+
     task = cluster.get_task()
     os.environ['GCS_READ_CACHE_DISABLED'] = '1'
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'cpp'
@@ -46,9 +45,17 @@ def start_tf_board(client: skein.ApplicationClient,
                 argv += os.environ['TF_BOARD_EXTRA_ARGS'].split(' ')
             tensorboard.configure(argv)
         tensorboard.launch()
-        event.url_event(client, task, f"Tensorboard is listening at {tensorboard_url}")
-        thread = [t for t in threading.enumerate() if t.name == 'TensorBoard'][0]
+        event.start_event(client, task)
+        event.url_event(client, task, f"{tensorboard_url}")
     except Exception as e:
+        tf.logging.error("Cannot start tensorboard", e)
         event.stop_event(client, task, e)
 
-    return thread
+
+def url_event_name(tasks: Iterable[str]) -> Optional[str]:
+    tensorboard_tasks = [t for t in tasks
+                         if t.startswith('tensorboard')]
+    if len(tensorboard_tasks) == 1:
+        return tensorboard_tasks[0] + "/url"
+
+    return None

@@ -35,7 +35,7 @@ from ._env import (
     gen_task_cmd,
     PythonEnvDescription
 )
-from tf_yarn import cluster, metrics, evaluator_metrics, packaging, mlflow
+from tf_yarn import cluster, metrics, evaluator_metrics, packaging, mlflow, tensorboard
 from tf_yarn.experiment import Experiment
 from tf_yarn.event import broadcast
 
@@ -74,15 +74,13 @@ TASK_SPEC_NONE = single_server_topology()
 
 
 def _setup_pyenvs(
-        pyenv_zip_path: Union[str, Dict[NodeLabel, str]],
-        standalone_client_mode: bool = False
+        pyenv_zip_path: Union[str, Dict[NodeLabel, str]]
 ) -> Dict[NodeLabel, PythonEnvDescription]:
     if isinstance(pyenv_zip_path, str):
         pyenvs = {NodeLabel.CPU: gen_pyenv_from_existing_archive(
-            pyenv_zip_path,
-            standalone_client_mode)}
+            pyenv_zip_path)}
     else:
-        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path, standalone_client_mode)
+        pyenvs = {label: gen_pyenv_from_existing_archive(env_zip_path)
                   for label, env_zip_path in pyenv_zip_path.items()}
     return pyenvs
 
@@ -138,7 +136,7 @@ def _setup_cluster_spec(
     app: skein.ApplicationClient,
     standalone_client_mode: bool
 ) -> tf.train.ClusterSpec:
-    tasks_not_in_cluster = ['evaluator']
+    tasks_not_in_cluster = ['evaluator', 'tensorboard']
     # In standalone client mode the chief is also not part of the cluster
     if standalone_client_mode:
         tasks_not_in_cluster.append('chief')
@@ -151,6 +149,7 @@ def _setup_skein_cluster(
         pyenvs: Dict[NodeLabel, PythonEnvDescription],
         task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
         *,
+        standalone_client_mode: bool,
         skein_client: skein.Client = None,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
@@ -175,7 +174,10 @@ def _setup_skein_cluster(
                 _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
                             str(task_spec.termination_timeout_seconds))
             services[task_type] = skein.Service(
-                script=gen_task_cmd(pyenv, log_conf_file),
+                script=f'''
+                            set -x
+                            {gen_task_cmd(pyenv, task_type, standalone_client_mode, log_conf_file)}
+                        ''',
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
                 instances=task_spec.instances,
@@ -382,17 +384,16 @@ def run_on_yarn(
     if nb_retries < 0:
         raise ValueError(f'nb_retries must be greater or equal to 0. Got {nb_retries}')
 
-    pyenvs = _setup_pyenvs(
-        pyenv_zip_path,
-        standalone_client_mode=False)
+    pyenvs = _setup_pyenvs(pyenv_zip_path)
 
     n_try = 0
     while True:
         try:
             skein_cluster = _setup_skein_cluster(
                 pyenvs=pyenvs,
-                skein_client=skein_client,
                 task_specs=task_specs,
+                standalone_client_mode=False,
+                skein_client=skein_client,
                 files=files,
                 env=env,
                 queue=queue,
@@ -502,13 +503,12 @@ def standalone_client_mode(
         Name of the yarn application
     """
     try:
-        pyenvs = _setup_pyenvs(
-            pyenv_zip_path,
-            standalone_client_mode=True)
+        pyenvs = _setup_pyenvs(pyenv_zip_path)
         skein_cluster = _setup_skein_cluster(
             pyenvs=pyenvs,
-            skein_client=skein_client,
             task_specs=task_specs,
+            standalone_client_mode=True,
+            skein_client=skein_client,
             files=files,
             env=env,
             queue=queue,
@@ -595,10 +595,12 @@ def _execute_and_await_termination(
         skein_cluster.app,
         eval_monitor_log_thresholds
     )
-    one_shot_metrics_logger = metrics.OneShotMetricsLogger(
+
+    tensorboard_url_event_name = tensorboard.url_event_name(iter_tasks(skein_cluster.tasks))
+    tensorboard_url_logger = metrics.OneShotMetricsLogger(
         skein_cluster.app,
-        {task: ['url'] for task in iter_tasks(skein_cluster.tasks)
-         if task.startswith('tensorboard')},
+        [(tensorboard_url_event_name, tensorboard.URL_EVENT_LABEL)]
+        if tensorboard_url_event_name else [],
         n_try
     )
 
@@ -622,7 +624,7 @@ def _execute_and_await_termination(
                 break
         else:
             eval_metrics_logger.log()
-            one_shot_metrics_logger.log()
+            tensorboard_url_logger.log()
         time.sleep(poll_every_secs)
         state = report.state
 

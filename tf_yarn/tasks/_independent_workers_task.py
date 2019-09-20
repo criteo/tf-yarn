@@ -5,7 +5,7 @@ from tf_yarn._task_commons import (
     _shutdown_container, _process_arguments, _get_experiment
 )
 from tf_yarn._internal import reserve_sock_addr
-from . import cluster
+from tf_yarn import cluster
 
 
 def main() -> None:
@@ -24,8 +24,7 @@ def main() -> None:
 
     # "ps" tasks do not terminate by themselves. See
     # https://github.com/tensorflow/tensorflow/issues/4713.
-    # Tensorboard is terminated after all other tasks in _shutdown_container
-    if task_type not in ['ps', 'tensorboard']:
+    if task_type not in ['ps']:
         thread.join()
         tf.logging.info(f"{task_type}:{task_id} {thread.state}")
 

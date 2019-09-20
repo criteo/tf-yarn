@@ -4,7 +4,7 @@ from typing import (
     NamedTuple
 )
 
-from tf_yarn import packaging
+from tf_yarn import packaging, topologies
 
 
 class PythonEnvDescription(NamedTuple):
@@ -13,35 +13,45 @@ class PythonEnvDescription(NamedTuple):
     dest_path: str
 
 
-INDEPENDENT_WORKERS_MODULE = "tf_yarn._independent_workers_task"
-STANDALONE_CLIENT_MODULE = "tf_yarn._standalone_client_task"
+INDEPENDENT_WORKERS_MODULE = "tf_yarn.tasks._independent_workers_task"
+STANDALONE_CLIENT_MODULE = "tf_yarn.tasks._standalone_client_task"
+TENSORBOARD_MODULE = "tf_yarn.tasks._tensorboard_task"
 CONDA_ENV_NAME = "pyenv"
 CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python"
 
 
-def gen_pyenv_from_existing_archive(path_to_archive: str,
-                                    standalone_client_mode: bool
-                                    ) -> PythonEnvDescription:
+def gen_pyenv_from_existing_archive(path_to_archive: str) -> PythonEnvDescription:
 
-    containers_module = STANDALONE_CLIENT_MODULE if standalone_client_mode \
-        else INDEPENDENT_WORKERS_MODULE
     archive_filename = os.path.basename(path_to_archive)
 
     packer = packaging.detect_packer_from_file(path_to_archive)
     if packer == packaging.PEX_PACKER:
         return PythonEnvDescription(
             path_to_archive,
-            f"./{archive_filename} -m {containers_module} ",
+            f"./{archive_filename}",
             archive_filename)
     elif packer == packaging.CONDA_PACKER:
         return PythonEnvDescription(
             path_to_archive,
-            f"{CONDA_CMD} -m {containers_module}", CONDA_ENV_NAME)
+            f"{CONDA_CMD}", CONDA_ENV_NAME)
     else:
         raise ValueError("Archive format unsupported. Must be .pex or conda .zip")
 
 
 def gen_task_cmd(pyenv: PythonEnvDescription,
+                 task_type: str,
+                 standalone_client_mode: bool,
                  log_conf_file: Optional[str]) -> str:
+
+    if task_type == "tensorboard":
+        containers_module = TENSORBOARD_MODULE
+    elif task_type in topologies.ALL_TASK_TYPES:
+        if standalone_client_mode:
+            containers_module = STANDALONE_CLIENT_MODULE
+        else:
+            containers_module = INDEPENDENT_WORKERS_MODULE
+    else:
+        raise ValueError(f"Invalid task type: {task_type}")
+
     conf_args = f"--log-conf-file={log_conf_file}" if log_conf_file is not None else ""
-    return f"{pyenv.dispatch_task_cmd} " + conf_args
+    return f"{pyenv.dispatch_task_cmd} -m {containers_module} " + conf_args

@@ -83,6 +83,16 @@ def log_metrics(metrics: Dict[str, Any], step: int = None):
         mlflow.log_metrics(metrics, step)
 
 
+def log_artifact(local_path: str, artifact_path: str = None):
+    if use_mlflow():
+        mlflow.log_artifact(local_path, artifact_path)
+
+
+def log_artifacts(local_dir: str, artifact_path: str = None):
+    if use_mlflow():
+        mlflow.log_artifacts(local_dir, artifact_path)
+
+
 def format_key(key: str) -> str:
     if key:
         return key.replace(":", "_").replace("/", "_")

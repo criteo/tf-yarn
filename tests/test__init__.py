@@ -1,16 +1,18 @@
 from unittest import mock
+import traceback
+import skein
+import pytest
+import tensorflow as tf
+
 from tf_yarn import (
     _run_on_cluster,
     _setup_cluster_spec,
     get_safe_experiment_fn,
     SkeinCluster,
     Experiment,
-    run_on_yarn
+    run_on_yarn,
+    ContainerLogStatus
 )
-import traceback
-import skein
-import pytest
-import tensorflow as tf
 from tf_yarn.topologies import TaskSpec
 
 
@@ -162,3 +164,20 @@ def test_retry_run_on_yarn(nb_retries, nb_failures):
         nb_calls = min(nb_retries, nb_failures) + 1
         assert mock_run_on_cluster.call_count == nb_calls
         assert mock_setup_skein_cluster.call_count == nb_calls
+
+
+def test_container_log_status():
+    container_log_status = ContainerLogStatus(
+         {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                      "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
+          "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                      "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
+         {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
+    )
+
+    containers = container_log_status.by_container_id()
+
+    assert containers["container_e17294_1569204305368_264801_01_000002"] == ("chief:0",
+                                                                             "SUCCEEDED")
+    assert containers["container_e95614_6456565654646_344343_01_000003"] == ("evaluator:0",
+                                                                             "FAILED")

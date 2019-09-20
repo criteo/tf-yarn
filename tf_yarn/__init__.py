@@ -66,6 +66,34 @@ class SkeinCluster(NamedTuple):
     events: Dict[str, Dict[str, str]]
 
 
+class ContainerLogStatus(NamedTuple):
+    log_urls: Dict[str, str] = dict()
+    container_status: Dict[str, str] = dict()
+
+    def by_container_id(self) -> Dict[str, Tuple[str, str]]:
+        containers: Dict[str, Tuple[str, str]] = {}
+        if len(self.log_urls.keys()) != len(self.container_status.keys()):
+            logger.warning(f"logs_urls and container_status dicts have not the same length")
+            return containers
+
+        for task, url, status in zip(self.log_urls.keys(),
+                                     self.log_urls.values(),
+                                     self.container_status.values()):
+            container_id = self._get_container_id(url)
+            containers[container_id] = (task, status)
+
+        return containers
+
+    def _get_container_id(self, url: str) -> str:
+        if not url:
+            return ""
+        url_components = url.split("/")
+        if len(url_components) > 1:
+            return url_components[-2]
+
+        return ""
+
+
 class RunFailed(Exception):
     """``run_on_yarn`` failed."""
 
@@ -293,7 +321,6 @@ def run_on_yarn(
     file_systems: List[str] = None,
     log_conf_file: str = None,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    path_to_log_hdfs: str = None,
     nb_retries: int = 0,
     custom_task_module: Optional[str] = None,
     name: str = "RunOnYarn"
@@ -374,9 +401,6 @@ def run_on_yarn(
         'last_training_step': 'Training set of last checkpoint',
         'nb_eval_steps': 'Number of evaluation steps done'
 
-    path_to_log_hdfs
-        Optional path. If specified, tf-yarn will copy hadoop logs into this path
-
     nb_retries
         Number of times the yarn application is retried in case of failures
 
@@ -418,7 +442,7 @@ def run_on_yarn(
                 n_try=n_try,
                 custom_task_module=custom_task_module
             )
-            with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
+            with _shutdown_on_exception(skein_cluster.app):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
 
                 return _run_on_cluster(
@@ -451,7 +475,6 @@ def standalone_client_mode(
         acls: ACLs = _default_acls_all_access(),
         file_systems: List[str] = None,
         log_conf_file: str = None,
-        path_to_log_hdfs: str = None,
         name: str = "RunOnYarn"
 ):
     """
@@ -511,9 +534,6 @@ def standalone_client_mode(
         optional file with log config, setups logging by default with INFO verbosity,
         if you specify a file here don't forget to also ship it to the containers via files arg
 
-    path_to_log_hdfs
-        Optional path. If specified, tf-yarn will copy hadoop logs into this path
-
     name
         Name of the yarn application
     """
@@ -533,7 +553,7 @@ def standalone_client_mode(
             name=name
         )
 
-        with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
+        with _shutdown_on_exception(skein_cluster.app):
             cluster_spec = _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, True)
 
             _send_config_proto(skein_cluster, tf_session_config)
@@ -574,8 +594,7 @@ def _send_config_proto(
 
 
 @contextmanager
-def _shutdown_on_exception(app: skein.ApplicationClient,
-                           path_to_log_hdfs: str = None):
+def _shutdown_on_exception(app: skein.ApplicationClient):
     # Ensure SIGINT is not masked to enable kill on C-c.
     import signal
     signal.signal(signal.SIGINT, signal.default_int_handler)
@@ -591,10 +610,6 @@ def _shutdown_on_exception(app: skein.ApplicationClient,
             app.shutdown(FinalStatus.FAILED)
         logger.exception("Application shutdown due to an exception")
         raise
-    finally:
-        if path_to_log_hdfs:
-            with tf.gfile.GFile(f'{path_to_log_hdfs}/yarn_logs.txt', 'wb') as fd:
-                fd.write(app_logs(app))
 
 
 def _execute_and_await_termination(
@@ -629,9 +644,8 @@ def _execute_and_await_termination(
 
         if report.final_status != "undefined":
             skein_cluster.event_listener.join()
-            logger.info("events")
-            logger.info(skein_cluster.events)
-            log_events, result_metrics = _handle_events(skein_cluster.events, n_try)
+            log_events, result_metrics, container_status = _handle_events(skein_cluster.events,
+                                                                          n_try)
             logger.info(log_events)
             if report.final_status == "failed":
                 raise RunFailed
@@ -644,7 +658,43 @@ def _execute_and_await_termination(
         state = report.state
 
     result_metrics.log_mlflow(n_try)
+
+    containers = container_status.by_container_id()
+
+    # add one for AM container
+    wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
+
+    logs = _get_app_logs(
+        skein_cluster.client,
+        skein_cluster.app,
+        wait_for_nb_logs)
+    _save_logs_to_mlflow(logs, containers, n_try)
+
     return result_metrics
+
+
+def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],
+                        containers: Dict[str, Tuple[str, str]],
+                        n_try: int):
+    if not logs:
+        return
+
+    for key, logs in logs.items():
+        if key in containers:
+            task, status = containers[key]
+            filename = mlflow.format_key(f"{task}_{status}_{n_try}")
+        else:
+            filename = mlflow.format_key(f"{key}_{n_try}")
+        _save_text_to_mlflow(logs, filename)
+
+
+def _save_text_to_mlflow(content, filename):
+    logger.info(f"save file {filename} to mlflow")
+    with tempfile.TemporaryDirectory() as tempdir:
+        path = os.path.join(tempdir, filename)
+        with open(path, 'w') as f:
+            f.write(content)
+        mlflow.log_artifact(path)
 
 
 def _format_app_report(report: ApplicationReport) -> str:
@@ -685,7 +735,7 @@ def _aggregate_events(
 def _handle_events(
     events: Dict[str, Dict[str, str]],
     n_try: int
-) -> Tuple[str, metrics.Metrics]:
+) -> Tuple[str, metrics.Metrics, ContainerLogStatus]:
     header = []
     details = []
     min_training_start_time = timedelta.max
@@ -696,6 +746,8 @@ def _handle_events(
     valid_eval_time = True
     container_duration: Dict[str, Optional[timedelta]] = dict()
     train_eval_time_per_node: Dict[str, Optional[timedelta]] = dict()
+    container_log_urls: Dict[str, str] = dict()
+    container_status: Dict[str, str] = dict()
     for task, stages in sorted(events.items()):
         if "stop" in stages:
             status = "FAILED" if stages["stop"] else "SUCCEEDED"
@@ -709,6 +761,8 @@ def _handle_events(
         exception = stages.get("stop", "")
         logs = stages.get("logs", "")
 
+        container_log_urls[task] = logs
+        container_status[task] = status
         container_duration[task] = None
         if 'container_start_time' in stages and 'container_stop_time' in stages:
             container_duration[task] = timedelta(seconds=(float(stages['container_stop_time'])
@@ -757,19 +811,29 @@ def _handle_events(
         container_duration,
         train_eval_time_per_node
     )
+
     return ((os.linesep + os.linesep.join(header)
              + os.linesep * (1 + bool(details))
-             + os.linesep.join(details)), result_metrics)
+             + os.linesep.join(details)),
+            result_metrics,
+            ContainerLogStatus(container_log_urls, container_status))
 
 
-def app_logs(app: skein.ApplicationClient) -> str:
-    command = ["yarn", "logs", "-applicationId", app.id]
-    for ind in range(YARN_LOG_TRIES - 1):
+def _get_app_logs(
+    client: skein.Client,
+    app: skein.ApplicationClient,
+    wait_for_nb_logs: int
+) -> Optional[skein.model.ApplicationLogs]:
+    for ind in range(YARN_LOG_TRIES):
         try:
-            return subprocess.check_output(command).decode()
+            logs = client.application_logs(app.id)
+            nb_keys = len(logs.keys())
+            logger.info(f"Got {nb_keys}/{wait_for_nb_logs} log files")
+            if nb_keys == wait_for_nb_logs:
+                return logs
         except Exception:
             logger.warn(
-                f"Cannot collect logs (attempt {ind}/{YARN_LOG_TRIES})",
+                f"Cannot collect logs (attempt {ind+1}/{YARN_LOG_TRIES})",
                 exc_info=True)
-        time.sleep(1)
-    return subprocess.check_output(command).decode()
+        time.sleep(3)
+    return None

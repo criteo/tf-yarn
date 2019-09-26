@@ -198,9 +198,16 @@ def _setup_skein_cluster(
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
             service_env = task_env.copy()
-            if task_spec.termination_timeout_seconds >= 0:
-                _add_to_env(service_env, "SERVICE_TERMINATION_TIMEOUT_SECONDS",
-                            str(task_spec.termination_timeout_seconds))
+            if task_spec.tb_termination_timeout_seconds >= 0:
+                _add_to_env(service_env, "TB_TERMINATION_TIMEOUT_SECONDS",
+                            str(task_spec.tb_termination_timeout_seconds))
+            if task_spec.tb_model_dir:
+                _add_to_env(service_env, "TB_MODEL_DIR",
+                            str(task_spec.tb_model_dir))
+            if task_spec.tb_extra_args:
+                _add_to_env(service_env, "TB_EXTRA_ARGS",
+                            str(task_spec.tb_extra_args))
+
             services[task_type] = skein.Service(
                 script=f'''
                             set -x

@@ -55,7 +55,7 @@ def experiment_fn() -> Experiment:
 
     estimator = tf.estimator.LinearClassifier(
         feature_columns=winequality.get_feature_columns(),
-        model_dir=f"{HDFS_DIR}",
+        model_dir=HDFS_DIR,
         n_classes=winequality.get_n_classes())
     return Experiment(
         estimator,
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         task_specs={
             "chief": TaskSpec(memory="2 GiB", vcores=4),
             "evaluator": TaskSpec(memory="2 GiB", vcores=1),
-            "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
+            "tensorboard": TaskSpec(memory="2 GiB", vcores=1, tb_model_dir=HDFS_DIR)
         },
         files={
             **editable_requirements,

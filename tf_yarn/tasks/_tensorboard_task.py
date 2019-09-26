@@ -1,4 +1,5 @@
 import logging
+import os
 import skein
 import tensorflow as tf
 
@@ -20,12 +21,19 @@ def main() -> None:
 
     _task_commons._setup_container_logs(client)
     cluster_tasks = _task_commons._get_cluster_tasks(client)
-    experiment = _task_commons._get_experiment(client)
+
+    model_dir = os.getenv('TB_MODEL_DIR', "")
+    if not model_dir:
+        tf.logging.info("Read model_dir from estimator config")
+        experiment = _task_commons._get_experiment(client)
+        model_dir = experiment.estimator.config.model_dir
+
+    tf.logging.info(f"Starting tensorboard on {model_dir}")
 
     thread = _internal.MonitoredThread(
         name=f"{task_type}:{task_id}",
         target=tensorboard.start_tf_board,
-        args=(client, experiment.estimator.config.model_dir),
+        args=(client, model_dir),
         daemon=True)
     thread.start()
 

@@ -16,7 +16,7 @@ URL_EVENT_LABEL = "Tensorboard listening on"
 
 
 def get_termination_timeout():
-    timeout = os.environ.get('SERVICE_TERMINATION_TIMEOUT_SECONDS')
+    timeout = os.environ.get('TB_TERMINATION_TIMEOUT_SECONDS')
     if timeout is not None:
         timeout = int(timeout)
     else:
@@ -25,9 +25,6 @@ def get_termination_timeout():
 
 
 def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
-    model_dir = os.getenv('TF_BOARD_MODEL_DIR', tf_board_model_dir)
-    tf.logging.info(f"Starting tensorboard on {model_dir}")
-
     task = cluster.get_task()
     os.environ['GCS_READ_CACHE_DISABLED'] = '1'
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'cpp'
@@ -38,11 +35,11 @@ def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
                                           default.get_assets_zip_provider())
         with _internal.reserve_sock_addr() as (h, p):
             tensorboard_url = f"http://{h}:{p}"
-            argv = ['tensorboard', f"--logdir={model_dir}",
+            argv = ['tensorboard', f"--logdir={tf_board_model_dir}",
                     f"--port={p}"]
-            # Append more arguments if needed.
-            if 'TF_BOARD_EXTRA_ARGS' in os.environ:
-                argv += os.environ['TF_BOARD_EXTRA_ARGS'].split(' ')
+            tb_extra_args = os.getenv('TB_EXTRA_ARGS', "")
+            if tb_extra_args:
+                argv += tb_extra_args.split(' ')
             tensorboard.configure(argv)
         tensorboard.launch()
         event.start_event(client, task)

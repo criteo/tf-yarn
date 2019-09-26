@@ -20,18 +20,27 @@ class NodeLabel(Enum):
 
 
 class TaskSpec(object):
-    __slots__ = ('_resources', 'instances', 'label', 'termination_timeout_seconds')
+    __slots__ = ('_resources',
+                 'instances',
+                 'label',
+                 'tb_termination_timeout_seconds',
+                 'tb_model_dir',
+                 'tb_extra_args')
 
     def __init__(self,
                  memory: Union[int, str],
                  vcores: int,
                  instances: int = 1,
                  label: NodeLabel = NodeLabel.CPU,
-                 termination_timeout_seconds: int = -1):
+                 tb_termination_timeout_seconds: int = -1,
+                 tb_model_dir: str = None,
+                 tb_extra_args: str = None):
         self._resources = skein.model.Resources(memory, vcores)
         self.instances = instances
         self.label = label
-        self.termination_timeout_seconds = termination_timeout_seconds
+        self.tb_termination_timeout_seconds = tb_termination_timeout_seconds
+        self.tb_model_dir = tb_model_dir
+        self.tb_extra_args = tb_extra_args
 
     @property
     def memory(self) -> int:

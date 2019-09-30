@@ -41,6 +41,7 @@ def gen_pyenv_from_existing_archive(path_to_archive: str) -> PythonEnvDescriptio
 def gen_task_cmd(pyenv: PythonEnvDescription,
                  task_type: str,
                  standalone_client_mode: bool,
+                 custom_task_module: Optional[str],
                  log_conf_file: Optional[str]) -> str:
 
     if task_type == "tensorboard":
@@ -48,6 +49,8 @@ def gen_task_cmd(pyenv: PythonEnvDescription,
     elif task_type in topologies.ALL_TASK_TYPES:
         if standalone_client_mode:
             containers_module = STANDALONE_CLIENT_MODULE
+        elif custom_task_module:
+            containers_module = custom_task_module
         else:
             containers_module = INDEPENDENT_WORKERS_MODULE
     else:

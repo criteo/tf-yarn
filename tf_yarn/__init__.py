@@ -150,6 +150,7 @@ def _setup_skein_cluster(
         task_specs: Dict[str, TaskSpec] = TASK_SPEC_NONE,
         *,
         standalone_client_mode: bool,
+        custom_task_module: Optional[str] = None,
         skein_client: skein.Client = None,
         files: Dict[str, str] = None,
         env: Dict[str, str] = {},
@@ -176,7 +177,12 @@ def _setup_skein_cluster(
             services[task_type] = skein.Service(
                 script=f'''
                             set -x
-                            {gen_task_cmd(pyenv, task_type, standalone_client_mode, log_conf_file)}
+                            {gen_task_cmd(
+                                pyenv,
+                                task_type,
+                                standalone_client_mode,
+                                custom_task_module,
+                                log_conf_file)}
                         ''',
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
@@ -289,6 +295,7 @@ def run_on_yarn(
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     path_to_log_hdfs: str = None,
     nb_retries: int = 0,
+    custom_task_module: Optional[str] = None,
     name: str = "RunOnYarn"
 ) -> Optional[metrics.Metrics]:
     """Run an experiment on YARN.
@@ -373,6 +380,13 @@ def run_on_yarn(
     nb_retries
         Number of times the yarn application is retried in case of failures
 
+    custom_task_module
+        Provide the full module name of a custom task that is executed on each worker
+        None by default
+        (Module will be invoked with python -m {custom_task_module} on the cluster)
+        Only for advanced use cases, can be useful for example,
+        to bypass/tweek the existing estimator.train_and_evaluate pattern
+
     name
         Name of the yarn application
 
@@ -401,7 +415,8 @@ def run_on_yarn(
                 file_systems=file_systems,
                 log_conf_file=log_conf_file,
                 name=name,
-                n_try=n_try
+                n_try=n_try,
+                custom_task_module=custom_task_module
             )
             with _shutdown_on_exception(skein_cluster.app, path_to_log_hdfs):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)

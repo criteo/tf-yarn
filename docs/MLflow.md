@@ -1,8 +1,8 @@
-# MLflow
+# Integration with MLflow
 
 MLflow tracking is activated when mlflow package is installed (`pip install mlflow` or `conda install mlflow`) and when the tracking uri is set.
 
-To setup (MLflow tracking)[(https://www.mlflow.org/docs/latest/tracking.html#where-runs-are-recorde] you need set the MLFLOW_TRACKING_URI environment variable to a tracking server’s URI or call [`mlflow.set_tracking_uri()`](https://www.mlflow.org/docs/latest/python_api/mlflow.html#mlflow.set_tracking_uri).
+To setup [MLflow tracking](https://www.mlflow.org/docs/latest/tracking.html#where-runs-are-recorde) you need set the MLFLOW_TRACKING_URI environment variable to a tracking server’s URI or call [`mlflow.set_tracking_uri()`](https://www.mlflow.org/docs/latest/python_api/mlflow.html#mlflow.set_tracking_uri).
 
 The MLflow example can be found here [here](https://github.com/criteo/tf-yarn/blob/master/examples/mlflow_example.py).
 
@@ -25,4 +25,4 @@ class MyHook(tf.train.SessionRunHook):
        if cluster.is_evaluator():
            mlflow.log_tag(..)
 ```
-An example hook logging the steps/sec can be found here [StepPerSecondHook](https://github.com/criteo/tf-yarn/blob/master/tf_yarn/metrics.py#L66)
+An example hook logging the steps/sec can be found here [StepPerSecondHook](https://github.com/criteo/tf-yarn/blob/master/tf_yarn/metrics.py#L66).

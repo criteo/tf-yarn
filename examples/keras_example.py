@@ -1,10 +1,11 @@
 """
     Full example of using TF-Yarn to run Keras on YARN.
 """
+import logging
+logging.basicConfig(level="INFO") # noqa
 import sys
 import getpass
 import gzip
-import logging
 import subprocess
 import os
 import skein
@@ -17,9 +18,6 @@ from tensorflow import keras
 
 from tf_yarn import event, TaskSpec, Experiment, run_on_yarn, packaging
 import winequality
-
-logging.basicConfig(level="INFO")
-
 
 USER = getpass.getuser()
 

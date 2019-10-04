@@ -2,6 +2,7 @@
 Example of using LinearClassifier
 """
 import logging
+logging.basicConfig(level="INFO") # noqa
 import os
 import pwd
 import getpass
@@ -17,8 +18,6 @@ from datetime import datetime
 
 from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
 import winequality
-
-logging.basicConfig(level="INFO")
 
 USER = getpass.getuser()
 

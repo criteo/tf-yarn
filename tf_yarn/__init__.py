@@ -17,7 +17,6 @@ from functools import partial
 import tempfile
 from threading import Thread
 from datetime import timedelta
-import subprocess
 
 import cloudpickle
 import json
@@ -664,13 +663,24 @@ def _execute_and_await_termination(
     # add one for AM container
     wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
 
-    logs = _get_app_logs(
-        skein_cluster.client,
-        skein_cluster.app,
-        wait_for_nb_logs)
-    _save_logs_to_mlflow(logs, containers, n_try)
+    if _is_pyarrow_installed:
+        logs = _get_app_logs(
+            skein_cluster.client,
+            skein_cluster.app,
+            wait_for_nb_logs)
+        _save_logs_to_mlflow(logs, containers, n_try)
+    else:
+        logger.warning("Pyarrow is not installed. Logs won't be stored on HDFS")
 
     return result_metrics
+
+
+def _is_pyarrow_installed():
+    try:
+        import pyarrow
+        return True
+    except ModuleNotFoundError:
+        return False
 
 
 def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],

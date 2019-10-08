@@ -646,6 +646,20 @@ def _execute_and_await_termination(
             log_events, result_metrics, container_status = _handle_events(skein_cluster.events,
                                                                           n_try)
             logger.info(log_events)
+
+            containers = container_status.by_container_id()
+            # add one for AM container
+            wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
+            if _is_pyarrow_installed:
+                logs = _get_app_logs(
+                    skein_cluster.client,
+                    skein_cluster.app,
+                    wait_for_nb_logs
+                )
+                _save_logs_to_mlflow(logs, containers, n_try)
+            else:
+                logger.warning("Pyarrow is not installed. Logs won't be stored on HDFS")
+
             if report.final_status == "failed":
                 raise RunFailed
             else:
@@ -657,21 +671,6 @@ def _execute_and_await_termination(
         state = report.state
 
     result_metrics.log_mlflow(n_try)
-
-    containers = container_status.by_container_id()
-
-    # add one for AM container
-    wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
-
-    if _is_pyarrow_installed:
-        logs = _get_app_logs(
-            skein_cluster.client,
-            skein_cluster.app,
-            wait_for_nb_logs)
-        _save_logs_to_mlflow(logs, containers, n_try)
-    else:
-        logger.warning("Pyarrow is not installed. Logs won't be stored on HDFS")
-
     return result_metrics
 
 

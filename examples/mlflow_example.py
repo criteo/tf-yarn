@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # you need to install mlflow `pip install mlflow`
     # and set MLflow tracking uri
     utils.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
-    mlflow.start_run()
+    mlflow.start_run(experiment_id=77)
 
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()

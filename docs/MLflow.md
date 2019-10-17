@@ -7,10 +7,14 @@ To setup [MLflow tracking](https://www.mlflow.org/docs/latest/tracking.html#wher
 The MLflow example can be found here [here](https://github.com/criteo/tf-yarn/blob/master/examples/mlflow_example.py).
 
 Currently tf-yarn logs the following metrics by default:
-- Container duration times in seconds
-- Container log urls & final status
 - Learning speed of the chief only (steps/sec)
 - Statistic about the evaluator (Awake/idle ratio, Eval step mean duration in seconds)
+
+For MLFlow artifact logging to HDFS you also need PyArrow (`pip install pyarrow` or `conda install pyarrow`)
+
+tf-yarn adds the following artifacts by default:
+- Container duration times
+- Container log urls & final status
 
 Distributed metrics are implemented via TensorFlow hooks. You can add you own metrics by adding new Hooks and choose if you want to log from all nodes or from specific nodes (chief, worker, ..) via the tf_yarn.cluster module.
 

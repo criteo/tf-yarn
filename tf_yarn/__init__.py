@@ -650,15 +650,12 @@ def _execute_and_await_termination(
             containers = container_status.by_container_id()
             # add one for AM container
             wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
-            if _is_pyarrow_installed:
-                logs = _get_app_logs(
-                    skein_cluster.client,
-                    skein_cluster.app,
-                    wait_for_nb_logs
-                )
-                _save_logs_to_mlflow(logs, containers, n_try)
-            else:
-                logger.warning("Pyarrow is not installed. Logs won't be stored on HDFS")
+            logs = _get_app_logs(
+                skein_cluster.client,
+                skein_cluster.app,
+                wait_for_nb_logs
+            )
+            _save_logs_to_mlflow(logs, containers, n_try)
 
             if report.final_status == "failed":
                 raise RunFailed
@@ -674,14 +671,6 @@ def _execute_and_await_termination(
     return result_metrics
 
 
-def _is_pyarrow_installed():
-    try:
-        import pyarrow
-        return True
-    except ModuleNotFoundError:
-        return False
-
-
 def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],
                         containers: Dict[str, Tuple[str, str]],
                         n_try: int):
@@ -694,16 +683,7 @@ def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],
             filename = mlflow.format_key(f"{task}_{status}_{n_try}")
         else:
             filename = mlflow.format_key(f"{key}_{n_try}")
-        _save_text_to_mlflow(logs, filename)
-
-
-def _save_text_to_mlflow(content, filename):
-    logger.info(f"save file {filename} to mlflow")
-    with tempfile.TemporaryDirectory() as tempdir:
-        path = os.path.join(tempdir, filename)
-        with open(path, 'w') as f:
-            f.write(content)
-        mlflow.log_artifact(path)
+        mlflow.save_text_to_mlflow(logs, filename)
 
 
 def _format_app_report(report: ApplicationReport) -> str:

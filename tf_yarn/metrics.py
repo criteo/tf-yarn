@@ -24,14 +24,19 @@ class Metrics(NamedTuple):
     train_eval_time_per_node: Dict[str, Optional[timedelta]]
 
     def log_mlflow(self, n_try: int):
+        content = ""
         for metric_name, value in self._asdict().items():
             if isinstance(value, dict):
-                mlflow.log_metrics({
-                    mlflow.format_key(f"{metric_name}_{k}_{n_try}"): v.total_seconds()
-                    for k, v in value.items() if v})
+                for k, v in value.items():
+                    if v:
+                        formatted_key = mlflow.format_key(f"{metric_name}_{k}_{n_try}")
+                        content = content + f"{formatted_key}: {v.total_seconds()} secs\n"
             else:
                 if value:
-                    mlflow.log_metric(f"{metric_name}_{n_try}", value.total_seconds())
+                    formatted_key = mlflow.format_key(f"{metric_name}_{n_try}")
+                    content = content + f"{formatted_key}: {value.total_seconds()} secs\n"
+
+        mlflow.save_text_to_mlflow(content, "tf_yarn_duration_stats")
 
 
 class OneShotMetricsLogger(NamedTuple):

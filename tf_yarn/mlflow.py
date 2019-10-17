@@ -1,4 +1,6 @@
 import logging
+import tempfile
+import os
 
 from typing import Dict, Any, Optional
 
@@ -33,6 +35,14 @@ def _detect_mlflow() -> bool:
         return False
 
     return True
+
+
+def _is_pyarrow_installed():
+    try:
+        import pyarrow
+        return True
+    except ModuleNotFoundError:
+        return False
 
 
 def active_run_id() -> str:
@@ -98,3 +108,19 @@ def format_key(key: str) -> str:
         return key.replace(":", "_").replace("/", "_")
     else:
         return ""
+
+
+def save_text_to_mlflow(content, filename):
+    if not use_mlflow():
+        return
+
+    if not _is_pyarrow_installed():
+        logger.warning(f"Pyarrow is not installed. {filename} artifact won't be stored on HDFS")
+        return
+
+    logger.info(f"save file {filename} to mlflow")
+    with tempfile.TemporaryDirectory() as tempdir:
+        path = os.path.join(tempdir, filename)
+        with open(path, 'w') as f:
+            f.write(content)
+        mlflow.log_artifact(path)

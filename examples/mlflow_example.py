@@ -34,20 +34,17 @@ HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
 
 
 def experiment_fn() -> Experiment:
-    train_data, test_data = winequality.get_train_eval_datasets(WINE_EQUALITY_FILE)
 
     def train_input_fn():
-        return (train_data.shuffle(1000)
+        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
+        return (dataset.shuffle(1000)
                 .batch(128)
-                .repeat()
-                .make_one_shot_iterator()
-                .get_next())
+                .repeat())
 
     def eval_input_fn():
-        return (test_data.shuffle(1000)
-                .batch(128)
-                .make_one_shot_iterator()
-                .get_next())
+        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
+        return (dataset.shuffle(1000)
+                .batch(128))
 
     estimator = tf.estimator.LinearClassifier(
         feature_columns=winequality.get_feature_columns(),

@@ -2,5 +2,4 @@ pex==1.6.7
 conda-pack
 cloudpickle==1.0.0
 skein==0.8.0
-pandas
 pip>=18.1

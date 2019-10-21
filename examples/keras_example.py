@@ -39,26 +39,23 @@ HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
 
 def main():
     def experiment_fn() -> Experiment:
-        train_data, test_data = winequality.get_train_eval_datasets(WINE_EQUALITY_FILE)
 
         def convert_to_tensor(x, y):
             return (tf.convert_to_tensor(list(x.values()), dtype=tf.float32),
                     tf.convert_to_tensor(y, dtype=tf.int32))
 
         def train_input_fn():
-            return (train_data.map(convert_to_tensor)
+            dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
+            return (dataset.map(convert_to_tensor)
                     .shuffle(1000)
                     .batch(128)
-                    .repeat()
-                    .make_one_shot_iterator()
-                    .get_next())
+                    .repeat())
 
         def eval_input_fn():
-            return (test_data.map(convert_to_tensor)
+            dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
+            return (dataset.map(convert_to_tensor)
                     .shuffle(1000)
-                    .batch(128)
-                    .make_one_shot_iterator()
-                    .get_next())
+                    .batch(128))
 
         model = keras.Sequential()
         model.add(keras.layers.Dense(units=300, activation="relu", input_shape=(11,)))

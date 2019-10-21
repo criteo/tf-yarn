@@ -4,7 +4,7 @@ import socket
 
 import skein
 import tensorflow as tf
-from tensorboard import default, program
+from tensorboard import program
 
 from typing import Optional, Iterable, Tuple
 
@@ -31,8 +31,7 @@ def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION'] = '2'
     try:
         program.setup_environment()
-        tensorboard = program.TensorBoard(default.get_plugins(),
-                                          default.get_assets_zip_provider())
+        tensorboard = program.TensorBoard()
         with _internal.reserve_sock_addr() as (h, p):
             tensorboard_url = f"http://{h}:{p}"
             argv = ['tensorboard', f"--logdir={tf_board_model_dir}",

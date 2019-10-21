@@ -40,18 +40,17 @@ HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
 
 
 def train_input_fn():
-    train_data, test_data = winequality.get_train_eval_datasets(WINE_EQUALITY_FILE)
-    return (train_data.shuffle(1000)
+    dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
+    return (dataset.shuffle(1000)
             .batch(128)
             .repeat()
             )
 
 
 def eval_input_fn():
-    train_data, test_data = winequality.get_train_eval_datasets(WINE_EQUALITY_FILE)
-    return (test_data.shuffle(1000)
+    dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
+    return (dataset.shuffle(1000)
             .batch(128)
-            .repeat()
             )
 
 

@@ -45,8 +45,8 @@ WORKER0_PORT = 8888
 def test_start_cluster_worker(task_name, task_index):
     task = f"{task_name}:{task_index}"
 
-    CLUSTER_SPEC = {"worker:0/init": f"{WORKER0_HOST}:{WORKER0_PORT}",
-                    f"{task}/init": f"{CURRENT_HOST}:{CURRENT_PORT}"}
+    CLUSTER_SPEC = {"worker:0/init": [f"{WORKER0_HOST}:{WORKER0_PORT}"],
+                    f"{task}/init": [f"{CURRENT_HOST}:{CURRENT_PORT}"]}
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ))
@@ -54,7 +54,7 @@ def test_start_cluster_worker(task_name, task_index):
 
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
 
-        mock_event.wait.side_effect = lambda client, key: CLUSTER_SPEC[key]
+        mock_event.wait.side_effect = lambda client, key: CLUSTER_SPEC[key][0]
         mock_client = mock.Mock(spec=skein.ApplicationClient)
         cluster.start_cluster((CURRENT_HOST, CURRENT_PORT), mock_client, [task, "worker:0"])
         mock_event.init_event.assert_called_once_with(mock_client, task,
@@ -68,13 +68,13 @@ def test_start_cluster_worker(task_name, task_index):
 def test_start_tf_server(task_name, task_index, is_server_started):
     task = f"{task_name}:{task_index}"
 
-    CLUSTER_SPEC = {"worker:0/init": f"{WORKER0_HOST}:{WORKER0_PORT}",
-                    f"{task}/init": f"{CURRENT_HOST}:{CURRENT_PORT}"}
+    CLUSTER_SPEC = {"worker:0/init": [f"{WORKER0_HOST}:{WORKER0_PORT}"],
+                    f"{task}/init": [f"{CURRENT_HOST}:{CURRENT_PORT}"]}
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ))
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
-        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.train"))
+        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.distribute"))
         cluster.start_tf_server(CLUSTER_SPEC)
 
         if is_server_started:

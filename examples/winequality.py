@@ -10,10 +10,11 @@ FEATURES = [
 LABEL = "quality"
 
 
-def get_train_eval_datasets(
+def get_dataset(
     path: str,
-    train_fraction: float = 0.7
-) -> typing.Tuple[tf.data.Dataset, tf.data.Dataset]:
+    train_fraction: float = 0.7,
+    split: str = "train"
+) -> tf.data.Dataset:
     def split_label(*row):
         return dict(zip(FEATURES, row)), row[-1]
 
@@ -26,15 +27,18 @@ def get_train_eval_datasets(
     def in_test_set(*row):
         return ~in_training_set(*row)
 
-    data = tf.contrib.data.CsvDataset(
+    data = tf.data.experimental.CsvDataset(
         path,
         [tf.float32] * len(FEATURES) + [tf.int32],
         header=True,
         field_delim=";")
 
-    train = data.filter(in_training_set).map(split_label).cache()
-    test = data.filter(in_test_set).map(split_label).cache()
-    return train, test
+    if split == "train":
+        return data.filter(in_training_set).map(split_label)
+    elif split == "test":
+        return data.filter(in_test_set).map(split_label)
+    else:
+        raise ValueError(f"Unknown option split, must be 'train' or 'test'")
 
 
 def get_feature_columns():

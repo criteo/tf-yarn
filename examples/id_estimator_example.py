@@ -21,8 +21,8 @@ def model_fn(features, labels, mode):
             predictions={"x": x},
             export_outputs={})
 
-    loss = tf.losses.mean_squared_error(x, labels)
-    train_op = tf.assign_add(tf.train.get_global_step(), 1)
+    loss = tf.compat.v1.losses.mean_squared_error(x, labels)
+    train_op = tf.compat.v1.assign_add(tf.compat.v1.train.get_global_step(), 1)
     return tf.estimator.EstimatorSpec(
         mode=mode,
         loss=loss,

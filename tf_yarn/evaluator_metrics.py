@@ -69,7 +69,7 @@ class EvaluatorMetricsLogger():
                 logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
 
 
-class EvalMonitorHook(tf.train.SessionRunHook):
+class EvalMonitorHook(tf.estimator.SessionRunHook):
     '''
     Hook to generate statistics about evaluator usage
     Usage: tf.estimator.EvalSpec(...,hooks=[Eval_analyzer_hook()])
@@ -84,7 +84,7 @@ class EvalMonitorHook(tf.train.SessionRunHook):
 
     def before_run(self, run_context):
         self.eval_start_time = time.time()
-        return tf.train.SessionRunArgs(tf.train.get_global_step())
+        return tf.estimator.SessionRunArgs(tf.compat.v1.train.get_global_step())
 
     def after_run(self, _run_context, run_values):
         self.step_counter += 1

@@ -251,8 +251,8 @@ def _setup_skein_cluster(
 
 
 def _hook_name_already_exists(
-        hook: tf.train.SessionRunHook,
-        hooks: List[tf.train.SessionRunHook]) -> bool:
+        hook: tf.estimator.SessionRunHook,
+        hooks: List[tf.estimator.SessionRunHook]) -> bool:
     hook_name = type(hook).__name__
     return len([h for h in hooks
                 if type(h).__name__ == hook_name]) > 0

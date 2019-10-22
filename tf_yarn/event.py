@@ -1,3 +1,4 @@
+import logging
 import time
 import traceback
 
@@ -5,12 +6,14 @@ import skein
 import typing
 import tensorflow as tf
 
+_logger = logging.getLogger(__name__)
+
 
 def wait(client: skein.ApplicationClient, key: str) -> str:
     """
     Wait for a key
     """
-    tf.logging.info("Waiting for " + key)
+    _logger.info("Waiting for " + key)
     return client.kv.wait(key).decode()
 
 
@@ -68,7 +71,7 @@ def broadcast(
     key: str,
     value: str = ""
 ) -> None:
-    tf.logging.info(f"Broadcasting {key} = {value!r}")
+    _logger.info(f"Broadcasting {key} = {value!r}")
     try:
         client.kv[key] = value.encode()
     except AttributeError:

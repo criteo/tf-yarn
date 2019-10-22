@@ -6,19 +6,16 @@ It should :
 * The graph is distributed from this client to these workers
 * Compute the mean
 """
-import sys
-
 import logging
+logging.basicConfig(level="INFO") # noqa
+import sys
 import numpy as np
 import skein
 import tensorflow as tf
 
-from tf_yarn import event
-from tf_yarn import TaskSpec, packaging, standalone_client_mode
+from tf_yarn import event, TaskSpec, packaging, standalone_client_mode
 
 NODE_NAME = "worker"
-
-logging.basicConfig(level="INFO")
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +55,7 @@ def main():
 
         with tf.Session(f"grpc://{first_task}", config=session_config) as sess:
             result = sess.run(mean, feed_dict={x: np.random.random(size)})
-            print(f"mean = {result}")
+            logger.info(f"mean = {result}")
 
 
 if __name__ == "__main__":

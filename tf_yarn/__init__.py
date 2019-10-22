@@ -1,5 +1,6 @@
 import importlib
 import logging
+import logging.config
 import uuid
 import os
 import time
@@ -184,7 +185,6 @@ def _setup_skein_cluster(
         queue: str = "default",
         acls: ACLs = None,
         file_systems: List[str] = None,
-        log_conf_file: str = None,
         name: str = "RunOnYarn",
         n_try: int = 0
 ) -> SkeinCluster:
@@ -215,8 +215,7 @@ def _setup_skein_cluster(
                                 pyenv,
                                 task_type,
                                 standalone_client_mode,
-                                custom_task_module,
-                                log_conf_file)}
+                                custom_task_module)}
                         ''',
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
@@ -260,7 +259,7 @@ def _hook_name_already_exists(
 
 
 def _add_monitor_to_experiment(experiment: Experiment) -> Experiment:
-    tf.logging.info(f"configured training hooks: {experiment.train_spec.hooks}")
+    logger.info(f"configured training hooks: {experiment.train_spec.hooks}")
 
     training_hooks = list(experiment.train_spec.hooks)
 
@@ -271,7 +270,7 @@ def _add_monitor_to_experiment(experiment: Experiment) -> Experiment:
         if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
             training_hooks.append(steps_per_second_hook)
         else:
-            tf.logging.warning("do not add StepPerSecondHook as there is already one configured")
+            logger.warning("do not add StepPerSecondHook as there is already one configured")
 
     monitored_train_spec = experiment.train_spec._replace(
         hooks=training_hooks
@@ -325,7 +324,6 @@ def run_on_yarn(
     queue: str = "default",
     acls: ACLs = _default_acls_all_access(),
     file_systems: List[str] = None,
-    log_conf_file: str = None,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     nb_retries: int = 0,
     custom_task_module: Optional[str] = None,
@@ -391,10 +389,6 @@ def run_on_yarn(
         A list of namenode URIs to acquire delegation tokens for
         in addition to ``fs.defaultFS``.
 
-    log_conf_file
-        optional file with log config, setups logging by default with INFO verbosity,
-        if you specify a file here don't forget to also ship it to the containers via files arg
-
     eval_monitor_log_thresholds
         optional dictionnary of string to (float 1, float 2).
         Each couple (key, value) corresponds to an evaluation
@@ -443,7 +437,6 @@ def run_on_yarn(
                 queue=queue,
                 acls=acls,
                 file_systems=file_systems,
-                log_conf_file=log_conf_file,
                 name=name,
                 n_try=n_try,
                 custom_task_module=custom_task_module
@@ -480,7 +473,6 @@ def standalone_client_mode(
         queue: str = "default",
         acls: ACLs = _default_acls_all_access(),
         file_systems: List[str] = None,
-        log_conf_file: str = None,
         name: str = "RunOnYarn"
 ):
     """
@@ -536,10 +528,6 @@ def standalone_client_mode(
         A list of namenode URIs to acquire delegation tokens for
         in addition to ``fs.defaultFS``.
 
-    log_conf_file
-        optional file with log config, setups logging by default with INFO verbosity,
-        if you specify a file here don't forget to also ship it to the containers via files arg
-
     name
         Name of the yarn application
     """
@@ -555,7 +543,6 @@ def standalone_client_mode(
             queue=queue,
             acls=acls,
             file_systems=file_systems,
-            log_conf_file=log_conf_file,
             name=name
         )
 
@@ -833,3 +820,10 @@ def _get_app_logs(
                 exc_info=True)
         time.sleep(3)
     return None
+
+
+def setup_logging():
+    # tensorflow imports in tf_yarn.__init__ already have set up some loggers
+    # erase them with a clean config
+    log_conf_file = os.path.join(os.path.dirname(__file__), "default.log.conf")
+    logging.config.fileConfig(log_conf_file)

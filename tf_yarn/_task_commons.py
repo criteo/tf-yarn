@@ -1,7 +1,5 @@
-import argparse
 import json
 import logging
-import logging.config
 import os
 import re
 import sys
@@ -16,19 +14,13 @@ from tf_yarn.__init__ import KV_CLUSTER_INSTANCES, KV_EXPERIMENT_FN
 from tf_yarn._internal import MonitoredThread, iter_tasks
 
 
-def _process_arguments() -> None:
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument("--log-conf-file", type=str)
-    args = parser.parse_args()
-    log_conf_file = args.log_conf_file
-    if log_conf_file is None:
-        base_dir = os.path.dirname(sys.modules["tf_yarn"].__file__)
-        log_conf_file = os.path.join(base_dir, "default.log.conf")
-    logging.config.fileConfig(log_conf_file, disable_existing_loggers=True)
-    tf.logging.info(f"Using log file {log_conf_file}")
-    tf.logging.info(f"Python {sys.version}")
-    tf.logging.info(f"Skein {skein.__version__}")
-    tf.logging.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
+_logger = logging.getLogger(__name__)
+
+
+def _log_sys_info() -> None:
+    _logger.info(f"Python {sys.version}")
+    _logger.info(f"Skein {skein.__version__}")
+    _logger.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
 
 
 def _setup_container_logs(client):
@@ -95,7 +87,7 @@ def _execute_dispatched_function(
     experiment: Experiment
 ) -> MonitoredThread:
     task_type, task_id = cluster.get_task_description()
-    tf.logging.info(f"Starting execution {task_type}:{task_id}")
+    _logger.info(f"Starting execution {task_type}:{task_id}")
     thread = MonitoredThread(
         name=f"{task_type}:{task_id}",
         target=_gen_monitored_train_and_evaluate(client),

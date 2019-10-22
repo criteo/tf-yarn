@@ -5,6 +5,9 @@ import tensorflow as tf
 
 from typing import Optional
 
+import tf_yarn
+tf_yarn.setup_logging()
+
 from tf_yarn import (
     _task_commons,
     _internal,
@@ -13,8 +16,11 @@ from tf_yarn import (
     tensorboard
 )
 
+_logger = logging.getLogger(__name__)
+
 
 def main() -> None:
+    _task_commons._log_sys_info()
     task_type, task_id = cluster.get_task_description()
     task = cluster.get_task()
     client = skein.ApplicationClient.from_current()
@@ -24,11 +30,11 @@ def main() -> None:
 
     model_dir = os.getenv('TB_MODEL_DIR', "")
     if not model_dir:
-        tf.logging.info("Read model_dir from estimator config")
+        _logger.info("Read model_dir from estimator config")
         experiment = _task_commons._get_experiment(client)
         model_dir = experiment.estimator.config.model_dir
 
-    tf.logging.info(f"Starting tensorboard on {model_dir}")
+    _logger.info(f"Starting tensorboard on {model_dir}")
 
     thread = _internal.MonitoredThread(
         name=f"{task_type}:{task_id}",
@@ -48,5 +54,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    _task_commons._process_arguments()
     main()

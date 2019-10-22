@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import socket
@@ -9,6 +10,8 @@ from tensorboard import program
 from typing import Optional, Iterable, Tuple
 
 from tf_yarn import _internal, event, cluster
+
+_logger = logging.getLogger(__name__)
 
 
 DEFAULT_TERMINATION_TIMEOUT_SECONDS = 30
@@ -44,7 +47,7 @@ def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
         event.start_event(client, task)
         event.url_event(client, task, f"{tensorboard_url}")
     except Exception as e:
-        tf.logging.error("Cannot start tensorboard", e)
+        _logger.error("Cannot start tensorboard", e)
         event.stop_event(client, task, e)
 
 

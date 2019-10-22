@@ -41,8 +41,7 @@ def gen_pyenv_from_existing_archive(path_to_archive: str) -> PythonEnvDescriptio
 def gen_task_cmd(pyenv: PythonEnvDescription,
                  task_type: str,
                  standalone_client_mode: bool,
-                 custom_task_module: Optional[str],
-                 log_conf_file: Optional[str]) -> str:
+                 custom_task_module: Optional[str]) -> str:
 
     if task_type == "tensorboard":
         containers_module = TENSORBOARD_MODULE
@@ -56,5 +55,4 @@ def gen_task_cmd(pyenv: PythonEnvDescription,
     else:
         raise ValueError(f"Invalid task type: {task_type}")
 
-    conf_args = f"--log-conf-file={log_conf_file}" if log_conf_file is not None else ""
-    return f"{pyenv.dispatch_task_cmd} -m {containers_module} " + conf_args
+    return f"{pyenv.dispatch_task_cmd} -m {containers_module} "

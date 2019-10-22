@@ -292,13 +292,13 @@ def _get_archive_metadata_path(archive_on_hdfs: str) -> str:
 def _is_archive_up_to_date(archive_on_hdfs: str,
                            current_packages_list: Dict[str, str]
                            ) -> bool:
-    if not tf.gfile.Exists(archive_on_hdfs):
+    if not tf.io.gfile.exists(archive_on_hdfs):
         return False
     archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
-    if not tf.gfile.Exists(archive_meta_data):
+    if not tf.io.gfile.exists(archive_meta_data):
         _logger.debug(f'metadata for archive {archive_on_hdfs} does not exist')
         return False
-    with tf.gfile.GFile(archive_meta_data, "rb") as fd:
+    with tf.io.gfile.GFile(archive_meta_data, "rb") as fd:
         packages_installed = json.loads(fd.read())
         return sorted(packages_installed.items()) == sorted(current_packages_list.items())
 
@@ -311,9 +311,9 @@ def _dump_archive_metadata(archive_on_hdfs: str,
         tempfile_path = os.path.join(tempdir, "metadata.json")
         with open(tempfile_path, "w") as fd:
             fd.write(json.dumps(current_packages_list, sort_keys=True, indent=4))
-        if tf.gfile.Exists(archive_meta_data):
-            tf.gfile.Remove(archive_meta_data)
-        tf.gfile.Copy(tempfile_path, archive_meta_data)
+        if tf.io.gfile.exists(archive_meta_data):
+            tf.io.gfile.remove(archive_meta_data)
+        tf.io.gfile.copy(tempfile_path, archive_meta_data)
 
 
 def upload_zip_to_hdfs(
@@ -381,10 +381,10 @@ def detect_archive_names(
 
 def _upload_zip(zip_file: str, archive_on_hdfs: str):
     packer = detect_packer_from_file(zip_file)
-    if packer == PEX_PACKER and tf.gfile.Exists(archive_on_hdfs):
+    if packer == PEX_PACKER and tf.io.gfile.exists(archive_on_hdfs):
         with tempfile.TemporaryDirectory() as tempdir:
             local_copy_path = os.path.join(tempdir, os.path.basename(archive_on_hdfs))
-            tf.gfile.Copy(archive_on_hdfs, local_copy_path)
+            tf.io.gfile.copy(archive_on_hdfs, local_copy_path)
             info_from_hdfs = PexInfo.from_pex(local_copy_path)
             into_to_upload = PexInfo.from_pex(zip_file)
             if info_from_hdfs.code_hash == into_to_upload.code_hash:
@@ -394,12 +394,12 @@ def _upload_zip(zip_file: str, archive_on_hdfs: str):
 
     _logger.info(f"upload current {zip_file} to {archive_on_hdfs}")
 
-    tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
-    tf.gfile.Copy(zip_file, archive_on_hdfs, overwrite=True)
+    tf.io.gfile.makedirs(os.path.dirname(archive_on_hdfs))
+    tf.io.gfile.copy(zip_file, archive_on_hdfs, overwrite=True)
     # Remove previous metadata
     archive_meta_data = _get_archive_metadata_path(archive_on_hdfs)
-    if tf.gfile.Exists(archive_meta_data):
-        tf.gfile.Remove(archive_meta_data)
+    if tf.io.gfile.exists(archive_meta_data):
+        tf.io.gfile.remove(archive_meta_data)
 
 
 def detect_packer_from_env() -> Packer:
@@ -447,8 +447,8 @@ def upload_env_to_hdfs_from_venv(
                 additional_packages=additional_packages,
                 ignored_packages=ignored_packages
             )
-            tf.gfile.MakeDirs(os.path.dirname(archive_on_hdfs))
-            tf.gfile.Copy(archive_local, archive_on_hdfs, overwrite=True)
+            tf.io.gfile.makedirs(os.path.dirname(archive_on_hdfs))
+            tf.io.gfile.copy(archive_local, archive_on_hdfs, overwrite=True)
 
             _dump_archive_metadata(archive_on_hdfs, current_packages)
     else:

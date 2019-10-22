@@ -108,7 +108,7 @@ def _get_editable_package_name():
 @mock.patch(f"{MODULE_TO_TEST}.tf")
 def test_update_no_archive(mock_tf):
     map_is_exist = {MYARCHIVE_FILENAME: False}
-    mock_tf.gfile.Exists.side_effect = lambda arg: map_is_exist[arg]
+    mock_tf.io.gfile.exists.side_effect = lambda arg: map_is_exist[arg]
     assert not packaging._is_archive_up_to_date(MYARCHIVE_FILENAME, [])
 
 
@@ -116,7 +116,7 @@ def test_update_no_archive(mock_tf):
 def test_update_no_metadata(mock_tf):
     map_is_exist = {MYARCHIVE_FILENAME: True,
                     MYARCHIVE_METADATA: False}
-    mock_tf.gfile.Exists.side_effect = lambda arg: map_is_exist[arg]
+    mock_tf.io.gfile.exists.side_effect = lambda arg: map_is_exist[arg]
     assert not packaging._is_archive_up_to_date(MYARCHIVE_FILENAME, [])
 
 
@@ -134,12 +134,12 @@ def test_update_version_comparaison(current_packages, metadata_packages,
     map_is_exist = {MYARCHIVE_FILENAME: True,
                     MYARCHIVE_METADATA: True}
     with mock.patch(f"{MODULE_TO_TEST}.tf") as mock_tf:
-        mock_tf.gfile.Exists.side_effect = map_is_exist
+        mock_tf.io.gfile.exists.side_effect = map_is_exist
         # Mock metadata on hdfs
         gFile = mock.MagicMock()
         gFile.read.return_value = json.dumps(metadata_packages)
         gFile.__enter__.return_value = gFile
-        mock_tf.gfile.GFile.return_value = gFile
+        mock_tf.io.gfile.GFile.return_value = gFile
         # Test if package is updated
         assert packaging._is_archive_up_to_date(MYARCHIVE_FILENAME,
                                                 current_packages) == expected
@@ -163,15 +163,15 @@ expected_file = """\
 def test_dump_metadata(mock_tf):
     mock_open = mock.mock_open()
     with mock.patch(f"{MODULE_TO_TEST}.open", mock_open):
-        mock_tf.gfile.Exists.return_value = True
+        mock_tf.io.gfile.exists.return_value = True
         packages = {"a": "1.0", "b": "2.0"}
         packaging._dump_archive_metadata(MYARCHIVE_FILENAME, packages)
         # Check previous file has been deleted
-        mock_tf.gfile.Remove.assert_called_once_with(MYARCHIVE_METADATA)
+        mock_tf.io.gfile.remove.assert_called_once_with(MYARCHIVE_METADATA)
         # Check file is ok
         mock_fd = mock_open()
         mock_fd.write.assert_called_once_with(expected_file)
-        mock_tf.gfile.Copy.assert_called_once_with(Any(str), MYARCHIVE_METADATA)
+        mock_tf.io.gfile.copy.assert_called_once_with(Any(str), MYARCHIVE_METADATA)
 
 
 def test_upload_env():
@@ -199,7 +199,7 @@ def test_upload_env():
         mock_packer.assert_called_once_with(
             {"a": "1.0", "b": "2.0"}, Any(str), []
         )
-        mock_tf.gfile.Copy.assert_called_once_with(MYARCHIVE_FILENAME,
+        mock_tf.io.gfile.copy.assert_called_once_with(MYARCHIVE_FILENAME,
                                                    MYARCHIVE_FILENAME,
                                                    overwrite=True)
 
@@ -225,7 +225,7 @@ def test_upload_zip_to_hdfs():
         with mock.patch(f"{MODULE_TO_TEST}.request") as mock_request:
             with mock.patch(f"{MODULE_TO_TEST}.tempfile") as mock_tempfile:
 
-                mock_tf.gfile.Exists.return_value = False
+                mock_tf.io.gfile.exists.return_value = False
                 mock_tempfile.TemporaryDirectory.return_value.__enter__.return_value = "/tmp"
 
                 result = packaging.upload_zip_to_hdfs(
@@ -236,8 +236,8 @@ def test_upload_zip_to_hdfs():
                 mock_request.urlretrieve.assert_called_once_with(
                     "http://myserver/mypex.pex",
                     "/tmp/mypex.pex")
-                mock_tf.gfile.MakeDirs.assert_called_once_with(home_hdfs_path)
-                mock_tf.gfile.Copy.assert_any_call(
+                mock_tf.io.gfile.makedirs.assert_called_once_with(home_hdfs_path)
+                mock_tf.io.gfile.copy.assert_any_call(
                     "/tmp/mypex.pex", f"{home_hdfs_path}/blah.pex", overwrite=True)
 
                 assert "/user/j.doe/blah.pex" == result
@@ -260,7 +260,7 @@ def test_upload_env_to_hdfs_in_a_pex():
         mock__get_archive_metadata_path.return_value = f"{home_hdfs_path}/blah.json"
 
         # metadata & pex already exists on hdfs
-        mock_tf.gfile.Exists.return_value = True
+        mock_tf.io.gfile.exists.return_value = True
 
         mock_pex_info = stack.enter_context(
             mock.patch(f"{MODULE_TO_TEST}.PexInfo")
@@ -277,14 +277,14 @@ def test_upload_env_to_hdfs_in_a_pex():
         result = packaging.upload_env_to_hdfs(f'{home_hdfs_path}/blah.pex')
 
         # Check existing pex on hdfs is downloaded to compare code_hash with file to upload
-        mock_tf.gfile.Copy.assert_any_call(
+        mock_tf.io.gfile.copy.assert_any_call(
             f'{home_hdfs_path}/blah.pex', mock.ANY)
         # Check copy pex to remote
-        mock_tf.gfile.MakeDirs.assert_called_once_with(home_hdfs_path)
-        mock_tf.gfile.Copy.assert_any_call(
+        mock_tf.io.gfile.makedirs.assert_called_once_with(home_hdfs_path)
+        mock_tf.io.gfile.copy.assert_any_call(
             f'{home_path}/myapp.pex', f'{home_hdfs_path}/blah.pex', overwrite=True)
         # Check metadata has been cleaned
-        mock_tf.gfile.Remove.assert_called_once_with(f'{home_hdfs_path}/blah.json')
+        mock_tf.io.gfile.remove.assert_called_once_with(f'{home_hdfs_path}/blah.json')
         # check envname
         assert 'myapp' == result[1]
 

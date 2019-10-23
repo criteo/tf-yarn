@@ -131,6 +131,7 @@ def pack_in_pex(requirements: Dict[str, str],
     interpreter = PythonInterpreter.get()
     pex_info = PexInfo.default(interpreter)
     pex_info.ignore_errors = True
+    pex_info.inherit_path = "fallback"
     pex_builder = PEXBuilder(
         copy=True,
         interpreter=interpreter,

@@ -3,13 +3,14 @@ import tempfile
 import os
 
 from typing import Dict, Any, Optional
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
 try:
     import mlflow
-    from mlflow.tracking import utils
-except ModuleNotFoundError:
+    from mlflow import exceptions
+except (ModuleNotFoundError, ImportError):
     pass
 
 _use_mlflow: Optional[bool] = None
@@ -23,11 +24,16 @@ def use_mlflow() -> bool:
 
 
 def _detect_mlflow() -> bool:
+    tf_yarn_use_mlflow = os.getenv("TF_YARN_USE_MLFLOW", "")
+    if tf_yarn_use_mlflow == "False":
+        return False
+
     try:
         import mlflow
         from mlflow.tracking import utils
-    except ModuleNotFoundError:
-        logger.warning("mlflow not installed")
+        from mlflow import exceptions
+    except (ModuleNotFoundError, ImportError):
+        logger.exception("mlflow is not installed")
         return False
 
     if not utils.is_tracking_uri_set():
@@ -45,6 +51,28 @@ def _is_pyarrow_installed():
         return False
 
 
+def safe_mlflow(f):
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        try:
+            return f(*args, **kwds)
+        except (ConnectionError, exceptions.MlflowException):
+            logger.exception("mlflow connection error")
+    return wrapper
+
+
+def optional_mlflow(f):
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        if use_mlflow():
+            try:
+                return f(*args, **kwds)
+            except (ConnectionError, exceptions.MlflowException):
+                logger.exception("mlflow connection error")
+    return wrapper
+
+
+@safe_mlflow
 def active_run_id() -> str:
     if use_mlflow():
         active_run = mlflow.active_run()
@@ -58,49 +86,49 @@ def active_run_id() -> str:
 
 def get_tracking_uri() -> str:
     if use_mlflow():
-        return utils.get_tracking_uri()
+        return mlflow.get_tracking_uri()
     else:
         return ""
 
 
+@optional_mlflow
 def set_tag(key: str, value: Any):
-    if use_mlflow():
-        mlflow.set_tag(key, value)
+    mlflow.set_tag(key, value)
 
 
+@optional_mlflow
 def set_tags(tags: Dict[str, Any]):
-    if use_mlflow():
-        mlflow.set_tags(tags)
+    mlflow.set_tags(tags)
 
 
+@optional_mlflow
 def log_param(key: str, value: Any):
-    if use_mlflow():
-        mlflow.log_param(key, value)
+    mlflow.log_param(key, value)
 
 
+@optional_mlflow
 def log_params(params: Dict[str, Any]):
-    if use_mlflow():
-        mlflow.log_params(params)
+    mlflow.log_params(params)
 
 
+@optional_mlflow
 def log_metric(key: str, value: float, step: int = None):
-    if use_mlflow():
-        mlflow.log_metric(key, value, step)
+    mlflow.log_metric(key, value, step)
 
 
+@optional_mlflow
 def log_metrics(metrics: Dict[str, Any], step: int = None):
-    if use_mlflow():
-        mlflow.log_metrics(metrics, step)
+    mlflow.log_metrics(metrics, step)
 
 
+@optional_mlflow
 def log_artifact(local_path: str, artifact_path: str = None):
-    if use_mlflow():
-        mlflow.log_artifact(local_path, artifact_path)
+    mlflow.log_artifact(local_path, artifact_path)
 
 
+@optional_mlflow
 def log_artifacts(local_dir: str, artifact_path: str = None):
-    if use_mlflow():
-        mlflow.log_artifacts(local_dir, artifact_path)
+    mlflow.log_artifacts(local_dir, artifact_path)
 
 
 def format_key(key: str) -> str:
@@ -110,6 +138,7 @@ def format_key(key: str) -> str:
         return ""
 
 
+@safe_mlflow
 def save_text_to_mlflow(content, filename):
     if not use_mlflow():
         return

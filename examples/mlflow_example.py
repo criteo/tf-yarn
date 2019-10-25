@@ -6,14 +6,16 @@ logging.basicConfig(level="INFO") # noqa
 import os
 import getpass
 import mlflow
+import requests
 import skein
 import tensorflow as tf
 
 from datetime import datetime
-from mlflow.tracking import utils
 
 from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
 import winequality
+
+logger = logging.getLogger(__name__)
 
 USER = getpass.getuser()
 
@@ -67,8 +69,8 @@ if __name__ == "__main__":
 
     # you need to install mlflow `pip install mlflow`
     # and set MLflow tracking uri
-    utils.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
-    mlflow.start_run(experiment_id=77)
+    mlflow.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
+    run_id = mlflow.start_run(experiment_id=77).info.run_id
 
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
@@ -87,3 +89,12 @@ if __name__ == "__main__":
     )
 
     mlflow.end_run()
+
+    # check if run has been registered in MLFlow
+    run_json = requests.get(f"{mlflow.get_tracking_uri()}/api/2.0/mlflow/runs/get",
+                          params={'run_id': run_id}).json()
+
+    logger.info(f"created run: {run_json}")
+
+    metrics = run_json["run"]["data"]["metrics"]
+    assert len(metrics) > 0

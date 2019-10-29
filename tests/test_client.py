@@ -4,12 +4,12 @@ import skein
 import pytest
 import tensorflow as tf
 
-from tf_yarn import (
+from tf_yarn.experiment import Experiment
+from tf_yarn.client import (
     _run_on_cluster,
     _setup_cluster_spec,
     get_safe_experiment_fn,
     SkeinCluster,
-    Experiment,
     run_on_yarn,
     ContainerLogStatus
 )
@@ -24,7 +24,7 @@ sock_addrs = {
 }
 
 
-@mock.patch("tf_yarn.skein.ApplicationClient")
+@mock.patch("tf_yarn.client.skein.ApplicationClient")
 @pytest.mark.parametrize("tasks_instances, expected_spec, standalone_client_mode", [
     ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
      {'chief': ['addr1:port1'],
@@ -78,9 +78,9 @@ def test_kill_skein_on_exception():
     def cloudpickle_raise_exception(*args, **kwargs):
         raise Exception("Cannot serialize your method!")
 
-    with mock.patch('tf_yarn._setup_skein_cluster') as mock_setup_skein_cluster:
-        with mock.patch('tf_yarn._setup_pyenvs'):
-            with mock.patch('tf_yarn.cloudpickle.dumps') as mock_cloudpickle:
+    with mock.patch('tf_yarn.client._setup_skein_cluster') as mock_setup_skein_cluster:
+        with mock.patch('tf_yarn.client._setup_pyenvs'):
+            with mock.patch('tf_yarn.client.cloudpickle.dumps') as mock_cloudpickle:
                 mock_cloudpickle.side_effect = cloudpickle_raise_exception
                 mock_app = mock.MagicMock(skein.ApplicationClient)
                 mock_setup_skein_cluster.return_value = SkeinCluster(
@@ -141,9 +141,9 @@ def test_retry_run_on_yarn(nb_retries, nb_failures):
         else:
             pass
 
-    with mock.patch('tf_yarn._setup_pyenvs'), \
-            mock.patch('tf_yarn._setup_skein_cluster') as mock_setup_skein_cluster, \
-            mock.patch('tf_yarn._run_on_cluster') as mock_run_on_cluster:
+    with mock.patch('tf_yarn.client._setup_pyenvs'), \
+            mock.patch('tf_yarn.client._setup_skein_cluster') as mock_setup_skein_cluster, \
+            mock.patch('tf_yarn.client._run_on_cluster') as mock_run_on_cluster:
         mock_run_on_cluster.side_effect = fail
 
         gb = 2**10

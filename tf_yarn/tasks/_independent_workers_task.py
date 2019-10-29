@@ -1,11 +1,12 @@
-import logging.config
+import logging
 import os
 import sys
 
 import tensorflow as tf
 
-import tf_yarn
-tf_yarn.setup_logging()
+from tf_yarn.tasks import logging as tf_yarn_logging
+tf_yarn_logging.setup()
+
 from tf_yarn import cluster, _task_commons, _internal
 
 _logger = logging.getLogger(__name__)

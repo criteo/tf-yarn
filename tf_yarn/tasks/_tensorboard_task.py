@@ -5,8 +5,8 @@ import tensorflow as tf
 
 from typing import Optional
 
-import tf_yarn
-tf_yarn.setup_logging()
+from tf_yarn.tasks import logging as tf_yarn_logging
+tf_yarn_logging.setup()
 
 from tf_yarn import (
     _task_commons,

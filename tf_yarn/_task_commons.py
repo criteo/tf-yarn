@@ -9,8 +9,7 @@ import cloudpickle
 import skein
 import tensorflow as tf
 
-from tf_yarn import event, cluster, Experiment
-from tf_yarn.__init__ import KV_CLUSTER_INSTANCES, KV_EXPERIMENT_FN
+from tf_yarn import event, cluster, Experiment, constants
 from tf_yarn._internal import MonitoredThread, iter_tasks
 
 
@@ -48,14 +47,14 @@ def _prepare_container(
 def _get_cluster_tasks(
     client: skein.ApplicationClient
 ) -> List[str]:
-    return list(iter_tasks(json.loads(client.kv.wait(KV_CLUSTER_INSTANCES).decode())))
+    return list(iter_tasks(json.loads(client.kv.wait(constants.KV_CLUSTER_INSTANCES).decode())))
 
 
 def _get_experiment(
     client: skein.ApplicationClient
 ) -> Experiment:
     try:
-        experiment = cloudpickle.loads(client.kv.wait(KV_EXPERIMENT_FN))()
+        experiment = cloudpickle.loads(client.kv.wait(constants.KV_EXPERIMENT_FN))()
     except Exception as e:
         task = cluster.get_task()
         event.start_event(client, task)

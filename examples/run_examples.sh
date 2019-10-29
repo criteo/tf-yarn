@@ -16,7 +16,6 @@ hdfs dfs -rm -r -f tf_yarn_test/tf_yarn_*
 python3.6 -m venv tf-yarn_test_env
 . tf-yarn_test_env/bin/activate
 pip install -e .
-pip install pex==1.6.7
 pip install mlflow
 pip install pyarrow
 

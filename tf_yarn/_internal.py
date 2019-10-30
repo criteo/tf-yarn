@@ -142,12 +142,13 @@ def create_and_pack_conda_env(
     env_path = os.path.join(root or os.getcwd(), name)
     if not os.path.exists(env_path):
         logger.info("Creating new env " + name)
-        _call(["conda", "create", "-p", env_path, "-y", "-q", "--copy",
-               "python=" + python,
-               # TensorFlow enforces an upper bound on setuptools which
-               # conflicts with the version installed by Conda by default.
-               "setuptools=" + setuptools.__version__],
-              env=dict(os.environ))
+        _call([
+            "conda", "create", "-p", env_path, "-y", "-q", "--copy",
+            "python=" + python,
+            # TensorFlow enforces an upper bound on setuptools which
+            # conflicts with the version installed by Conda by default.
+            "setuptools=" + setuptools.__version__
+        ], env=dict(os.environ))
 
         env_python_bin = os.path.join(env_path, "bin", "python")
         if not os.path.exists(env_python_bin):

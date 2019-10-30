@@ -35,17 +35,17 @@ def main():
             }
     ) as cluster_spec:
         size = 10000
-        x = tf.compat.v1.placeholder(tf.float32, size)
+        x = tf.placeholder(tf.float32, size)
 
         with tf.device(f"/job:{NODE_NAME}/task:1"):
-            with tf.compat.v1.name_scope("scope_of_task1"):
+            with tf.name_scope("scope_of_task1"):
                 first_batch = tf.slice(x, [5000], [-1])
-                mean1 = tf.reduce_mean(input_tensor=first_batch)
+                mean1 = tf.reduce_mean(first_batch)
 
         with tf.device(f"/job:{NODE_NAME}/task:0"):
-            with tf.compat.v1.name_scope("scope_of_task0"):
+            with tf.name_scope("scope_of_task0"):
                 second_batch = tf.slice(x, [0], [5000])
-                mean2 = tf.reduce_mean(input_tensor=second_batch)
+                mean2 = tf.reduce_mean(second_batch)
                 mean = (mean1 + mean2) / 2
 
         cluster_spec_dict = cluster_spec.as_dict()
@@ -53,7 +53,7 @@ def main():
         logger.info("cluster_spec:" + str(cluster_spec_dict))
         logger.info("connecting to target:" + first_task)
 
-        with tf.compat.v1.Session(f"grpc://{first_task}", config=session_config) as sess:
+        with tf.Session(f"grpc://{first_task}", config=session_config) as sess:
             result = sess.run(mean, feed_dict={x: np.random.random(size)})
             logger.info(f"mean = {result}")
 

@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 def _log_sys_info() -> None:
     _logger.info(f"Python {sys.version}")
     _logger.info(f"Skein {skein.__version__}")
-    _logger.info(f"TensorFlow {tf.version.GIT_VERSION} {tf.version.VERSION}")
+    _logger.info(f"TensorFlow {tf.GIT_VERSION} {tf.VERSION}")
 
 
 def _setup_container_logs(client):

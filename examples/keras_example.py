@@ -41,8 +41,8 @@ def main():
     def experiment_fn() -> Experiment:
 
         def convert_to_tensor(x, y):
-            return (tf.convert_to_tensor(value=list(x.values()), dtype=tf.float32),
-                    tf.convert_to_tensor(value=y, dtype=tf.int32))
+            return (tf.convert_to_tensor(list(x.values()), dtype=tf.float32),
+                    tf.convert_to_tensor(y, dtype=tf.int32))
 
         def train_input_fn():
             dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")

@@ -30,13 +30,12 @@ def _detect_mlflow() -> bool:
 
     try:
         import mlflow
-        from mlflow.tracking import utils
         from mlflow import exceptions
     except (ModuleNotFoundError, ImportError):
         logger.exception("mlflow is not installed")
         return False
 
-    if not utils.is_tracking_uri_set():
+    if not mlflow.is_tracking_uri_set():
         logger.warning("mlflow tracking uri is not set. will not use mlflow")
         return False
 

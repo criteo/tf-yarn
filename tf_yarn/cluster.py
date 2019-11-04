@@ -97,12 +97,12 @@ def setup_tf_config(cluster_spec):
 
 def start_tf_server(
     cluster_spec: typing.Dict[str, typing.List[str]],
-    session_config: tf.compat.v1.ConfigProto = None
-) -> typing.Optional[tf.distribute.Server]:
+    session_config: tf.ConfigProto = None
+) -> typing.Optional[tf.train.Server]:
 
     task_type, task_id = get_task_description()
     if is_fake_google_env(task_type) and cluster_spec:
-        server = tf.distribute.Server(
+        server = tf.train.Server(
             tf.train.ClusterSpec(cluster_spec),
             job_name=task_type,
             task_index=task_id,

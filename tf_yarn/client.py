@@ -461,7 +461,7 @@ def run_on_yarn(
 def standalone_client_mode(
         pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
         task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
-        tf_session_config: Optional[tf.compat.v1.ConfigProto] = None,
+        tf_session_config: Optional[tf.ConfigProto] = None,
         *,
         skein_client: skein.Client = None,
         files: Dict[str, str] = None,
@@ -498,7 +498,7 @@ def standalone_client_mode(
         ``"chief"``.
 
     tf_session_config
-        tf.compat.v1.ConfigProto to be provided to each started TFServer
+        tf.ConfigProto to be provided to each started TFServer
 
     files
         Local files or directories to upload to the container.
@@ -577,7 +577,7 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
 
 def _send_config_proto(
         skein_cluster: SkeinCluster,
-        tf_session_config: tf.compat.v1.ConfigProto):
+        tf_session_config: tf.ConfigProto):
     serialized_fn = cloudpickle.dumps(tf_session_config)
     skein_cluster.app.kv[constants.KV_TF_SESSION_CONFIG] = serialized_fn
 

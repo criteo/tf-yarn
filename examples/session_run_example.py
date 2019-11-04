@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def main():
     pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
-    session_config = tf.compat.v1.ConfigProto(operation_timeout_in_ms=300000)
+    session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
     with standalone_client_mode(
             pyenv_zip_path,
             task_specs={

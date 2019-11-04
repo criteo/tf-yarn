@@ -27,7 +27,7 @@ do
     pip install pyarrow
 
     # Setup pex
-    pex . -o examples/tf-yarn.pex
+    pex tensorflow==${tf_version} . -o examples/tf-yarn.pex
 
     # Setup specific to examples
     # Get wine dataset for linear_classifier_example

@@ -74,7 +74,7 @@ def test_start_tf_server(task_name, task_index, is_server_started):
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ))
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
-        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.distribute"))
+        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.train"))
         cluster.start_tf_server(CLUSTER_SPEC)
 
         if is_server_started:

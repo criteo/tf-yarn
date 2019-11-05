@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 try:
     import mlflow
     from mlflow import exceptions
+    # pulled by mlflow
+    from requests import exceptions as requests_exc
 except (ModuleNotFoundError, ImportError):
     pass
 
@@ -31,6 +33,8 @@ def _detect_mlflow() -> bool:
     try:
         import mlflow
         from mlflow import exceptions
+        # pulled by mlflow
+        from requests import exceptions as requests_exc
     except (ModuleNotFoundError, ImportError):
         logger.exception("mlflow is not installed")
         return False
@@ -55,7 +59,7 @@ def safe_mlflow(f):
     def wrapper(*args, **kwds):
         try:
             return f(*args, **kwds)
-        except (ConnectionError, exceptions.MlflowException):
+        except (ConnectionError, requests_exc.RequestException, exceptions.MlflowException):
             logger.exception("mlflow connection error")
     return wrapper
 
@@ -66,7 +70,7 @@ def optional_mlflow(f):
         if use_mlflow():
             try:
                 return f(*args, **kwds)
-            except (ConnectionError, exceptions.MlflowException):
+            except (ConnectionError, requests_exc.RequestException, exceptions.MlflowException):
                 logger.exception("mlflow connection error")
     return wrapper
 

@@ -223,6 +223,10 @@ def _setup_skein_cluster(
                 },
                 env=service_env)
 
+        # on the cluster we don't ask again for delegation tokens
+        if "HADOOP_TOKEN_FILE_LOCATION" in os.environ:
+            file_systems = None
+
         spec = skein.ApplicationSpec(
             services,
             queue=queue,

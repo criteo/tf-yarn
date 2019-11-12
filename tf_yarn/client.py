@@ -118,7 +118,7 @@ def _setup_task_env(
 
     _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
 
-    _add_to_env(env, "TF_YARN_N_TRY", str(n_try))
+    env["TF_YARN_N_TRY"] = str(n_try)
 
     task_env = {
         **env,
@@ -195,14 +195,12 @@ def _setup_skein_cluster(
             pyenv = pyenvs[task_spec.label]
             service_env = task_env.copy()
             if task_spec.tb_termination_timeout_seconds >= 0:
-                _add_to_env(service_env, "TB_TERMINATION_TIMEOUT_SECONDS",
-                            str(task_spec.tb_termination_timeout_seconds))
+                service_env["TB_TERMINATION_TIMEOUT_SECONDS"] = \
+                    str(task_spec.tb_termination_timeout_seconds)
             if task_spec.tb_model_dir:
-                _add_to_env(service_env, "TB_MODEL_DIR",
-                            str(task_spec.tb_model_dir))
+                service_env["TB_MODEL_DIR"] = str(task_spec.tb_model_dir)
             if task_spec.tb_extra_args:
-                _add_to_env(service_env, "TB_EXTRA_ARGS",
-                            str(task_spec.tb_extra_args))
+                service_env["TB_EXTRA_ARGS"] = str(task_spec.tb_extra_args)
 
             services[task_type] = skein.Service(
                 script=f'''

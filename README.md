@@ -291,7 +291,7 @@ from tf_yarn import packaging
 pyenv_zip_path_cpu, _ = packaging.upload_env_to_hdfs()
 pyenv_zip_path_gpu, _ = packaging.upload_env_to_hdfs(
     archive_on_hdfs=f"{packaging.get_default_fs()}/user/{getpass.getuser()}/envs/tf_yarn_gpu_env.pex",
-    additional_packages={"tensorflow-gpu", "2.0.0a0"},
+    additional_packages={"tensorflow-gpu": "2.0.0a0"},
     ignored_packages={"tensorflow"}
 )
 run_on_yarn(

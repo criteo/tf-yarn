@@ -11,6 +11,9 @@ More infos [here](https://github.com/criteo/tf-yarn/blob/master/docs/MLflow.md).
 
 [Tensorboard](https://github.com/criteo/tf-yarn/blob/master/docs/Tensorboard.md) can be spawned in a separate container during learnings.
 
+Two alternatives to TensorFlow's distribution strategies are available:
+[Horovod with gloo](https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md) and [tf-collective-all-reduce](https://github.com/criteo/tf-collective-all-reduce)
+
 ![tf-yarn](https://github.com/criteo/tf-yarn/blob/master/skein.png?raw=true)
 
 ## Installation

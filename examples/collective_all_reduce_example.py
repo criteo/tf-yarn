@@ -1,25 +1,15 @@
 """
-Example of using LinearClassifier
+Example of using horovod
 """
 import logging
 logging.basicConfig(level="INFO") # noqa
 import os
-import pwd
 import getpass
-import sys
-import warnings
-import typing
-import skein
 import tensorflow as tf
-
-from functools import partial
-from subprocess import check_output
-from datetime import datetime
-
-from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn, standalone_client_mode
 import winequality
-from tensorflow import keras
-import numpy as np
+from datetime import datetime
+from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
+import horovod.tensorflow as hvd
 
 USER = getpass.getuser()
 
@@ -39,54 +29,54 @@ HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
-def train_input_fn():
-    dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
-    return (dataset.shuffle(1000)
-            .batch(128)
-            .repeat()
-            )
+def experiment_fn() -> Experiment:
+    def train_input_fn():
+        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
+        return dataset.shuffle(1000).batch(128).repeat()
 
+    def eval_input_fn():
+        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
+        return dataset.shuffle(1000).batch(128)
 
-def eval_input_fn():
-    dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
-    return (dataset.shuffle(1000)
-            .batch(128)
-            )
+    estimator = tf.estimator.LinearClassifier(
+        feature_columns=winequality.get_feature_columns(),
+        model_dir=f"{HDFS_DIR}",
+        n_classes=winequality.get_n_classes(),
+        optimizer=lambda: hvd.DistributedOptimizer(tf.train.AdamOptimizer())
+    )
+
+    return Experiment(
+        estimator,
+        tf.estimator.TrainSpec(
+            train_input_fn,
+            max_steps=10,
+            hooks=[hvd.BroadcastGlobalVariablesHook(0)]
+        ),
+        tf.estimator.EvalSpec(
+            eval_input_fn,
+            steps=10,
+            start_delay_secs=0,
+            throttle_secs=30
+        )
+    )
 
 
 if __name__ == "__main__":
-    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
+    pyenv_zip_path, _ = packaging.upload_env_to_hdfs()
     editable_requirements = packaging.get_editable_requirements_from_current_venv()
 
-    with standalone_client_mode(
+    run_on_yarn(
         pyenv_zip_path,
+        experiment_fn,
         task_specs={
-            "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2)
+            "chief": TaskSpec(memory="2 GiB", vcores=4),
+            "worker": TaskSpec(memory="2 GiB", vcores=4, instances=1),
+            "evaluator": TaskSpec(memory="2 GiB", vcores=1),
+            "tensorboard": TaskSpec(memory="2 GiB", vcores=1, tb_model_dir=HDFS_DIR)
         },
-        files=editable_requirements
-    ) as cluster_spec:
-
-        distrib_config = tf.contrib.distribute.DistributeConfig(
-            train_distribute=tf.contrib.distribute.CollectiveAllReduceStrategy(),
-            eval_distribute=tf.contrib.distribute.CollectiveAllReduceStrategy(),
-            remote_cluster=cluster_spec
-        )
-        run_config = tf.estimator.RunConfig(
-            experimental_distribute=distrib_config
-        )
-
-        estimator = tf.estimator.LinearClassifier(
-            feature_columns=winequality.get_feature_columns(),
-            model_dir=f"{HDFS_DIR}",
-            n_classes=winequality.get_n_classes(),
-            optimizer='Adam',
-            config=run_config)
-
-        tf.estimator.train_and_evaluate(
-            estimator,
-            tf.estimator.TrainSpec(train_input_fn, max_steps=1000),
-            tf.estimator.EvalSpec(
-                eval_input_fn,
-                steps=10,
-                start_delay_secs=0,
-                throttle_secs=30))
+        files={
+            **editable_requirements,
+            os.path.basename(winequality.__file__): winequality.__file__,
+        },
+        custom_task_module="tf_yarn.tasks._gloo_allred_task"
+    )

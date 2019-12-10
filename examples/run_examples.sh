@@ -15,19 +15,16 @@ do
 
     # Cleanup old artefacts
     rm -rf tf-yarn_test_env
-    rm -f examples/tf-yarn.pex
     hdfs dfs -rm -r -f tf_yarn_test/tf_yarn_*
 
     # Setup environment
     python3.6 -m venv tf-yarn_test_env
     . tf-yarn_test_env/bin/activate
+    pip install --upgrade pip setuptools
     pip install tensorflow==${tf_version}
-    pip install -e . --upgrade setuptools
+    pip install -e .
     pip install mlflow
     pip install pyarrow
-
-    # Setup pex
-    pex tensorflow==${tf_version} . -o examples/tf-yarn.pex
 
     # Setup specific to examples
     # Get wine dataset for linear_classifier_example
@@ -42,6 +39,9 @@ do
     # Execute examples
     pushd examples
         for example in *_example.py; do
+            if [[ "$example" == "collective_all_reduce_example.py" && $tf_version == "1.12.2" ]]; then
+                continue
+            fi
             echo "executing $example .."
             python $example
             if ! [ $? -eq 0 ]; then

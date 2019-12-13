@@ -3,4 +3,3 @@ conda-pack
 cloudpickle==1.0.0
 skein==0.8.0
 pip>=18.1
-horovod

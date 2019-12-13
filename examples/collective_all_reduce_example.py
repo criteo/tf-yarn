@@ -9,7 +9,17 @@ import tensorflow as tf
 import winequality
 from datetime import datetime
 from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
-import horovod.tensorflow as hvd
+
+logger = logging.getLogger(__name__)
+
+try:
+    import horovod.tensorflow as hvd
+except (ModuleNotFoundError):
+    logger.warning(
+       "horovod not installed. checkout "
+       "https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md"
+    )
+    pass
 
 USER = getpass.getuser()
 

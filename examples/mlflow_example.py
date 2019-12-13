@@ -12,7 +12,8 @@ import tensorflow as tf
 
 from datetime import datetime
 
-from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
+import cluster_pack
+from tf_yarn import Experiment, TaskSpec, run_on_yarn
 import winequality
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,12 @@ USER = getpass.getuser()
 2. Upload it to HDFS
 3. Pass a full URI to either of the CSV files to the example
 """
-WINE_EQUALITY_FILE = f"{packaging.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
+WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
 
 """
 Output path of the learned model on hdfs
 """
-HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
+HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
@@ -72,8 +73,8 @@ if __name__ == "__main__":
     mlflow.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
     run_id = mlflow.start_run(experiment_id=77).info.run_id
 
-    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    pyenv_zip_path, env_name = cluster_pack.upload_env()
+    editable_requirements = cluster_pack.get_editable_requirements()
 
     run_on_yarn(
         pyenv_zip_path,

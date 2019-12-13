@@ -29,6 +29,8 @@ from datetime import timedelta
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
 
+import cluster_pack
+
 from tf_yarn import (
     _env,
     _internal,
@@ -36,7 +38,6 @@ from tf_yarn import (
     constants,
     metrics,
     evaluator_metrics,
-    packaging,
     mlflow,
     tensorboard,
     event,
@@ -114,7 +115,7 @@ def _setup_task_env(
         n_try: int = 0
 ):
     task_files = _maybe_zip_task_files(files or {}, tempdir)
-    task_files[__package__] = packaging.zip_path(here, False, tempdir)
+    task_files[__package__] = cluster_pack.zip_path(here, False, tempdir)
 
     _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
 
@@ -147,7 +148,7 @@ def _maybe_zip_task_files(files, tempdir):
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = packaging.zip_path(source, False, tempdir)
+            source = cluster_pack.zip_path(source, False, tempdir)
 
         task_files[target] = source
     return task_files

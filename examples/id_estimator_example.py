@@ -10,7 +10,8 @@ from subprocess import check_output
 import skein
 import tensorflow as tf
 
-from tf_yarn import Experiment, TaskSpec, packaging, run_on_yarn
+import cluster_pack
+from tf_yarn import Experiment, TaskSpec, run_on_yarn
 
 
 def model_fn(features, labels, mode):
@@ -43,8 +44,8 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    pyenv_zip_path, env_name = cluster_pack.upload_env()
+    editable_requirements = cluster_pack.get_editable_requirements()
     # skein.Client is useful when multiple learnings run in parallel
     # and share one single skein JAVA process
     with skein.Client() as client:

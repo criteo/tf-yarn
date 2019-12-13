@@ -13,7 +13,8 @@ import numpy as np
 import skein
 import tensorflow as tf
 
-from tf_yarn import event, TaskSpec, packaging, standalone_client_mode
+import cluster_pack
+from tf_yarn import event, TaskSpec, standalone_client_mode
 
 NODE_NAME = "worker"
 
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    pyenv_zip_path, env_name = cluster_pack.upload_env()
+    editable_requirements = cluster_pack.get_editable_requirements()
     session_config = tf.ConfigProto(operation_timeout_in_ms=300000)
     with standalone_client_mode(
             pyenv_zip_path,

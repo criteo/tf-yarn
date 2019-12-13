@@ -1,5 +1,3 @@
-pex==1.6.12
-conda-pack
-cloudpickle==1.0.0
+cluster-pack==0.0.5
 skein==0.8.0
-pip>=18.1
+cloudpickle==1.0.0

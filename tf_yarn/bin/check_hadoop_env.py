@@ -11,12 +11,12 @@ import time
 
 from typing import Tuple, List
 
-from tf_yarn import packaging
+import cluster_pack
 
 
 logger = logging.getLogger(__name__)
 
-PATH_ON_HDFS = f"{packaging.get_default_fs()}/tmp/{uuid.uuid4()}"
+PATH_ON_HDFS = f"{cluster_pack.get_default_fs()}/tmp/{uuid.uuid4()}"
 FILENAME_ON_HDFS = "hello_tf_yarn.txt"
 FILEPATH_ON_HDFS = f"{PATH_ON_HDFS}/{FILENAME_ON_HDFS}"
 EXPECTED_CONTENT = "Hello tf-yarn!"
@@ -55,16 +55,16 @@ def check_hadoop_tensorflow() -> bool:
 
 def launch_remote_check(file: str) -> Tuple[bool, str]:
     logging.info('Launching remote check')
-    zip_hdfs, _ = packaging.upload_env_to_hdfs(packer=packaging.PEX_PACKER)
+    zip_hdfs, _ = cluster_pack.upload_env(packer=cluster_pack.PEX_PACKER)
     archive_name = os.path.basename(zip_hdfs)
     with skein.Client() as client:
         files = {
             archive_name: zip_hdfs,
             'check_hadoop_env.py': __file__,
         }
-        editable_packages = packaging.get_editable_requirements_from_current_venv()
+        editable_packages = cluster_pack.get_editable_requirements()
         if 'tf_yarn' in editable_packages:
-            tf_yarn_zip = packaging.zip_path(editable_packages['tf_yarn'], False)
+            tf_yarn_zip = cluster_pack.zip_path(editable_packages['tf_yarn'], False)
             logger.info(f"zip path for editable tf_yarn is {tf_yarn_zip}")
             files.update({'tf_yarn': tf_yarn_zip})
         service = skein.Service(

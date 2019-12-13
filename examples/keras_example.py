@@ -16,7 +16,8 @@ from functools import partial
 from datetime import datetime
 from tensorflow import keras
 
-from tf_yarn import event, TaskSpec, Experiment, run_on_yarn, packaging
+import cluster_pack
+from tf_yarn import event, TaskSpec, Experiment, run_on_yarn
 import winequality
 
 USER = getpass.getuser()
@@ -28,12 +29,12 @@ USER = getpass.getuser()
 2. Upload it to HDFS
 3. Pass a full URI to either of the CSV files to the example
 """
-WINE_EQUALITY_FILE = f"{packaging.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
+WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
 
 """
 Output path of the learned model on hdfs
 """
-HDFS_DIR = (f"{packaging.get_default_fs()}/user/{USER}"
+HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
@@ -86,8 +87,8 @@ def main():
     # when all workers try to save the first checkpoint at the same time
     experiment_fn()
 
-    pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
-    editable_requirements = packaging.get_editable_requirements_from_current_venv()
+    pyenv_zip_path, env_name = cluster_pack.upload_env()
+    editable_requirements = cluster_pack.get_editable_requirements()
     run_on_yarn(
         pyenv_zip_path,
         experiment_fn,

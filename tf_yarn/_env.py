@@ -4,7 +4,8 @@ from typing import (
     NamedTuple
 )
 
-from tf_yarn import packaging, topologies
+import cluster_pack
+from tf_yarn import topologies
 
 
 class PythonEnvDescription(NamedTuple):
@@ -24,13 +25,13 @@ def gen_pyenv_from_existing_archive(path_to_archive: str) -> PythonEnvDescriptio
 
     archive_filename = os.path.basename(path_to_archive)
 
-    packer = packaging.detect_packer_from_file(path_to_archive)
-    if packer == packaging.PEX_PACKER:
+    packer = cluster_pack.detect_packer_from_file(path_to_archive)
+    if packer == cluster_pack.PEX_PACKER:
         return PythonEnvDescription(
             path_to_archive,
             f"./{archive_filename}",
             archive_filename)
-    elif packer == packaging.CONDA_PACKER:
+    elif packer == cluster_pack.CONDA_PACKER:
         return PythonEnvDescription(
             path_to_archive,
             f"{CONDA_CMD}", CONDA_ENV_NAME)

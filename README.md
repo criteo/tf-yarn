@@ -1,6 +1,6 @@
 # tf-yarnᵝ
 
-tf-yarn is a Python library we have built at Criteo for training TensorFlow models on a YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
+tf-yarn is a Python library we have built at Criteo for training TensorFlow models on a Hadoop/YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
 
 It supports running on one worker or on multiple workers with different distribution strategies, it can run on CPUs or GPUs and also runs with the recently added standalone client mode, and this with just a few lines of code.
 
@@ -87,9 +87,9 @@ The example uses the [Wine Quality][wine-quality] dataset from UCI ML repository
 
 ```python
 from tf_yarn import TaskSpec, run_on_yarn
-from tf_yarn import packaging
+import cluster_pack
 
-pyenv_zip_path = packaging.upload_env_to_hdfs()
+pyenv_zip_path, _ = cluster_pack.upload_env()
 run_on_yarn(
     pyenv_zip_path,
     experiment_fn,
@@ -229,22 +229,21 @@ run_on_yarn(
 
 ## Configuring the Python interpreter and packages
 
-tf-yarn needs to ship an isolated virtual environment to the containers.
-
-You can use the packaging module to generate a package on hdfs based on your current installed Virtual Environment.
-(You should have installed the dependencies from `requirements.txt` first `pip install -r requirements.txt`)
+tf-yarn uses [cluster-pack](https://github.com/criteo/cluster-pack) to to ship an isolated virtual environment to the containers.
+(You should have installed the dependencies from `requirements.txt` into your virtual environment first `pip install -r requirements.txt`)
 This works if you use Anaconda and also with [Virtual Environments](https://docs.python.org/3/tutorial/venv.html).
 
-By default the generated package is a [pex][pex] package. The packaging module will generate the pex package, upload it to hdfs and you can start tf_yarn by providing the hdfs path.
+By default the generated package is a [pex][pex] package. cluster-pack will generate the pex package, upload it to hdfs and you can start tf_yarn by providing the hdfs path.
 
 ```python
-pyenv_zip_path, env_name = packaging.upload_env_to_hdfs()
+import cluster_pack
+pyenv_zip_path, env_name = cluster_pack.upload_env()
 run_on_yarn(
     pyenv_zip_path=pyenv_zip_path
 )
 ```
 
-If you hosting evironment is Anaconda `upload_env_to_hdfs` the packaging module will use [conda-pack][conda-pack] to create the package.
+If you hosting evironment is Anaconda `upload_env` the packaging module will use [conda-pack][conda-pack] to create the package.
 
 You can also directly use the command line tools provided by [conda-pack][conda-pack] and [pex][pex] to generate the packages.
 
@@ -288,12 +287,13 @@ to run on the GPU ones:
 
 ```python
 import getpass
+import cluster_pack
 from tf_yarn import NodeLabel
-from tf_yarn import packaging
 
-pyenv_zip_path_cpu, _ = packaging.upload_env_to_hdfs()
-pyenv_zip_path_gpu, _ = packaging.upload_env_to_hdfs(
-    archive_on_hdfs=f"{packaging.get_default_fs()}/user/{getpass.getuser()}/envs/tf_yarn_gpu_env.pex",
+
+pyenv_zip_path_cpu, _ = cluster_pack.upload_env()
+pyenv_zip_path_gpu, _ = cluster_pack.upload_env(
+    archive_on_hdfs=f"{cluster_pack.get_default_fs()}/user/{getpass.getuser()}/envs/tf_yarn_gpu_env.pex",
     additional_packages={"tensorflow-gpu": "2.0.0a0"},
     ignored_packages={"tensorflow"}
 )

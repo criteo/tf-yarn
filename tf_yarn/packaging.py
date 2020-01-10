@@ -57,4 +57,4 @@ def get_editable_requirements_from_current_venv(
 
 
 def get_default_fs():
-    return cluster_pack.get_default_fs
+    return cluster_pack.get_default_fs()

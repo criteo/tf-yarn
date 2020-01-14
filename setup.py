@@ -63,7 +63,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.4.15"),
+    version=_check_add_criteo_environment("0.4.16"),
     install_requires=REQUIREMENTS + [get_tensorflow_version()],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

@@ -25,7 +25,7 @@ do
     pip install -e .
     pip install mlflow
     pip install pyarrow
-    pip install horovod
+    pip install horovod==0.18.2
 
     # Setup specific to examples
     # Get wine dataset for linear_classifier_example

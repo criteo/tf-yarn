@@ -9,7 +9,7 @@ echo "run examples .."
 
 exit_code=0
 
-for tf_version in "1.12.2" "1.14.0"
+for tf_version in "1.12.2" "1.15.2"
 do
     echo "running with tensorflow ${tf_version} .."
 

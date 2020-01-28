@@ -10,7 +10,6 @@ import subprocess
 import os
 import skein
 import numpy as np
-import tensorflow as tf
 
 from functools import partial
 from datetime import datetime
@@ -40,6 +39,8 @@ HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
 
 def main():
     def experiment_fn() -> Experiment:
+        # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
+        import tensorflow as tf
 
         def convert_to_tensor(x, y):
             return (tf.convert_to_tensor(list(x.values()), dtype=tf.float32),

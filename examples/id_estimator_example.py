@@ -8,13 +8,15 @@ import pwd
 import getpass
 from subprocess import check_output
 import skein
-import tensorflow as tf
 
 import cluster_pack
 from tf_yarn import Experiment, TaskSpec, run_on_yarn
 
 
 def model_fn(features, labels, mode):
+    # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
+    import tensorflow as tf
+
     x = features["x"]
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(
@@ -33,6 +35,9 @@ def model_fn(features, labels, mode):
 
 
 def experiment_fn() -> Experiment:
+    # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
+    import tensorflow as tf
+
     def input_fn():
         x = tf.constant([[1.0], [2.0], [3.0], [4.0]])
         return {"x": x}, x

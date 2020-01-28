@@ -10,7 +10,6 @@ import sys
 import warnings
 import typing
 import skein
-import tensorflow as tf
 
 from functools import partial
 from subprocess import check_output
@@ -39,6 +38,8 @@ HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
 
 
 def experiment_fn() -> Experiment:
+    # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
+    import tensorflow as tf
 
     def train_input_fn():
         dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")

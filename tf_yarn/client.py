@@ -100,8 +100,11 @@ def _setup_pyenvs(
         pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]]
 ) -> Dict[topologies.NodeLabel, _env.PythonEnvDescription]:
     if isinstance(pyenv_zip_path, str):
-        pyenvs = {topologies.NodeLabel.CPU: _env.gen_pyenv_from_existing_archive(
-            pyenv_zip_path)}
+        pyenv = _env.gen_pyenv_from_existing_archive(pyenv_zip_path)
+        pyenvs = {
+            topologies.NodeLabel.CPU: pyenv,
+            topologies.NodeLabel.GPU: pyenv
+        }
     else:
         pyenvs = {label: _env.gen_pyenv_from_existing_archive(env_zip_path)
                   for label, env_zip_path in pyenv_zip_path.items()}

@@ -281,9 +281,6 @@ to run on the GPU ones:
 2. Set `TaskSpec.label` to `NodeLabel.GPU` for relevant task types.
    A good rule of a thumb is to run compute heavy `"chief"` and `"worker"`
    tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
-3. Generate two python environements: one with Tensorflow for CPUs and one
-   with Tensorflow for GPUs. You need to provide a custom path in archive_on_hdfs
-   as the default one is already use by the CPU pyenv_zip_path
 
 ```python
 import getpass
@@ -291,14 +288,9 @@ import cluster_pack
 from tf_yarn import NodeLabel
 
 
-pyenv_zip_path_cpu, _ = cluster_pack.upload_env()
-pyenv_zip_path_gpu, _ = cluster_pack.upload_env(
-    archive_on_hdfs=f"{cluster_pack.get_default_fs()}/user/{getpass.getuser()}/envs/tf_yarn_gpu_env.pex",
-    additional_packages={"tensorflow-gpu": "2.0.0a0"},
-    ignored_packages={"tensorflow"}
-)
+pyenv_zip_path, _ = cluster_pack.upload_env()
 run_on_yarn(
-    {NodeLabel.CPU: pyenv_zip_path_cpu, NodeLabel.GPU: pyenv_zip_path_gpu}
+    pyenv_zip_path
     experiment_fn,
     task_specs={
         "chief": TaskSpec(memory="2 GiB", vcores=4, label=NodeLabel.GPU),
@@ -307,6 +299,8 @@ run_on_yarn(
     queue="ml-gpu"
 )
 ```
+The previous example applies to TensorFlow >= 1.15.
+For TensorFlow < 1.15 you need to call upload_env with tensorflow-gpu package and provide it to `run_on_yarn`.
 
 [node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
 

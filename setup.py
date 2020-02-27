@@ -42,16 +42,11 @@ def _check_add_criteo_environment(package_name):
 
 
 def get_tensorflow_version() -> str:
-    version_gpu = ">=1.12.0,<2.0"
-    version_cpu = ">=1.12.2,<2.0"
+    version = ">=1.12.0,<2.0"
     if "BUILD_GPU" in os.environ:
-        if "CRITEO_ENV" in os.environ:
-            return f"tensorflow_gpu{version_gpu}.criteo"
-        else:
-            print("Warning: Public GPU build of tensorflow has not been tested with tf-yarn.")
-            return "tensorflow_gpu"
+        return f"tensorflow_gpu{version}"
     else:
-        return f"tensorflow{version_cpu}"
+        return f"tensorflow{version}"
 
 
 def get_tfyarn_suffix() -> str:

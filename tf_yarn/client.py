@@ -186,12 +186,14 @@ def _setup_skein_cluster(
         acls: ACLs = None,
         file_systems: List[str] = None,
         name: str = "RunOnYarn",
-        n_try: int = 0
+        n_try: int = 0,
+        pre_script_hook: Optional[str] = None
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
         "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
         f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
+    pre_script_hook = pre_script_hook if pre_script_hook else ""
     with tempfile.TemporaryDirectory() as tempdir:
         task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
         services = {}
@@ -209,6 +211,7 @@ def _setup_skein_cluster(
             services[task_type] = skein.Service(
                 script=f'''
                             set -x
+                            {pre_script_hook}
                             {_env.gen_task_cmd(
                                 pyenv,
                                 task_type,
@@ -329,7 +332,8 @@ def run_on_yarn(
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     nb_retries: int = 0,
     custom_task_module: Optional[str] = None,
-    name: str = "RunOnYarn"
+    name: str = "RunOnYarn",
+    pre_script_hook: Optional[str] = None
 ) -> Optional[metrics.Metrics]:
     """Run an experiment on YARN.
 
@@ -416,6 +420,9 @@ def run_on_yarn(
     name
         Name of the yarn application
 
+    pre_script_hook
+        bash command to prepare Hadoop environment
+
     Raises
     ------
     RunFailed
@@ -441,7 +448,8 @@ def run_on_yarn(
                 file_systems=file_systems,
                 name=name,
                 n_try=n_try,
-                custom_task_module=custom_task_module
+                custom_task_module=custom_task_module,
+                pre_script_hook=pre_script_hook
             )
             with _shutdown_on_exception(skein_cluster.app):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
@@ -475,7 +483,8 @@ def standalone_client_mode(
         queue: str = "default",
         acls: ACLs = _default_acls_all_access(),
         file_systems: List[str] = None,
-        name: str = "RunOnYarn"
+        name: str = "RunOnYarn",
+        pre_script_hook: Optional[str] = None
 ):
     """
     https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
@@ -532,6 +541,9 @@ def standalone_client_mode(
 
     name
         Name of the yarn application
+
+    pre_script_hook
+        bash command to prepare Hadoop environment
     """
     try:
         pyenvs = _setup_pyenvs(pyenv_zip_path)
@@ -545,7 +557,8 @@ def standalone_client_mode(
             queue=queue,
             acls=acls,
             file_systems=file_systems,
-            name=name
+            name=name,
+            pre_script_hook=pre_script_hook
         )
 
         with _shutdown_on_exception(skein_cluster.app):

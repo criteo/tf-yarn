@@ -35,6 +35,14 @@ HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
+def _get_fs_for_tests():
+    criteo_env = os.getenv("CRITEO_ENV", "")
+    if criteo_env:
+        return f"viewfs://{criteo_env}-pa4"
+    else:
+        return cluster_pack.get_default_fs()
+
+
 def experiment_fn() -> Experiment:
     # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
     import tensorflow as tf
@@ -68,11 +76,20 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-
     # you need to install mlflow `pip install mlflow`
     # and set MLflow tracking uri
     mlflow.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))
-    run_id = mlflow.start_run(experiment_id=77).info.run_id
+
+    experiment_name = "tf-yarn-tests"
+    exp = mlflow.get_experiment_by_name(experiment_name)
+    if not exp:
+        experiment_id = mlflow.create_experiment(
+            experiment_name,
+            f"{_get_fs_for_tests()}/user/{USER}/mlflow_artifacts")
+    else:
+        experiment_id = exp.experiment_id
+
+    run_id = mlflow.start_run(experiment_id=experiment_id).info.run_id
 
     pyenv_zip_path, env_name = cluster_pack.upload_env()
     editable_requirements = cluster_pack.get_editable_requirements()
@@ -94,7 +111,7 @@ if __name__ == "__main__":
 
     # check if run has been registered in MLFlow
     run_json = requests.get(f"{mlflow.get_tracking_uri()}/api/2.0/mlflow/runs/get",
-                          params={'run_id': run_id}).json()
+                            params={'run_id': run_id}).json()
 
     logger.info(f"created run: {run_json}")
 

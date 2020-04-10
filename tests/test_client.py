@@ -122,7 +122,7 @@ def test_get_safe_experiment_fn():
         experiment_fn = get_safe_experiment_fn("testpackage.testmodule.experiment_fn",
                                                "test_model_dir")
         print(f"got function .. {experiment_fn}")
-        print(f"execute function ..")
+        print("execute function ..")
         print(experiment_fn)
         experiment = experiment_fn()
         print(experiment)

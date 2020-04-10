@@ -59,7 +59,7 @@ def _worker_fn(client, task, net_if):
         )
         experiment.estimator._config = new_config
 
-    logger.info(f"start training..")
+    logger.info("start training..")
 
     experiment.estimator.train(
         experiment.train_spec.input_fn,
@@ -99,7 +99,7 @@ def main():
     client = skein.ApplicationClient.from_current()
     task_type, task_id = cluster.get_task_description()
     task = cluster.get_task()
-    event.init_event(client, task, f"127.0.0.1:0")
+    event.init_event(client, task, "127.0.0.1:0")
     _task_commons._setup_container_logs(client)
     net_if = get_net_if()
 

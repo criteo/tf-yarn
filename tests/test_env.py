@@ -7,7 +7,7 @@ from tf_yarn._env import (
 
 test_data = [
     ("/path/to/myenv.pex",
-     f"./myenv.pex",
+     "./myenv.pex",
      "myenv.pex"),
     ("/path/to/myenv.zip",
      f"{CONDA_CMD}",

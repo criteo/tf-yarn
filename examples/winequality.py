@@ -38,7 +38,7 @@ def get_dataset(
     elif split == "test":
         return data.filter(in_test_set).map(split_label)
     else:
-        raise ValueError(f"Unknown option split, must be 'train' or 'test'")
+        raise ValueError("Unknown option split, must be 'train' or 'test'")
 
 
 def get_feature_columns():

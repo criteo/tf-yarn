@@ -71,7 +71,7 @@ class ContainerLogStatus(NamedTuple):
     def by_container_id(self) -> Dict[str, Tuple[str, str]]:
         containers: Dict[str, Tuple[str, str]] = {}
         if len(self.log_urls.keys()) != len(self.container_status.keys()):
-            logger.warning(f"logs_urls and container_status dicts have not the same length")
+            logger.warning("logs_urls and container_status dicts have not the same length")
             return containers
 
         for task, url, status in zip(self.log_urls.keys(),

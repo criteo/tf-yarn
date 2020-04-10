@@ -42,15 +42,15 @@ log_thresholds_list = [
 ]
 
 logs_list = [
-    [((f'Statistics for eval1: metric1 description: 0.0 metric2 description: 13.0',),),
-     ((f'Statistics for eval2: metric1 description: 5.0 metric2 description: 16.0',),)],
-    [((f'Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)],
-    [((f'Statistics for eval1: metric1 description: 0.9',),),
-     ((f'Statistics for eval2: metric2 description: 26.0',),)],
-    [((f'Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
-     ((f'Statistics for eval2: metric2 description: 26.0',),)],
-    [((f'Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
-     ((f'Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)]
+    [(('Statistics for eval1: metric1 description: 0.0 metric2 description: 13.0',),),
+     (('Statistics for eval2: metric1 description: 5.0 metric2 description: 16.0',),)],
+    [(('Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)],
+    [(('Statistics for eval1: metric1 description: 0.9',),),
+     (('Statistics for eval2: metric2 description: 26.0',),)],
+    [(('Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
+     (('Statistics for eval2: metric2 description: 26.0',),)],
+    [(('Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
+     (('Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)]
 ]
 
 

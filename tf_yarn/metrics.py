@@ -60,7 +60,7 @@ class OneShotMetricsLogger(NamedTuple):
         return ret
 
 
-class StepPerSecondHook(tf.train.StepCounterHook):
+class StepPerSecondHook(tf.estimator.StepCounterHook):
 
     def __init__(
         self,
@@ -69,7 +69,7 @@ class StepPerSecondHook(tf.train.StepCounterHook):
         output_dir=None,
         summary_writer=None
     ):
-        tf.train.StepCounterHook.__init__(
+        tf.estimator.StepCounterHook.__init__(
             self,
             every_n_steps=every_n_steps,
             every_n_secs=every_n_secs,

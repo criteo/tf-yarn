@@ -42,7 +42,7 @@ def _check_add_criteo_environment(package_name):
 
 
 def get_tensorflow_version() -> str:
-    version = ">=1.12.0,<2.0"
+    version = ">=1.15.0,<=2.2.0"
     if "BUILD_GPU" in os.environ:
         return f"tensorflow_gpu{version}"
     else:
@@ -58,7 +58,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.4.20"),
+    version=_check_add_criteo_environment("0.5.0"),
     install_requires=REQUIREMENTS + [get_tensorflow_version()],
     tests_require=["pytest", "hadoop-test-cluster"],
     python_requires=">=3.6",

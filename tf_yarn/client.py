@@ -256,8 +256,8 @@ def _setup_skein_cluster(
 
 
 def _hook_name_already_exists(
-        hook: tf.train.SessionRunHook,
-        hooks: List[tf.train.SessionRunHook]) -> bool:
+        hook: tf.estimator.SessionRunHook,
+        hooks: List[tf.estimator.SessionRunHook]) -> bool:
     hook_name = type(hook).__name__
     return len([h for h in hooks
                 if type(h).__name__ == hook_name]) > 0
@@ -475,7 +475,7 @@ def run_on_yarn(
 def standalone_client_mode(
         pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
         task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
-        tf_session_config: Optional[tf.ConfigProto] = None,
+        tf_session_config: Optional[tf.compat.v1.ConfigProto] = None,
         *,
         skein_client: skein.Client = None,
         files: Dict[str, str] = None,
@@ -596,7 +596,7 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
 
 def _send_config_proto(
         skein_cluster: SkeinCluster,
-        tf_session_config: tf.ConfigProto):
+        tf_session_config: tf.compat.v1.ConfigProto):
     serialized_fn = cloudpickle.dumps(tf_session_config)
     skein_cluster.app.kv[constants.KV_TF_SESSION_CONFIG] = serialized_fn
 

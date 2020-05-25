@@ -51,12 +51,11 @@ def experiment_fn() -> Experiment:
         dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
         return dataset.shuffle(1000).batch(128)
 
-    estimator = tf.estimator.LinearClassifier(
+    estimator = tf.compat.v1.estimator.LinearClassifier(
         feature_columns=winequality.get_feature_columns(),
         model_dir=f"{HDFS_DIR}",
         n_classes=winequality.get_n_classes(),
-        optimizer=lambda: hvd.DistributedOptimizer(tf.train.AdamOptimizer())
-    )
+        optimizer=lambda: hvd.DistributedOptimizer(tf.compat.v1.train.AdamOptimizer()))
 
     return Experiment(
         estimator,

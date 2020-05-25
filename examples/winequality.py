@@ -20,8 +20,8 @@ def get_dataset(
 
     def in_training_set(*row):
         num_buckets = 1000
-        key = tf.string_join(list(map(tf.as_string, row)))
-        bucket_id = tf.string_to_hash_bucket_fast(key, num_buckets)
+        key = tf.strings.join(list(map(tf.as_string, row)))
+        bucket_id = tf.strings.to_hash_bucket_fast(key, num_buckets)
         return bucket_id < int(train_fraction * num_buckets)
 
     def in_test_set(*row):

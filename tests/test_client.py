@@ -109,7 +109,8 @@ def _experiment_fn(model_dir):
         return None
 
     return Experiment(
-        tf.estimator.LinearClassifier(feature_columns=[], model_dir=model_dir),
+        tf.estimator.LinearClassifier(feature_columns=[], model_dir=model_dir,
+        loss_reduction=tf.keras.losses.Reduction.SUM),
         tf.estimator.TrainSpec(train_fn),
         tf.estimator.EvalSpec(eval_fn))
 

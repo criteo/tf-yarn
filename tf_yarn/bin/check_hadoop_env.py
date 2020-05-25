@@ -29,13 +29,13 @@ def write_dummy_file_to_hdfs() -> str:
         with open(new_file, 'w') as fd:
             fd.write(EXPECTED_CONTENT)
         logger.info(f"write dummy file to hdfs {FILEPATH_ON_HDFS}")
-        tf.gfile.MakeDirs(PATH_ON_HDFS)
-        tf.gfile.Copy(new_file, FILEPATH_ON_HDFS, overwrite=True)
+        tf.io.gfile.makedirs(PATH_ON_HDFS)
+        tf.io.gfile.copy(new_file, FILEPATH_ON_HDFS, overwrite=True)
     return FILEPATH_ON_HDFS
 
 
 def read_by_tensorflow(file: str) -> str:
-    gfile = tf.gfile.GFile(file)
+    gfile = tf.io.gfile.GFile(file)
     return '\n'.join(gfile.readlines())
 
 
@@ -154,7 +154,7 @@ def main():
                         app_id]).decode()
                     logger.info(f"yarn logs: {yarn_logs}")
 
-                tf.gfile.Remove(FILEPATH_ON_HDFS)
+                tf.io.gfile.remove(FILEPATH_ON_HDFS)
 
         logger.info(f'Hadoop setup: {"OK" if check_ok else "KO"}')
     else:

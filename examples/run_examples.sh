@@ -9,7 +9,7 @@ echo "run examples .."
 
 exit_code=0
 
-for tf_version in "1.12.2" "1.15.2"
+for tf_version in "1.15.2" "2.2.0"
 do
     echo "running with tensorflow ${tf_version} .."
 
@@ -25,7 +25,7 @@ do
     pip install -e .
     pip install mlflow
     pip install pyarrow
-    pip install horovod==0.19.0
+    pip install horovod==0.19.2+criteo.${tf_version}
 
     # Setup specific to examples
     # Get wine dataset for linear_classifier_example
@@ -40,9 +40,6 @@ do
     # Execute examples
     pushd examples
         for example in *_example.py; do
-            if [[ "$example" == "collective_all_reduce_example.py" && $tf_version == "1.12.2" ]]; then
-                continue
-            fi
             echo "executing $example .."
             python $example
             if ! [ $? -eq 0 ]; then

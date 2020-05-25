@@ -36,6 +36,8 @@ CURRENT_HOST = "1.1.1.1"
 CURRENT_PORT = 8888
 WORKER0_HOST = "1.1.1.2"
 WORKER0_PORT = 8888
+WORKER1_HOST = "1.1.1.3"
+WORKER1_PORT = 8888
 
 
 @pytest.mark.parametrize("task_name, task_index", [
@@ -66,15 +68,15 @@ def test_start_cluster_worker(task_name, task_index):
     pytest.param("ps", 0, False)
 ])
 def test_start_tf_server(task_name, task_index, is_server_started):
-    task = f"{task_name}:{task_index}"
 
-    CLUSTER_SPEC = {"worker:0/init": [f"{WORKER0_HOST}:{WORKER0_PORT}"],
-                    f"{task}/init": [f"{CURRENT_HOST}:{CURRENT_PORT}"]}
+    CLUSTER_SPEC = {"worker": [f"worker0.{WORKER0_HOST}:{WORKER0_PORT}",
+                              f"worker1.{WORKER1_HOST}:{WORKER1_PORT}"],
+                    "ps": [f"ps0.{CURRENT_HOST}:{CURRENT_PORT}"]}
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(mock.patch.dict(os.environ))
         os.environ["SKEIN_CONTAINER_ID"] = f"{task_name}_{task_index}"
-        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.train"))
+        mock_server = stack.enter_context(mock.patch(f"{MODULE_TO_TEST}.tf.distribute"))
         cluster.start_tf_server(CLUSTER_SPEC)
 
         if is_server_started:

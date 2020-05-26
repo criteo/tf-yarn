@@ -1,6 +1,7 @@
 import logging
 import skein
 import tensorflow as tf
+import os
 
 from datetime import timedelta
 
@@ -81,3 +82,32 @@ class StepPerSecondHook(tf.estimator.StepCounterHook):
         if cluster.is_chief():
             steps_per_sec = elapsed_steps / elapsed_time
             mlflow.log_metric(f"steps_per_sec_{cluster.n_try()}", steps_per_sec, step=global_step)
+
+
+def is_event_file(filename):
+    return os.path.basename(filename).startswith('events.out')
+
+
+def gen_events_iterator(model_path):
+    event_file = next((filename for filename in tf.gfile.ListDirectory(model_path)
+                       if is_event_file(filename)))
+    assert isinstance(event_file, str)
+    return tf.train.summary_iterator(os.path.join(model_path, event_file))
+
+
+def get_all_metrics(model_path):
+    events = gen_events_iterator(model_path)
+    dataframe = {
+        'step': list(),
+        'name': list(),
+        'value': list()
+    }
+    for event in events:
+        summary = event.summary
+        if summary:
+            for value in summary.value:
+                if value.simple_value:
+                    dataframe['step'].append(event.step)
+                    dataframe['name'].append(value.tag)
+                    dataframe['value'].append(value.simple_value)
+    return dataframe

@@ -69,7 +69,6 @@ def _worker_fn(client, task, net_if):
 
 def _driver_fn(client, net_if):
     cluster_tasks = _task_commons._get_cluster_tasks(client)
-
     # Worker discovery
     worker_list = [f"{net_if[1]}:{N_PROCESS_PER_WORKER}"]
     n_workers = 1
@@ -81,7 +80,8 @@ def _driver_fn(client, net_if):
             n_workers += 1
 
     # Worker task allocation to workers
-    host_alloc_plan = gloo_run._allocate(','.join(worker_list), n_workers)
+    hosts = gloo_run.parse_hosts(','.join(worker_list))
+    host_alloc_plan = gloo_run.get_host_assignments(hosts, n_workers)
     for host in host_alloc_plan:
         host_info = f"""\
             {host.rank},{host.size},{host.local_rank},\
@@ -90,7 +90,8 @@ def _driver_fn(client, net_if):
         event.broadcast(client, f"{cluster.get_task()}/{host.hostname}", host_info)
 
     global_rendezv = RendezvousServer(verbose=1)
-    global_rendezv_port = global_rendezv.start_server(host_alloc_plan)
+    global_rendezv_port = global_rendezv.start_server()
+    global_rendezv.httpd.init(host_alloc_plan)
     event.broadcast(client, f"{cluster.get_task()}/sock_addr", f"{net_if[1]}:{global_rendezv_port}")
     return global_rendezv.listen_thread
 

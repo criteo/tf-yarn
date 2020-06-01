@@ -15,7 +15,6 @@ class PythonEnvDescription(NamedTuple):
 
 
 INDEPENDENT_WORKERS_MODULE = "tf_yarn.tasks._independent_workers_task"
-STANDALONE_CLIENT_MODULE = "tf_yarn.tasks._standalone_client_task"
 TENSORBOARD_MODULE = "tf_yarn.tasks._tensorboard_task"
 CONDA_ENV_NAME = "pyenv"
 CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python"
@@ -41,15 +40,12 @@ def gen_pyenv_from_existing_archive(path_to_archive: str) -> PythonEnvDescriptio
 
 def gen_task_cmd(pyenv: PythonEnvDescription,
                  task_type: str,
-                 standalone_client_mode: bool,
                  custom_task_module: Optional[str]) -> str:
 
     if task_type == "tensorboard":
         containers_module = TENSORBOARD_MODULE
     elif task_type in topologies.ALL_TASK_TYPES:
-        if standalone_client_mode:
-            containers_module = STANDALONE_CLIENT_MODULE
-        elif custom_task_module:
+        if custom_task_module:
             containers_module = custom_task_module
         else:
             containers_module = INDEPENDENT_WORKERS_MODULE

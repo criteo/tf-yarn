@@ -25,40 +25,29 @@ sock_addrs = {
 
 
 @mock.patch("tf_yarn.client.skein.ApplicationClient")
-@pytest.mark.parametrize("tasks_instances, expected_spec, standalone_client_mode", [
+@pytest.mark.parametrize("tasks_instances, expected_spec", [
     ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
      {'chief': ['addr1:port1'],
       'ps': ['addr4:port4'],
       'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9']
-      },
-     False
+      }
      ),
     ([('chief', 3)],
-     {'chief': ['addr1:port1', 'addr10:port10', 'addr11:port11']},
-     False
+     {'chief': ['addr1:port1', 'addr10:port10', 'addr11:port11']}
      ),
     ([('worker', 3), ('ps', 3)],
      {'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9'],
       'ps': ['addr4:port4', 'addr5:port5', 'addr6:port6']
-      },
-     False
+      }
      ),
     ([('worker', 1), ('evaluator', 0)],
-     {'worker': ['addr7:port7']},
-     False
-     ),
-    ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
-     {'ps': ['addr4:port4'],
-      'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9']
-      },
-     True
+     {'worker': ['addr7:port7']}
      )
 ])
 def test_setup_cluster_spec(
         mock_skein_app,
         tasks_instances,
-        expected_spec,
-        standalone_client_mode):
+        expected_spec):
     kv_store = dict()
     for task_type, nb_instances in tasks_instances:
         for i in range(nb_instances):
@@ -67,8 +56,7 @@ def test_setup_cluster_spec(
     mock_skein_app.kv.wait = kv_store.get
     cluster_spec = _setup_cluster_spec(
         tasks_instances,
-        mock_skein_app,
-        standalone_client_mode
+        mock_skein_app
     )
 
     assert cluster_spec.as_dict() == expected_spec

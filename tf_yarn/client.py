@@ -159,13 +159,9 @@ def _maybe_zip_task_files(files, tempdir):
 
 def _setup_cluster_spec(
     task_instances: List[Tuple[str, int]],
-    app: skein.ApplicationClient,
-    standalone_client_mode: bool
+    app: skein.ApplicationClient
 ) -> tf.train.ClusterSpec:
     tasks_not_in_cluster = ['evaluator', 'tensorboard']
-    # In standalone client mode the chief is also not part of the cluster
-    if standalone_client_mode:
-        tasks_not_in_cluster.append('chief')
     cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
     app.kv[constants.KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
     return tf.train.ClusterSpec(
@@ -177,7 +173,6 @@ def _setup_skein_cluster(
         pyenvs: Dict[topologies.NodeLabel, _env.PythonEnvDescription],
         task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
         *,
-        standalone_client_mode: bool,
         custom_task_module: Optional[str] = None,
         skein_client: skein.Client = None,
         files: Dict[str, str] = None,
@@ -215,7 +210,6 @@ def _setup_skein_cluster(
                             {_env.gen_task_cmd(
                                 pyenv,
                                 task_type,
-                                standalone_client_mode,
                                 custom_task_module)}
                         ''',
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
@@ -439,7 +433,6 @@ def run_on_yarn(
             skein_cluster = _setup_skein_cluster(
                 pyenvs=pyenvs,
                 task_specs=task_specs,
-                standalone_client_mode=False,
                 skein_client=skein_client,
                 files=files,
                 env=env,
@@ -452,7 +445,7 @@ def run_on_yarn(
                 pre_script_hook=pre_script_hook
             )
             with _shutdown_on_exception(skein_cluster.app):
-                _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, False)
+                _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app)
 
                 return _run_on_cluster(
                     experiment_fn,
@@ -469,107 +462,6 @@ def run_on_yarn(
 
     # Necessary for type checking
     return None
-
-
-@contextmanager
-def standalone_client_mode(
-        pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
-        task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
-        tf_session_config: Optional[tf.compat.v1.ConfigProto] = None,
-        *,
-        skein_client: skein.Client = None,
-        files: Dict[str, str] = None,
-        env: Dict[str, str] = {},
-        queue: str = "default",
-        acls: ACLs = _default_acls_all_access(),
-        file_systems: List[str] = None,
-        name: str = "RunOnYarn",
-        pre_script_hook: Optional[str] = None
-):
-    """
-    https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow \
-            /contrib/distribute/README.md#standalone-client-mode
-    Standalone mode means starting tf server on the cluster,
-    launching everything on the client and letting tf take care of the rest
-    This is not limited to Estimator API, it also works with low level tf
-    (see session_run_example.py)
-
-    Parameters
-    ----------
-
-    pyenv_zip_path
-        Path to an archive of a python environment to be deployed
-        It can be a zip conda env or a pex archive
-        In case of GPU/CPU cluster, provide a dictionnary with both
-        environments.
-
-    skein_client
-        Skein client to submit yarn jobs
-
-    task_specs
-        Resources to allocate for each task type. The keys
-        must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
-        ``"evaluator"``. The minimal spec must contain at least
-        ``"chief"``.
-
-    tf_session_config
-        tf.ConfigProto to be provided to each started TFServer
-
-    files
-        Local files or directories to upload to the container.
-        The keys are the target locations of the resources relative
-        to the container root, while the values -- their
-        corresponding local sources. Note that container root is
-        appended to ``PYTHONPATH``. Therefore, any listed Python
-        module a package is automatically importable.
-
-    env
-        Environment variables to forward to the containers.
-
-    queue
-        YARN queue to use.
-
-    acls
-        Configures the application-level Access Control Lists (ACLs).
-        Optional, defaults to ACLs all access.
-
-        See `ACLs <https://jcrist.github.io/skein/specification.html#acls>` for details.
-
-    file_systems
-        A list of namenode URIs to acquire delegation tokens for
-        in addition to ``fs.defaultFS``.
-
-    name
-        Name of the yarn application
-
-    pre_script_hook
-        bash command to prepare Hadoop environment
-    """
-    try:
-        pyenvs = _setup_pyenvs(pyenv_zip_path)
-        skein_cluster = _setup_skein_cluster(
-            pyenvs=pyenvs,
-            task_specs=task_specs,
-            standalone_client_mode=True,
-            skein_client=skein_client,
-            files=files,
-            env=env,
-            queue=queue,
-            acls=acls,
-            file_systems=file_systems,
-            name=name,
-            pre_script_hook=pre_script_hook
-        )
-
-        with _shutdown_on_exception(skein_cluster.app):
-            cluster_spec = _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app, True)
-
-            _send_config_proto(skein_cluster, tf_session_config)
-
-            yield cluster_spec
-    finally:
-        if skein_cluster:
-            event.broadcast(skein_cluster.app, "stop", "1")
 
 
 def get_safe_experiment_fn(full_fn_name: str, *args):

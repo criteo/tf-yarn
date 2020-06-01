@@ -2,9 +2,9 @@
 
 tf-yarn is a Python library we have built at Criteo for training TensorFlow models on a Hadoop/YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
 
-It supports running on one worker or on multiple workers with different distribution strategies, it can run on CPUs or GPUs and also runs with the recently added standalone client mode, and this with just a few lines of code.
+It supports running on one worker or on multiple workers with different distribution strategies and it can run on CPUs or GPUs using just a few lines of code.
 
-Its API provides an easy entry point for working with Estimators. Keras is currently supported via the [model_to_estimator](https://www.tensorflow.org/api_docs/python/tf/keras/estimator/model_to_estimator) conversion function, and low-level distributed TensorFlow via standalone client mode API. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
+Its API provides an easy entry point for working with Estimators. Keras is currently supported via the [model_to_estimator](https://www.tensorflow.org/api_docs/python/tf/keras/estimator/model_to_estimator) conversion function. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
 
 [MLflow](https://www.mlflow.org/docs/latest/quickstart.html) is supported for all kind of trainings (one worker/distributed).
 More infos [here](https://github.com/criteo/tf-yarn/blob/master/docs/MLflow.md).
@@ -52,10 +52,6 @@ $ check_hadoop_env
 # INFO:tf_yarn.bin.check_hadoop_env:remote_check: True
 # INFO:tf_yarn.bin.check_hadoop_env:Hadoop setup: OK
 ```
-
-## tf-yarn API's
-
-tf-yarn comes with two API's to launch a training — run_on_yarn and standalone_client_mode.
 
 ### run_on_yarn
 
@@ -126,42 +122,6 @@ tf.estimator.train_and_evaluate(
 
 [linear_classifier_example]: https://github.com/criteo/tf-yarn/blob/master/examples/linear_classifier_example.py
 [wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
-
-### standalone_client_mode
-
-[Standalone client mode](https://github.com/tensorflow/tensorflow/blob/r1.13/tensorflow/contrib/distribute/README.md?#standalone-client-mode) keeps most of the previous concepts. Instead of calling `train_and_evaluate` on each worker, one just spawns the TensorFlow server on each worker and then locally runs `train_and_evaluate` on the client. TensorFlow will take care of sending the graph to each worker. This removes the burden of having to ship manually the experiment function to the containers.
-
-Here is the previous example in Standalone client mode:
-
-```python
-from tensorflow.contrib.distribute import DistributeConfig, ParameterServerStrategy
-from tf_yarn import standalone_client_mode, TaskSpec
-
-with standalone_client_mode(
-     task_specs={
-       "worker": TaskSpec(memory=4 * 2**10, vcores=4, instances=2),
-       "ps": TaskSpec(memory=4 * 2**10, vcores=4, instances=1)}
-) as cluster_spec:
-    distrib_config = DistributeConfig(
-      train_distribute=ParameterServerStrategy(),
-      remote_cluster=cluster_spec
-    )
-    estimator = tf.estimator.DNNClassifier(
-      ...
-      config=tf.estimator.RunConfig(
-        experimental_distribute=distrib_config
-      )
-    )
-
-    tf.estimator.train_and_evaluate(
-      estimator,
-      tf.estimator.TrainSpec(...),
-      tf.estimator.EvalSpec(...))
-```
-
-`standalone_client_mode`  takes care of creating the `ClusterSpec` as described before. We activate `ParameterServerStrategy` in the `RunConfig` and then call `train_and_evaluate`.
-
-In addition to training estimators, Standalone client mode also gives access to TensorFlow’s low-level API. Have a look at the [examples](https://github.com/criteo/tf-yarn/blob/master/examples/session_run_example.py) for more information.
 
 ## Distributed TensorFlow
 

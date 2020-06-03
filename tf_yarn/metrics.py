@@ -92,7 +92,7 @@ def gen_events_iterator(model_path):
     event_file = next((filename for filename in tf.compat.v1.gfile.ListDirectory(model_path)
                        if is_event_file(filename)))
     assert isinstance(event_file, str)
-    return tf.train.summary_iterator(os.path.join(model_path, event_file))
+    return tf.compat.v1.train.summary_iterator(os.path.join(model_path, event_file))
 
 
 def get_all_metrics(model_path):

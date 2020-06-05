@@ -19,7 +19,10 @@ def evaluator_fn(client):
 
 def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
     eval_dir = os.path.join(experiment.estimator.model_dir, "eval")
-    evaluated_checkpoints = _get_evaluated_checkpoint(eval_dir)
+    if not tf.io.gfile.exists(eval_dir) or len(tf.io.gfile.listdir(eval_dir)) == 0:
+        evaluated_checkpoints = set()
+    else:
+        evaluated_checkpoints = _get_evaluated_checkpoint(eval_dir)
 
     if len(evaluated_checkpoints) > 0:
         last_evaluated_checkpoint = max(evaluated_checkpoints)

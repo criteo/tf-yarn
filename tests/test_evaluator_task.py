@@ -32,7 +32,11 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
             mock.patch('tf_yarn.tasks.evaluator_task._get_evaluated_checkpoint') \
             as _get_evaluated_checkpoint, \
             mock.patch('tf_yarn.tasks.evaluator_task._get_all_checkpoints') \
-            as _get_checkpoints:
+            as _get_checkpoints, \
+            mock.patch('tf_yarn.tasks.evaluator_task.tf.io.gfile.exists') as exists_mock, \
+            mock.patch('tf_yarn.tasks.evaluator_task.tf.io.gfile.listdir') as listdir_mock:
+        exists_mock.side_effect = lambda *args, **kwargs: True
+        listdir_mock.side_effect = lambda *args, **kwargs: evaluated_ckpts
         mock_exporter = mock.Mock(spec=tf.estimator.Exporter)
         mock_exporter.name = "my_best_exporter"
 

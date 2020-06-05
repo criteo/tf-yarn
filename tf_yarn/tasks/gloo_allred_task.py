@@ -14,7 +14,7 @@ except (ModuleNotFoundError, ImportError) as e:
     raise e
 
 from tf_yarn import event, _task_commons, cluster
-from tf_yarn.tasks.evaluator_fn import evaluator_fn
+from tf_yarn.tasks.evaluator_task import evaluator_fn
 
 logger = logging.getLogger(__name__)
 

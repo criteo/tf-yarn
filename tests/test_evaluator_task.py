@@ -3,7 +3,7 @@ from unittest.mock import ANY
 import os
 
 import pytest
-from tf_yarn.tasks import evaluator_fn
+from tf_yarn.tasks import evaluator_task
 from tf_yarn.experiment import Experiment
 
 import tensorflow as tf
@@ -28,9 +28,9 @@ checkpoints = {
 ])
 def test_evaluate(evaluated_ckpts, ckpt_to_export):
     with mock.patch('tf_yarn._task_commons._get_experiment') as experiment_mock, \
-            mock.patch('tf_yarn.tasks.evaluator_fn._get_evaluated_checkpoint') \
+            mock.patch('tf_yarn.tasks.evaluator_task._get_evaluated_checkpoint') \
             as _get_evaluated_checkpoint, \
-            mock.patch('tf_yarn.tasks.evaluator_fn._get_all_checkpoints') \
+            mock.patch('tf_yarn.tasks.evaluator_task._get_all_checkpoints') \
             as _get_checkpoints:
         mock_exporter = mock.Mock(spec=tf.estimator.Exporter)
         mock_exporter.name = "my_best_exporter"
@@ -49,7 +49,7 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
         _get_evaluated_checkpoint.side_effect = lambda eval_dir: evaluated_ckpts
 
         _get_checkpoints.side_effect = lambda model_dir: list(checkpoints)
-        evaluator_fn.evaluate(mock_experiment)
+        evaluator_task.evaluate(mock_experiment)
 
         assert len(mock_exporter.export.call_args_list) == len(ckpt_to_export)
         assert len(mock_experiment.estimator.evaluate.call_args_list) == len(ckpt_to_export)
@@ -68,4 +68,4 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
     ({}, None)
 ])
 def test_get_last_evaluated_checkpoint_steps(checkpoints, last_checkpoint):
-    assert evaluator_fn._get_last_evaluated_checkpoint_steps(checkpoints) == last_checkpoint
+    assert evaluator_task._get_last_evaluated_checkpoint_steps(checkpoints) == last_checkpoint

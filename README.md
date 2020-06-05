@@ -291,3 +291,32 @@ run_on_yarn(
 ```
 
 [federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
+
+## Running model evaluation independently
+
+Model training and model evaluation can be run independently. To do so, you must
+use parameter `custom_task_module` of `run_on_yarn`.
+
+To run model training without evaluation:
+```python
+run_on_yarn(
+    ...,
+    task_specs={
+        "chief": TaskSpec(memory="2 GiB", vcores=4),
+        "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2),
+        "ps": TaskSpec(memory="2 GiB", vcores=8),
+        "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
+    }
+)
+```
+
+To run model evaluation:
+```python
+run_on_yarn(
+    ...,
+    task_specs={
+        "evaluator": TaskSpec(memory="2 GiB", vcores=1)
+    },
+    custom_task_module="tf_yarn.tasks.evaluator_task"
+)
+```

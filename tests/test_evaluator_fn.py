@@ -21,7 +21,7 @@ checkpoints = {
 @pytest.mark.parametrize("evaluated_ckpts,ckpt_to_export", [
     ({"/path/to/model/dir/model.ckpt-0", "/path/to/model/dir/model.ckpt-100",
       "/path/to/model/dir/model.ckpt-200"}, {"/path/to/model/dir/model.ckpt-300"}),
-    ({}, {"/path/to/model/dir/model.ckpt-0", "/path/to/model/dir/model.ckpt-100",
+    (set(), {"/path/to/model/dir/model.ckpt-0", "/path/to/model/dir/model.ckpt-100",
      "/path/to/model/dir/model.ckpt-200", "/path/to/model/dir/model.ckpt-300"}),
     ({"/path/to/model/dir/model.ckpt-0", "/path/to/model/dir/model.ckpt-100",
       "/path/to/model/dir/model.ckpt-200", "/path/to/model/dir/model.ckpt-300"}, {})
@@ -46,7 +46,7 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
 
         experiment_mock.side_effect = lambda client: mock_experiment
 
-        _get_evaluated_checkpoint.side_effect = lambda eval_dir: list(evaluated_ckpts)
+        _get_evaluated_checkpoint.side_effect = lambda eval_dir: evaluated_ckpts
 
         _get_checkpoints.side_effect = lambda model_dir: list(checkpoints)
         evaluator_fn.evaluate(mock_experiment)

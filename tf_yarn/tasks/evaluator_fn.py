@@ -64,7 +64,7 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
                 name=experiment.eval_spec.name,
                 checkpoint_path=ckpt
             )
-            evaluated_checkpoints.append(ckpt)
+            evaluated_checkpoints.add(ckpt)
 
             if experiment.train_spec.max_steps and latest_eval_result:
                 global_step = latest_eval_result[ops.GraphKeys.GLOBAL_STEP]

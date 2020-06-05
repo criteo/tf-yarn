@@ -1,12 +1,15 @@
 import logging
 import os
-from datetime import datetime, timedelta
-from tensorflow.python import ops
 import time
-import tensorflow as tf
+from datetime import datetime, timedelta
+
 import skein
-from tf_yarn.tasks import logging as tf_yarn_logging
+import tensorflow as tf
+from tensorflow.python import ops
+
 from tf_yarn import _task_commons, event, metrics, cluster
+from tf_yarn.tasks import logging as tf_yarn_logging
+
 tf_yarn_logging.setup()
 
 logger = logging.getLogger(__name__)
@@ -39,11 +42,8 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
     latest_checkpoint = False
     exporters = {}
     if experiment.eval_spec.exporters:
-        exporters = experiment.eval_spec.exporters \
-            if isinstance(experiment.eval_spec.exporters, list) \
-            else [experiment.eval_spec.exporters]
         exporters = {os.path.join(experiment.estimator.model_dir, exporter.name): exporter
-                     for exporter in exporters}
+                     for exporter in experiment.eval_spec.exporters}
     while not latest_checkpoint:
         if stop_cond and stop_cond():
             logger.info("Stop condition met")

@@ -3,6 +3,8 @@ from unittest.mock import ANY
 import os
 
 import pytest
+from tensorflow_estimator.python.estimator.training import EvalSpec
+
 from tf_yarn.tasks import evaluator_task
 from tf_yarn.experiment import Experiment
 
@@ -41,13 +43,16 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
         mock_exporter.name = "my_best_exporter"
 
         mock_experiment = mock.Mock(spec=Experiment)
-        mock_experiment.eval_spec.start_delay_secs = 0
-        mock_experiment.eval_spec.throttle_secs = 0
+        mock_experiment.eval_spec = EvalSpec(
+            mock.Mock(),
+            exporters=mock_exporter,
+            start_delay_secs=0,
+            throttle_secs=0
+        )
         mock_experiment.estimator.evaluate.side_effect = \
             lambda *args, **kwargs: {ops.GraphKeys.GLOBAL_STEP: 300}
         mock_experiment.estimator.model_dir = "model_dir"
         mock_experiment.train_spec.max_steps = 300
-        mock_experiment.eval_spec.exporters = mock_exporter
 
         experiment_mock.side_effect = lambda client: mock_experiment
 

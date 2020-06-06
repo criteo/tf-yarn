@@ -9,6 +9,7 @@ from tf_yarn.experiment import Experiment
 import tensorflow as tf
 from tensorflow.python import ops
 
+from tf_yarn.tasks.evaluator_task import _get_step
 
 checkpoints = {
    "/path/to/model/dir/model.ckpt-0",
@@ -46,7 +47,9 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
 
         experiment_mock.side_effect = lambda client: mock_experiment
 
-        _get_evaluated_checkpoint.side_effect = lambda eval_dir: evaluated_ckpts
+        _get_evaluated_checkpoint.side_effect = lambda eval_dir: set(
+            [_get_step(ckpt) for ckpt in evaluated_ckpts]
+        )
 
         _get_checkpoints.side_effect = lambda model_dir: list(checkpoints)
         evaluator_task.evaluate(mock_experiment)
@@ -60,12 +63,3 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
                 mock_experiment.estimator.evaluate(
                     ANY, steps=ANY, hooks=ANY, name=ANY, checkpoint_path=ckpt
                 )
-
-
-@pytest.mark.parametrize("checkpoints,last_checkpoint", [
-    (checkpoints, 300),
-    ({"/path/to/model/dir/model.ckpt-300", "/path/to/model/dir/model.ckpt-0"}, 300),
-    ({}, None)
-])
-def test_get_last_evaluated_checkpoint_steps(checkpoints, last_checkpoint):
-    assert evaluator_task._get_last_evaluated_checkpoint_steps(checkpoints) == last_checkpoint

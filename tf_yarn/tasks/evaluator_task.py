@@ -22,8 +22,7 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
     evaluated_checkpoints = _get_evaluated_checkpoint(eval_dir)
 
     if len(evaluated_checkpoints) > 0:
-        last_evaluated_checkpoint = \
-            _get_last_evaluated_checkpoint_steps(evaluated_checkpoints)
+        last_evaluated_checkpoint = max(evaluated_checkpoints)
         logger.info(f"Last evaluated checkpoint: {last_evaluated_checkpoint}")
         if experiment.train_spec.max_steps and \
                 last_evaluated_checkpoint == experiment.train_spec.max_steps:
@@ -52,7 +51,10 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
         all_checkpoint_steps = {
             ckpt for ckpt in _get_all_checkpoints(experiment.estimator.model_dir)
         }
-        ckpt_to_eval = {ckpt for ckpt in all_checkpoint_steps if ckpt not in evaluated_checkpoints}
+        ckpt_to_eval = {
+            ckpt for ckpt in all_checkpoint_steps
+            if _get_step(ckpt) not in evaluated_checkpoints
+        }
 
         for ckpt in ckpt_to_eval:
             timestamp = datetime.now()
@@ -64,7 +66,7 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
                 name=experiment.eval_spec.name,
                 checkpoint_path=ckpt
             )
-            evaluated_checkpoints.add(ckpt)
+            evaluated_checkpoints.add(_get_step(ckpt))
 
             if experiment.train_spec.max_steps and latest_eval_result:
                 global_step = latest_eval_result[ops.GraphKeys.GLOBAL_STEP]
@@ -84,19 +86,16 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
         time.sleep(experiment.eval_spec.throttle_secs)
 
 
+def _get_step(checkpoint):
+    return int(checkpoint.split("model.ckpt-")[1])
+
+
 def _get_all_checkpoints(model_dir):
     return tf.train.get_checkpoint_state(model_dir).all_model_checkpoint_paths
 
 
 def _get_evaluated_checkpoint(eval_dir):
     return set(metrics.get_all_metrics(eval_dir)['step'])
-
-
-def _get_last_evaluated_checkpoint_steps(evaluated_checkpoints):
-    if len(evaluated_checkpoints) == 0:
-        return None
-    return sorted([int(ckpt.split("model.ckpt-")[1])
-                   for ckpt in evaluated_checkpoints])[-1]
 
 
 def main():

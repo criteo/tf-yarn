@@ -1,16 +1,15 @@
+import os
 from unittest import mock
 from unittest.mock import ANY
-import os
 
 import pytest
-from tensorflow_estimator.python.estimator.training import EvalSpec
-
-from tf_yarn.tasks import evaluator_task
-from tf_yarn.experiment import Experiment
-
 import tensorflow as tf
 from tensorflow.python import ops
+from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
+from tensorflow_estimator.python.estimator.training import EvalSpec
 
+from tf_yarn.experiment import Experiment
+from tf_yarn.tasks import evaluator_task
 from tf_yarn.tasks.evaluator_task import _get_step
 
 checkpoints = {
@@ -72,3 +71,15 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
                 mock_experiment.estimator.evaluate(
                     ANY, steps=ANY, hooks=ANY, name=ANY, checkpoint_path=ckpt
                 )
+
+
+@pytest.mark.parametrize("checkpoint_state,checkpoints", [
+    (CheckpointState(all_model_checkpoint_paths=["/path/to/model/dir/model.ckpt-300"]),
+     ["/path/to/model/dir/model.ckpt-300"]),
+    (None, []),
+])
+def test__get_all_checkpoints(checkpoint_state, checkpoints):
+    with mock.patch("tf_yarn.tasks.evaluator_task.tf.train.get_checkpoint_state"
+                    ) as get_checkpoint_state_mock:
+        get_checkpoint_state_mock.side_effect = lambda *args, **kwargs: checkpoint_state
+        assert evaluator_task._get_all_checkpoints("dir") == checkpoints

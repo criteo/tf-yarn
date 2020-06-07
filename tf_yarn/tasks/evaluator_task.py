@@ -94,7 +94,8 @@ def _get_step(checkpoint):
 
 
 def _get_all_checkpoints(model_dir):
-    return tf.train.get_checkpoint_state(model_dir).all_model_checkpoint_paths
+    ckpt_state = tf.train.get_checkpoint_state(model_dir)
+    return ckpt_state.all_model_checkpoint_paths if ckpt_state else []
 
 
 def _get_evaluated_checkpoint(eval_dir):

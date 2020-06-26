@@ -42,12 +42,16 @@ from tf_yarn import (
     tensorboard,
     event,
     experiment,
+    keras_experiment,
     topologies
 )
 
 YARN_LOG_TRIES = 15
 
 ExperimentFn = Callable[[], experiment.Experiment]
+
+KerasExperimentFn = Callable[[], keras_experiment.KerasExperiment]
+
 
 TASK_SPEC_NONE = topologies.single_server_topology()
 
@@ -257,40 +261,55 @@ def _hook_name_already_exists(
                 if type(h).__name__ == hook_name]) > 0
 
 
-def _add_monitor_to_experiment(experiment: experiment.Experiment) -> experiment.Experiment:
-    logger.info(f"configured training hooks: {experiment.train_spec.hooks}")
+def _add_monitor_to_experiment(
+    my_experiment: Union[experiment.Experiment, keras_experiment.KerasExperiment]
+) -> Union[experiment.Experiment, keras_experiment.KerasExperiment]:
+    if isinstance(my_experiment, experiment.Experiment):
+        logger.info(f"configured training hooks: {my_experiment.train_spec.hooks}")
 
-    training_hooks = list(experiment.train_spec.hooks)
+        training_hooks = list(my_experiment.train_spec.hooks)
 
-    if experiment.config.log_step_count_steps is not None:
-        steps_per_second_hook = metrics.StepPerSecondHook(
-            every_n_steps=experiment.config.log_step_count_steps
+        if my_experiment.config.log_step_count_steps is not None:
+            steps_per_second_hook = metrics.StepPerSecondHook(
+                every_n_steps=my_experiment.config.log_step_count_steps
+            )
+            if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
+                training_hooks.append(steps_per_second_hook)
+            else:
+                logger.warning("do not add StepPerSecondHook as there is already one configured")
+
+        monitored_train_spec = my_experiment.train_spec._replace(
+            hooks=training_hooks
         )
-        if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
-            training_hooks.append(steps_per_second_hook)
-        else:
-            logger.warning("do not add StepPerSecondHook as there is already one configured")
 
-    monitored_train_spec = experiment.train_spec._replace(
-        hooks=training_hooks
-    )
+        monitored_eval_spec = my_experiment.eval_spec._replace(
+            hooks=(evaluator_metrics.EvalMonitorHook(), *my_experiment.eval_spec.hooks)
+        )
 
-    monitored_eval_spec = experiment.eval_spec._replace(
-        hooks=(evaluator_metrics.EvalMonitorHook(), *experiment.eval_spec.hooks)
-    )
+        my_experiment = my_experiment._replace(
+            eval_spec=monitored_eval_spec, train_spec=monitored_train_spec)
+    elif isinstance(my_experiment, keras_experiment.KerasExperiment):
+        logger.warning("equivalent of StepPerSecondHook not yet implemented for KerasExperiment")
+    else:
+        raise ValueError("experiment must be an Experiment or a KerasExperiment")
+    return my_experiment
 
-    experiment = experiment._replace(eval_spec=monitored_eval_spec, train_spec=monitored_train_spec)
+
+def _add_monitor_to_keras_experiment(
+    experiment: keras_experiment.KerasExperiment
+) -> keras_experiment.KerasExperiment:
     return experiment
 
 
 def _run_on_cluster(
-    experiment_fn: ExperimentFn,
+    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
     skein_cluster: SkeinCluster,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     n_try: int = 0
 ) -> Optional[metrics.Metrics]:
     def _new_experiment_fn():
         return _add_monitor_to_experiment(experiment_fn())
+
     new_experiment_fn = _new_experiment_fn
 
     # Attempt serialization early to avoid allocating unnecesary resources
@@ -314,7 +333,7 @@ def _default_acls_all_access() -> skein.model.ACLs:
 
 def run_on_yarn(
     pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
-    experiment_fn: ExperimentFn,
+    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
     task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
     *,
     skein_client: skein.Client = None,

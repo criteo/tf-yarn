@@ -21,10 +21,10 @@ def main() -> None:
         # the estimator to train in a distributed way
         cluster.setup_tf_config(cluster_spec)
         experiment = _task_commons._get_experiment(client)
-        run_config = experiment.config
+        session_config = experiment.config.session_config
         _logger.info(f"Starting server {task_type}:{task_id}")
 
-    cluster.start_tf_server(cluster_spec, run_config.session_config)
+    cluster.start_tf_server(cluster_spec, session_config)
     thread = _task_commons._execute_dispatched_function(client, experiment)
 
     # "ps" tasks do not terminate by themselves. See
@@ -33,7 +33,7 @@ def main() -> None:
         thread.join()
         _logger.info(f"{task_type}:{task_id} {thread.state}")
 
-    _task_commons._shutdown_container(client, cluster_tasks, run_config, thread)
+    _task_commons._shutdown_container(client, cluster_tasks, session_config, thread)
 
 
 if __name__ == "__main__":

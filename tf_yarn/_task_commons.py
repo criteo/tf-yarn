@@ -120,7 +120,7 @@ def wait_for_connected_tasks(client, all_tasks, device_filters, message='stop'):
 def _shutdown_container(
     client: skein.ApplicationClient,
     cluster_tasks: List[str],
-    run_config: tf.estimator.RunConfig,
+    session_config: tf.compat.v1.ConfigProto,
     thread: Optional[MonitoredThread]
 ) -> None:
     # Wait for all tasks connected to this one. The set of tasks to
@@ -134,7 +134,7 @@ def _shutdown_container(
     wait_for_connected_tasks(
         client,
         cluster_tasks,
-        getattr(run_config.session_config, "device_filters", []))
+        getattr(session_config, "device_filters", []))
 
     event.broadcast_container_stop_time(client, task)
 

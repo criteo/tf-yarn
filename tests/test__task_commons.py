@@ -127,11 +127,11 @@ def test__shutdown_container():
         mocked_event = stack.enter_context(patch(f'{MODULE_TO_TEST}.event'))
         mocked_wait = stack.enter_context(patch(f'{MODULE_TO_TEST}.wait_for_connected_tasks'))
 
-        mocked_config = mock.MagicMock(spec=tf.estimator.RunConfig)
+        mocked_session_config = mock.MagicMock(spec=tf.compat.v1.ConfigProto)
         mocked_thread = mock.MagicMock(spec=MonitoredThread)
         mocked_thread.exception.return_value = Exception()
         with pytest.raises(Exception):
-            _shutdown_container(None, None, mocked_config, mocked_thread)
+            _shutdown_container(None, None, mocked_session_config, mocked_thread)
 
         mocked_event.stop_event.assert_called_once()
         mocked_wait.assert_called_once()

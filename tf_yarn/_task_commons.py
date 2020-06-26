@@ -3,13 +3,13 @@ import logging
 import os
 import re
 import sys
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, NamedTuple, Union
 
 import cloudpickle
 import skein
 import tensorflow as tf
 
-from tf_yarn import event, cluster, Experiment, constants
+from tf_yarn import event, cluster, Experiment, constants, KerasExperiment
 from tf_yarn._internal import MonitoredThread, iter_tasks
 
 
@@ -52,7 +52,7 @@ def _get_cluster_tasks(
 
 def _get_experiment(
     client: skein.ApplicationClient
-) -> Experiment:
+) -> NamedTuple:
     try:
         experiment = cloudpickle.loads(client.kv.wait(constants.KV_EXPERIMENT_FN))()
     except Exception as e:
@@ -83,15 +83,20 @@ def _gen_monitored_train_and_evaluate(client: skein.ApplicationClient):
 
 def _execute_dispatched_function(
     client: skein.ApplicationClient,
-    experiment: Experiment
+    experiment: Union[Experiment, KerasExperiment]
 ) -> MonitoredThread:
     task_type, task_id = cluster.get_task_description()
     _logger.info(f"Starting execution {task_type}:{task_id}")
-    thread = MonitoredThread(
-        name=f"{task_type}:{task_id}",
-        target=_gen_monitored_train_and_evaluate(client),
-        args=tuple(experiment),
-        daemon=True)
+    if isinstance(experiment, Experiment):
+        thread = MonitoredThread(
+            name=f"{task_type}:{task_id}",
+            target=_gen_monitored_train_and_evaluate(client),
+            args=tuple(experiment),
+            daemon=True)
+    elif isinstance(experiment, KerasExperiment):
+        raise ValueError("KerasExperiment using parameter strategy is unsupported")
+    else:
+        raise ValueError("experiment must be an Experiment or a KerasExperiment")
     thread.start()
     task = cluster.get_task()
     event.start_event(client, task)

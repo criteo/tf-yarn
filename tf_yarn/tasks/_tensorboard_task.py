@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from typing import Optional
 
+from tf_yarn import Experiment, KerasExperiment
 from tf_yarn.tasks import logging as tf_yarn_logging
 tf_yarn_logging.setup()
 
@@ -32,7 +33,12 @@ def main() -> None:
     if not model_dir:
         _logger.info("Read model_dir from estimator config")
         experiment = _task_commons._get_experiment(client)
-        model_dir = experiment.estimator.config.model_dir
+        if isinstance(experiment, Experiment):
+            model_dir = experiment.estimator.config.model_dir
+        elif isinstance(experiment, KerasExperiment):
+            model_dir = experiment.model_dir
+        else:
+            raise ValueError("experiment must be an Experiment or a KerasExperiment")
 
     _logger.info(f"Starting tensorboard on {model_dir}")
 

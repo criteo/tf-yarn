@@ -7,7 +7,7 @@ import skein
 import tensorflow as tf
 from tensorflow.python import ops
 
-from tf_yarn import _task_commons, event, metrics, cluster
+from tf_yarn import _task_commons, event, metrics, cluster, Experiment, KerasExperiment
 from tf_yarn.tasks import logging as tf_yarn_logging
 
 tf_yarn_logging.setup()
@@ -17,7 +17,17 @@ logger = logging.getLogger(__name__)
 
 def evaluator_fn(client):
     experiment = _task_commons._get_experiment(client)
-    evaluate(experiment, timeout_in_secs=1200)  # Timeout after 20min
+    if isinstance(experiment, Experiment):
+        evaluate(experiment, timeout_in_secs=1200)  # Timeout after 20min
+    elif isinstance(experiment, KerasExperiment):
+        keras_evaluate(experiment, timeout_in_secs=1200)
+    else:
+        raise ValueError("experiment must be an Experiment or a KerasExperiment")
+
+
+def keras_evaluate(experiment, stop_cond=None, timeout_in_secs=None):
+    logger.warn("Model evaluation not implemented")
+    return
 
 
 def evaluate(experiment, stop_cond=None, timeout_in_secs=None):

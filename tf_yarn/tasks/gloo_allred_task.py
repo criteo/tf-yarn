@@ -13,7 +13,7 @@ except (ModuleNotFoundError, ImportError) as e:
     warnings.warn("Horovod is not installed. See README for instructions to install it")
     raise e
 
-from tf_yarn import event, _task_commons, cluster
+from tf_yarn import event, _task_commons, cluster, Experiment, KerasExperiment
 from tf_yarn.tasks.evaluator_task import evaluator_fn
 
 logger = logging.getLogger(__name__)
@@ -48,23 +48,33 @@ def _worker_fn(client, task, net_if):
 
     experiment = _task_commons._get_experiment(client)
 
-    if task != 'chief:0':
-        # Overwrite config to do nothing but training to improve training speed
-        experiment.estimator._model_dir = "."
-        new_config = experiment.estimator.config.replace(
-            save_summary_steps=None,
-            save_checkpoints_steps=None,
-            save_checkpoints_secs=None,
-            log_step_count_steps=None
-        )
-        experiment.estimator._config = new_config
+    if isinstance(experiment, Experiment):
+        if task != 'chief:0':
+            # Overwrite config to do nothing but training to improve training speed
+            experiment.estimator._model_dir = "."
+            new_config = experiment.estimator.config.replace(
+                save_summary_steps=None,
+                save_checkpoints_steps=None,
+                save_checkpoints_secs=None,
+                log_step_count_steps=None
+            )
+            experiment.estimator._config = new_config
 
-    logger.info("start training..")
+        logger.info("start training..")
 
-    experiment.estimator.train(
-        experiment.train_spec.input_fn,
-        hooks=experiment.train_spec.hooks,
-        max_steps=experiment.train_spec.max_steps)
+        experiment.estimator.train(
+            experiment.train_spec.input_fn,
+            hooks=experiment.train_spec.hooks,
+            max_steps=experiment.train_spec.max_steps)
+    elif isinstance(experiment, KerasExperiment):
+        logger.info("start training..")
+        if experiment.input_data_fn is not None:
+            experiment.train_params['x'] = experiment.input_data_fn()
+        if experiment.target_data_fn is not None:
+            experiment.train_params['y'] = experiment.target_data_fn()
+        experiment.model.fit(**experiment.train_params)
+    else:
+        raise ValueError("experiment must be an Experiment or a KerasExperiment")
 
 
 def _driver_fn(client, net_if):

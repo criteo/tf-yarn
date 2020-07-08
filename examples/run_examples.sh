@@ -40,6 +40,9 @@ do
     # Execute examples
     pushd examples
         for example in *_example.py; do
+            if [[ "$example" == "native_keras_with_gloo_example.py" && $tf_version == "1.15.2" ]]; then
+                continue
+            fi
             echo "executing $example .."
             python $example
             if ! [ $? -eq 0 ]; then

@@ -20,7 +20,7 @@ def evaluator_fn(client):
     if isinstance(experiment, Experiment):
         evaluate(experiment, timeout_in_secs=1200)  # Timeout after 20min
     elif isinstance(experiment, KerasExperiment):
-        keras_evaluate(experiment, timeout_in_secs=1200)
+        keras_evaluate(experiment, timeout_in_secs=1200)  # Timeout after 20min
     else:
         raise ValueError("experiment must be an Experiment or a KerasExperiment")
 

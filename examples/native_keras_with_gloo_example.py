@@ -73,8 +73,9 @@ def main():
         model.compile(loss='sparse_categorical_crossentropy',
                       optimizer=opt,
                       metrics=['accuracy'])
+        path_to_checkpoint = f"{HDFS_DIR}" + "/checkpoint-{epoch}"
         my_callbacks = [
-            tf.keras.callbacks.EarlyStopping(patience=10),
+            tf.keras.callbacks.ModelCheckpoint(path_to_checkpoint),
             hvd.keras.callbacks.BroadcastGlobalVariablesCallback(0),
         ]
         train_params = {

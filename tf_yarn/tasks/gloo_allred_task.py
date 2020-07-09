@@ -4,6 +4,7 @@ import skein
 from psutil import net_if_addrs
 from socket import AddressFamily
 import warnings
+import tensorflow as tf
 
 try:
     import horovod.tensorflow as hvd
@@ -49,7 +50,7 @@ def _worker_fn(client, task, net_if):
     experiment = _task_commons._get_experiment(client)
 
     if isinstance(experiment, Experiment):
-        if task != 'chief:0':
+        if not cluster.is_chief(cluster.get_task_type(task)):
             # Overwrite config to do nothing but training to improve training speed
             experiment.estimator._model_dir = "."
             new_config = experiment.estimator.config.replace(
@@ -67,11 +68,18 @@ def _worker_fn(client, task, net_if):
             hooks=experiment.train_spec.hooks,
             max_steps=experiment.train_spec.max_steps)
     elif isinstance(experiment, KerasExperiment):
-        logger.info("start training..")
+        if not cluster.is_chief(cluster.get_task_type(task)):
+            if experiment.train_params['callbacks'] is not None:
+                callbacks_to_keep = []
+                for callback in experiment.train_params['callbacks']:
+                    if not isinstance(callback, tf.keras.callbacks.ModelCheckpoint):
+                        callbacks_to_keep.append(callback)
+                experiment.train_params['callbacks'] = callbacks_to_keep
         if experiment.input_data_fn is not None:
             experiment.train_params['x'] = experiment.input_data_fn()
         if experiment.target_data_fn is not None:
             experiment.train_params['y'] = experiment.target_data_fn()
+        logger.info("start training..")
         experiment.model.fit(**experiment.train_params)
     else:
         raise ValueError("experiment must be an Experiment or a KerasExperiment")

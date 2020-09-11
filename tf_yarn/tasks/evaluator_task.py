@@ -25,17 +25,57 @@ def evaluator_fn(client):
         raise ValueError("experiment must be an Experiment or a KerasExperiment")
 
 
-def keras_evaluate(experiment, stop_cond=None, timeout_in_secs=None):
-    logger.warn("Model evaluation not implemented")
-    return
+def stop_cond_reached(stop_cond, timeout_in_secs, timestamp):
+    if stop_cond and stop_cond():
+        logger.info("Stop condition met")
+        return True
+    if timeout_in_secs and datetime.now() > (timestamp + timedelta(seconds=timeout_in_secs)):
+        logger.info("Stopping evaluation due to timeout")
+        return True
+    return False
 
 
-def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
-    eval_dir = os.path.join(experiment.estimator.model_dir, "eval")
+def get_ckpt_to_eval(model_dir, evaluated_checkpoints):
+    ckpt_to_eval = {
+        ckpt for ckpt in _get_all_checkpoints(model_dir)
+        if _get_step(ckpt) not in evaluated_checkpoints
+    }
+    return ckpt_to_eval
+
+
+def get_initial_evaluated_checkpoints(eval_dir):
     if not tf.io.gfile.exists(eval_dir) or len(tf.io.gfile.listdir(eval_dir)) == 0:
         evaluated_checkpoints = set()
     else:
         evaluated_checkpoints = _get_evaluated_checkpoint(eval_dir)
+    return evaluated_checkpoints
+
+
+def keras_evaluate(experiment, stop_cond=None, timeout_in_secs=None):
+    eval_dir = os.path.join(experiment.model_dir, "eval")
+    evaluated_checkpoints = get_initial_evaluated_checkpoints(eval_dir)
+    timestamp = datetime.now()
+
+    while not stop_cond_reached(stop_cond, timeout_in_secs, timestamp):
+        ckpt_to_eval = get_ckpt_to_eval(experiment.model_dir, evaluated_checkpoints)
+
+        for ckpt in ckpt_to_eval:
+            timestamp = datetime.now()
+            logger.info(f"Evaluating checkpoint {ckpt}")
+            model = tf.keras.models.load_model(ckpt)
+            model.evaluate(experiment.validation_data_fn())
+
+            evaluated_checkpoints.add(_get_step(ckpt))
+
+        if len(ckpt_to_eval) == 0:
+            logger.info("No checkpoint to evaluate; Coming back to sleep (30 secs)")
+
+        time.sleep(30)
+
+
+def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
+    eval_dir = os.path.join(experiment.estimator.model_dir, "eval")
+    evaluated_checkpoints = get_initial_evaluated_checkpoints(eval_dir)
 
     if len(evaluated_checkpoints) > 0:
         last_evaluated_checkpoint = max(evaluated_checkpoints)
@@ -54,20 +94,8 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
     if experiment.eval_spec.exporters:
         exporters = {os.path.join(experiment.estimator.model_dir, exporter.name): exporter
                      for exporter in experiment.eval_spec.exporters}
-    while not latest_checkpoint:
-        if stop_cond and stop_cond():
-            logger.info("Stop condition met")
-            break
-        if timeout_in_secs and datetime.now() > (timestamp + timedelta(seconds=timeout_in_secs)):
-            logger.info("Stopping evaluation due to timeout")
-            break
-        all_checkpoint_steps = {
-            ckpt for ckpt in _get_all_checkpoints(experiment.estimator.model_dir)
-        }
-        ckpt_to_eval = {
-            ckpt for ckpt in all_checkpoint_steps
-            if _get_step(ckpt) not in evaluated_checkpoints
-        }
+    while not latest_checkpoint and not stop_cond_reached(stop_cond, timeout_in_secs, timestamp):
+        ckpt_to_eval = get_ckpt_to_eval(experiment.estimator.model_dir, evaluated_checkpoints)
 
         for ckpt in ckpt_to_eval:
             timestamp = datetime.now()

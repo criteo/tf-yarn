@@ -5,8 +5,8 @@ import pytest
 import tensorflow as tf
 
 from tf_yarn.experiment import Experiment
+from tf_yarn.keras_experiment import KerasExperiment
 from tf_yarn.client import (
-    _run_on_cluster,
     _setup_cluster_spec,
     get_safe_experiment_fn,
     SkeinCluster,
@@ -103,6 +103,21 @@ def _experiment_fn(model_dir):
         tf.estimator.EvalSpec(eval_fn))
 
 
+def _keras_experiment_fn(model_dir):
+    print(f"create Keras experiment with model_dir={model_dir}")
+
+    model = tf.keras.Sequential()
+
+    return KerasExperiment(
+        model=model,
+        model_dir=model_dir,
+        train_params=None,
+        input_data_fn=None,
+        target_data_fn=None,
+        validation_data_fn=None,
+        session_config=None)
+
+
 def test_get_safe_experiment_fn():
     with mock.patch('importlib.import_module') as mock_import_module:
         module = mock.Mock()
@@ -118,6 +133,23 @@ def test_get_safe_experiment_fn():
         assert isinstance(experiment, Experiment) is True
         assert experiment.estimator.model_dir == "test_model_dir"
         mock_import_module.assert_called_once_with("testpackage.testmodule")
+
+
+def test_get_safe_keras_experiment_fn():
+    with mock.patch('importlib.import_module') as mock_import_module:
+        module = mock.Mock()
+        module.experiment_fn = _keras_experiment_fn
+        mock_import_module.return_value = module
+        experiment_fn = get_safe_experiment_fn("testpackage.testmodule.experiment_fn",
+                                               "test_model_dir")
+        print(f"got function .. {experiment_fn}")
+        print("execute function ..")
+        print(experiment_fn)
+        experiment = experiment_fn()
+        print(experiment)
+        assert isinstance(experiment, KerasExperiment) is True
+        assert experiment.model_dir == "test_model_dir"
+        mock_import_module.assert_called_with("tensorflow.python.distribute.distribute_lib")
 
 
 @pytest.mark.parametrize("nb_retries,nb_failures", [(0, 0), (1, 0), (1, 1), (2, 2)])

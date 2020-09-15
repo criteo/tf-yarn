@@ -114,8 +114,7 @@ def _keras_experiment_fn(model_dir):
         train_params=None,
         input_data_fn=None,
         target_data_fn=None,
-        validation_data_fn=None,
-        session_config=None)
+        validation_data_fn=None)
 
 
 def test_get_safe_experiment_fn():

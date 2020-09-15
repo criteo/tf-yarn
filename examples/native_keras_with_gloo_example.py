@@ -88,8 +88,7 @@ def main():
             train_params=train_params,
             input_data_fn=input_data_fn,
             target_data_fn=None,
-            validation_data_fn=validation_data_fn,
-            session_config=None)
+            validation_data_fn=validation_data_fn)
 
     pyenv_zip_path, _ = cluster_pack.upload_env()
     editable_requirements = cluster_pack.get_editable_requirements()

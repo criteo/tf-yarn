@@ -9,4 +9,3 @@ class KerasExperiment(NamedTuple):
     input_data_fn: Callable
     target_data_fn: Callable
     validation_data_fn: Callable
-    session_config: tf.compat.v1.ConfigProto

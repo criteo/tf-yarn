@@ -4,7 +4,7 @@ tf-yarn is a Python library we have built at Criteo for training TensorFlow mode
 
 It supports running on one worker or on multiple workers with different distribution strategies and it can run on CPUs or GPUs using just a few lines of code.
 
-Its API provides an easy entry point for working with Estimators. Keras is currently supported via the [model_to_estimator](https://www.tensorflow.org/api_docs/python/tf/keras/estimator/model_to_estimator) conversion function. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
+Its API provides an easy entry point for working with Estimators and Keras. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
 
 [MLflow](https://www.mlflow.org/docs/latest/quickstart.html) is supported for all kind of trainings (one worker/distributed).
 More infos [here](https://github.com/criteo/tf-yarn/blob/master/docs/MLflow.md).
@@ -56,7 +56,7 @@ $ check_hadoop_env
 ### run_on_yarn
 
 The only abstraction tf-yarn adds on top of the ones already present in
-TensorFlow is `experiment_fn`. It is a function returning a triple of one `Estimator` and two specs -- `TrainSpec` and `EvalSpec`.
+TensorFlow is `experiment_fn`. It is a function returning a triple (wrapped in an `Experiment` object) of one `Estimator` and two specs -- `TrainSpec` and `EvalSpec`.
 
 Here is a stripped down `experiment_fn` from one of the provided [examples][linear_classifier_example] to give you an idea of how it might look:
 
@@ -122,6 +122,19 @@ tf.estimator.train_and_evaluate(
 
 [linear_classifier_example]: https://github.com/criteo/tf-yarn/blob/master/examples/linear_classifier_example.py
 [wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
+
+### Specificities using native Keras models instead of estimators
+
+When using a Keras model that is not converted into an estimator, `experiment_fn` returns a tuple (wrapped in a `KerasExperiment` object) composed of the following elements:
+
+- `model`: the compiled Keras model
+- `model_dir`: the location at which the model and its checkpoints will be saved
+- `train_params`: parameters that will be passed to the model fit method exluding input and target data
+- `input_data_fn`: function returning input data for the model fit method
+- `target_data_fn`: function returning target data for the model fit method
+- `validation_data_fn`: function returning input data for the model evaluate method
+
+Currently, Keras models are only supported using Horovod with Gloo as a distribution strategy (and not using MultiWorkerMirroredStrategy). Moreover, Keras models are only supported using Tensorflow 2. We provide an example describing how to use a Keras model with Horovod [examples][native_keras_with_gloo_example].
 
 ## Distributed TensorFlow
 

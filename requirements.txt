@@ -1,2 +1,2 @@
-cluster-pack>=0.1.0,<1.0.0
+cluster-pack
 skein==0.8.0

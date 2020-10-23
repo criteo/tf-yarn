@@ -140,6 +140,6 @@ def save_text_to_mlflow(content, filename):
     logger.info(f"save file {filename} to mlflow")
     with tempfile.TemporaryDirectory() as tempdir:
         path = os.path.join(tempdir, filename)
-        with open(path, 'w') as f:
-            f.write(content)
+        with open(path, 'wb') as f:
+            f.write(content.encode())
         mlflow.log_artifact(path)

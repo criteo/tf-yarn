@@ -500,9 +500,13 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
 
     """
     module_name, fn_name = full_fn_name.rsplit('.', 1)
-    module = importlib.import_module(module_name)
-    experiment_fn = getattr(module, fn_name)
-    return partial(experiment_fn, *args)
+
+    def _safe_exp_fn():
+        module = importlib.import_module(module_name)
+        experiment_fn = getattr(module, fn_name)
+        return experiment_fn(*args)
+
+    return _safe_exp_fn
 
 
 def _send_config_proto(

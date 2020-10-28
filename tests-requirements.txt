@@ -1,3 +1,3 @@
-coverage
-hadoop-test-cluster
 pytest
+pylama
+mypy

@@ -67,10 +67,10 @@ def experiment_fn() -> Experiment:
         ))
     return Experiment(
         estimator,
-        tf.estimator.TrainSpec(train_input_fn, max_steps=10000),
+        tf.estimator.TrainSpec(train_input_fn, max_steps=100),
         tf.estimator.EvalSpec(
             eval_input_fn,
-            steps=100,
+            steps=10,
             start_delay_secs=0,
             throttle_secs=30))
 

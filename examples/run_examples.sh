@@ -22,9 +22,13 @@ do
     . tf-yarn_test_env/bin/activate
     pip install --upgrade pip setuptools
     pip install tensorflow==${tf_version}
+    if [[ $tf_version == "1.15.2" ]]; then
+        # https://github.com/pantsbuild/pex/issues/913
+        # only pex 2.1.1 is supported for tf 1.15
+        pip install pex==2.1.1
+    fi
     pip install -e .
     pip install mlflow
-    pip install pyarrow
     pip install horovod==0.19.2+criteo.${tf_version}
 
     # Setup specific to examples
@@ -34,6 +38,7 @@ do
         echo "downloading winequality.zip .."
         curl http://www3.dsi.uminho.pt/pcortez/wine/winequality.zip -o examples/winequality.zip
         python -c "import zipfile; zip_ref = zipfile.ZipFile('examples/winequality.zip', 'r'); zip_ref.extractall('examples'); zip_ref.close()"
+        hdfs dfs -mkdir tf_yarn_test
         hdfs dfs -put -f examples/winequality/winequality-red.csv tf_yarn_test/winequality-red.csv
     fi
 
@@ -43,11 +48,13 @@ do
             if [[ "$example" == "native_keras_with_gloo_example.py" && $tf_version == "1.15.2" ]]; then
                 continue
             fi
-            echo "executing $example .."
+            echo "executing $example with tf=${tf_version} .."
             python $example
             if ! [ $? -eq 0 ]; then
                 exit_code=1
-                echo "error on $example"
+                echo "error $example with tf=${tf_version}"
+            else
+                echo "done $example with tf=${tf_version}"
             fi
         done
     popd

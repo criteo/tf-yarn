@@ -58,7 +58,7 @@ def experiment_fn() -> Experiment:
         n_classes=winequality.get_n_classes())
     return Experiment(
         estimator,
-        tf.estimator.TrainSpec(train_input_fn, max_steps=10),
+        tf.estimator.TrainSpec(train_input_fn, max_steps=100),
         tf.estimator.EvalSpec(
             eval_input_fn,
             steps=10,

@@ -42,7 +42,7 @@ def _check_add_criteo_environment(package_name):
 
 
 def get_tensorflow_version() -> str:
-    version = ">=1.15.0,<=2.2.0"
+    version = ">=1.15.0,<3.0"
     if "BUILD_GPU" in os.environ:
         return f"tensorflow_gpu{version}"
     else:

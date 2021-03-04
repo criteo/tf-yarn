@@ -1,2 +1,2 @@
 cluster-pack
-skein==0.8.0
+skein>=0.8,<0.9

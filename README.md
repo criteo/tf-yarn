@@ -20,8 +20,12 @@ Two alternatives to TensorFlow's distribution strategies are available:
 
 ### Install with Pip
 
+Note that in order to support both tensorflow cpu and gpu in a single package, tf-yarn doesn't depend directly on tensorflow.
+You can either run `pip install tf-yarn` then install tensorflow or tensorflow_gpu, or use `pip install tf-yarn[cpu]` to do it all in one command.
+The supported versions of tensorflow are in the range 1.15.0 to 2.2.0. Install a version in that range to use tf yarn.
+
 ```bash
-$ pip install tf-yarn
+$ pip install tf-yarn[cpu]
 ```
 
 ### Install from source

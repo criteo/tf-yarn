@@ -4,7 +4,6 @@ from unittest.mock import ANY
 
 import pytest
 import tensorflow as tf
-from tensorflow.python import ops
 from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
 from tensorflow_estimator.python.estimator.training import EvalSpec
 
@@ -49,7 +48,7 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
             throttle_secs=0
         )
         mock_experiment.estimator.evaluate.side_effect = \
-            lambda *args, **kwargs: {ops.GraphKeys.GLOBAL_STEP: 300}
+            lambda *args, **kwargs: {tf.compat.v1.GraphKeys.GLOBAL_STEP: 300}
         mock_experiment.estimator.model_dir = "model_dir"
         mock_experiment.train_spec.max_steps = 300
 

@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 
 import skein
 import tensorflow as tf
-from tensorflow.python import ops
 
 from tf_yarn import _task_commons, event, metrics, cluster, Experiment, KerasExperiment
 from tf_yarn.tasks import logging as tf_yarn_logging
@@ -110,7 +109,7 @@ def evaluate(experiment, stop_cond=None, timeout_in_secs=None):
             evaluated_checkpoints.add(_get_step(ckpt))
 
             if experiment.train_spec.max_steps and latest_eval_result:
-                global_step = latest_eval_result[ops.GraphKeys.GLOBAL_STEP]
+                global_step = latest_eval_result[tf.compat.v1.GraphKeys.GLOBAL_STEP]
                 if global_step and global_step >= experiment.train_spec.max_steps:
                     logger.info("Last checkpoint evaluated")
                     latest_checkpoint = True

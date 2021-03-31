@@ -135,6 +135,7 @@ def test_get_safe_experiment_fn():
 
 
 def test_get_safe_keras_experiment_fn():
+    _keras_experiment_fn("test_model_dir")
     with mock.patch('importlib.import_module') as mock_import_module:
         module = mock.Mock()
         module.experiment_fn = _keras_experiment_fn
@@ -148,7 +149,7 @@ def test_get_safe_keras_experiment_fn():
         print(experiment)
         assert isinstance(experiment, KerasExperiment) is True
         assert experiment.model_dir == "test_model_dir"
-        mock_import_module.assert_called_with("tensorflow.python.distribute.distribute_lib")
+        mock_import_module.assert_called_with("testpackage.testmodule")
 
 
 @pytest.mark.parametrize("nb_retries,nb_failures", [(0, 0), (1, 0), (1, 1), (2, 2)])

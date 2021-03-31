@@ -21,7 +21,7 @@ jobs:
           pip install --upgrade pip
           pip install .
           pip install -r tests-requirements.txt
-          pip install tensorflow==2.2.0
+          pip install tensorflow==2.4.1
       - name: Linter
         run: |
           pylama

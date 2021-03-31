@@ -50,8 +50,8 @@ setuptools.setup(
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     extras_require={
-        "cpu": ["tensorflow>=1.15,<=2.2.0"],
-        "gpu": ["tensorflow-gpu>=1.15,<=2.2.0"],
+        "cpu": ["tensorflow>=1.15,<=2.4.1"],
+        "gpu": ["tensorflow-gpu>=1.15,<=2.4.1"],
     },
     python_requires=">=3.6",
 

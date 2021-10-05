@@ -247,7 +247,7 @@ def _setup_skein_cluster(
         app = skein_client.submit_and_connect(spec)
 
         # Start a thread which collects all events posted by all tasks in kv store
-        event_listener = Thread(target=_aggregate_events, args=(app.kv, events))
+        event_listener = Thread(target=_aggregate_events, args=(app.kv, events), daemon=True)
         event_listener.start()
 
         return SkeinCluster(skein_client, app, task_instances, event_listener, events)

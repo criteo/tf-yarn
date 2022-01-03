@@ -164,13 +164,10 @@ def _maybe_zip_task_files(files, tempdir):
 def _setup_cluster_spec(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient
-) -> tf.train.ClusterSpec:
+) -> None:
     tasks_not_in_cluster = ['evaluator', 'tensorboard']
     cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
     app.kv[constants.KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
-    return tf.train.ClusterSpec(
-        cluster.aggregate_spec(app, list(_internal.iter_tasks(cluster_instances)))
-    )
 
 
 def _setup_skein_cluster(
@@ -507,13 +504,6 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
         return experiment_fn(*args)
 
     return _safe_exp_fn
-
-
-def _send_config_proto(
-        skein_cluster: SkeinCluster,
-        tf_session_config: tf.compat.v1.ConfigProto):
-    serialized_fn = cloudpickle.dumps(tf_session_config)
-    skein_cluster.app.kv[constants.KV_TF_SESSION_CONFIG] = serialized_fn
 
 
 @contextmanager

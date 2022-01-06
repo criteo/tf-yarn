@@ -1,13 +1,9 @@
 import logging
 import os
-import threading
-import socket
+from typing import Optional, Iterable
 
 import skein
-import tensorflow as tf
 from tensorboard import program
-
-from typing import Optional, Iterable, Tuple
 
 from tf_yarn import _internal, event, cluster
 

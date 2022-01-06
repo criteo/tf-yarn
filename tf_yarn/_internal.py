@@ -1,10 +1,7 @@
-import glob
 import logging
 import os
 import platform
-import shutil
 import socket
-import tempfile
 from typing import (
     Optional,
     Tuple,
@@ -15,9 +12,7 @@ from typing import (
 from contextlib import contextmanager
 from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
-from ._criteo import get_requirements_file
 
-import setuptools
 
 logger = logging.getLogger(__name__)
 

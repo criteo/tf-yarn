@@ -6,12 +6,7 @@ import uuid
 import os
 import tempfile
 import time
-
-import cloudpickle
 import json
-import skein
-import tensorflow as tf
-
 from typing import (
     Dict,
     Optional,
@@ -22,13 +17,13 @@ from typing import (
     List
 )
 from contextlib import suppress, contextmanager
-from functools import partial
-
 from threading import Thread
 from datetime import timedelta
+
+import cloudpickle
+import skein
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
-
 import cluster_pack
 
 from tf_yarn import (
@@ -39,12 +34,10 @@ from tf_yarn import (
     metrics,
     evaluator_metrics,
     mlflow,
-    tensorboard,
-    event,
-    experiment,
-    keras_experiment,
     topologies
 )
+from tf_yarn.tensorflow import tensorboard, experiment, keras_experiment
+from tf_yarn.tensorflow.metrics import _add_monitor_to_experiment
 
 YARN_LOG_TRIES = 15
 
@@ -248,54 +241,6 @@ def _setup_skein_cluster(
         event_listener.start()
 
         return SkeinCluster(skein_client, app, task_instances, event_listener, events)
-
-
-def _hook_name_already_exists(
-        hook: tf.estimator.SessionRunHook,
-        hooks: List[tf.estimator.SessionRunHook]) -> bool:
-    hook_name = type(hook).__name__
-    return len([h for h in hooks
-                if type(h).__name__ == hook_name]) > 0
-
-
-def _add_monitor_to_experiment(
-    my_experiment: Union[experiment.Experiment, keras_experiment.KerasExperiment]
-) -> Union[experiment.Experiment, keras_experiment.KerasExperiment]:
-    if isinstance(my_experiment, experiment.Experiment):
-        logger.info(f"configured training hooks: {my_experiment.train_spec.hooks}")
-
-        training_hooks = list(my_experiment.train_spec.hooks)
-
-        if my_experiment.config.log_step_count_steps is not None:
-            steps_per_second_hook = metrics.StepPerSecondHook(
-                every_n_steps=my_experiment.config.log_step_count_steps
-            )
-            if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
-                training_hooks.append(steps_per_second_hook)
-            else:
-                logger.warning("do not add StepPerSecondHook as there is already one configured")
-
-        monitored_train_spec = my_experiment.train_spec._replace(
-            hooks=training_hooks
-        )
-
-        monitored_eval_spec = my_experiment.eval_spec._replace(
-            hooks=(evaluator_metrics.EvalMonitorHook(), *my_experiment.eval_spec.hooks)
-        )
-
-        my_experiment = my_experiment._replace(
-            eval_spec=monitored_eval_spec, train_spec=monitored_train_spec)
-    elif isinstance(my_experiment, keras_experiment.KerasExperiment):
-        logger.warning("equivalent of StepPerSecondHook not yet implemented for KerasExperiment")
-    else:
-        raise ValueError("experiment must be an Experiment or a KerasExperiment")
-    return my_experiment
-
-
-def _add_monitor_to_keras_experiment(
-    experiment: keras_experiment.KerasExperiment
-) -> keras_experiment.KerasExperiment:
-    return experiment
 
 
 def _run_on_cluster(

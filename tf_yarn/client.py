@@ -13,7 +13,8 @@ from typing import (
     NamedTuple,
     Callable,
     Union,
-    List
+    List,
+    Any
 )
 from contextlib import suppress, contextmanager
 from threading import Thread
@@ -37,21 +38,15 @@ from tf_yarn import (
 from tf_yarn._task_commons import (
     get_task_type, is_chief, is_evaluator, is_worker
 )
-from tf_yarn.tensorflow import tensorboard, experiment, keras_experiment
-from tf_yarn.tensorflow.metrics import _add_monitor_to_experiment
+from tf_yarn import tensorboard
 
 YARN_LOG_TRIES = 15
-
-ExperimentFn = Callable[[], experiment.Experiment]
-
-KerasExperimentFn = Callable[[], keras_experiment.KerasExperiment]
-
-
-TASK_SPEC_NONE = topologies.single_server_topology()
 
 logger = logging.getLogger(__name__)
 
 here = os.path.dirname(__file__)
+
+ExperimentFn = Callable[[], Any]
 
 
 class SkeinCluster(NamedTuple):
@@ -166,7 +161,7 @@ def _setup_cluster_spec(
 
 def _setup_skein_cluster(
         pyenvs: Dict[topologies.NodeLabel, _env.PythonEnvDescription],
-        task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
+        task_specs: Dict[str, topologies.TaskSpec],
         *,
         custom_task_module: Optional[str] = None,
         skein_client: skein.Client = None,
@@ -245,18 +240,13 @@ def _setup_skein_cluster(
 
 
 def _run_on_cluster(
-    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
+    experiment_fn: ExperimentFn,
     skein_cluster: SkeinCluster,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     n_try: int = 0
 ) -> Optional[metrics.Metrics]:
-    def _new_experiment_fn():
-        return _add_monitor_to_experiment(experiment_fn())
-
-    new_experiment_fn = _new_experiment_fn
-
     # Attempt serialization early to avoid allocating unnecesary resources
-    serialized_fn = cloudpickle.dumps(new_experiment_fn)
+    serialized_fn = cloudpickle.dumps(experiment_fn)
     with skein_cluster.client:
         return _execute_and_await_termination(
             skein_cluster,
@@ -276,8 +266,8 @@ def _default_acls_all_access() -> skein.model.ACLs:
 
 def run_on_yarn(
     pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
-    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
-    task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
+    experiment_fn: ExperimentFn,
+    task_specs: Dict[str, topologies.TaskSpec],
     *,
     skein_client: skein.Client = None,
     files: Dict[str, str] = None,
@@ -294,7 +284,7 @@ def run_on_yarn(
     """Run an experiment on YARN.
 
     The implementation allocates a service with the requested number
-    of instances for each distributed TensorFlow task type. Each
+    of instances for each distributed task type. Each
     instance runs ``_dispatch_task`` which roughly does the following.
 
     1. Reserve a TCP port and communicate the resulting socket address

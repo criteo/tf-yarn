@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 import skein
 import tensorflow as tf
 
-from tf_yarn import _task_commons, event, Experiment, KerasExperiment
+from tf_yarn import _task_commons, event
+from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn.tensorflow import metrics
 from tf_yarn._task_commons import setup_logging, get_task, get_task_description
 setup_logging()

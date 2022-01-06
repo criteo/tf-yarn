@@ -12,7 +12,7 @@ import skein
 from datetime import datetime
 
 import cluster_pack
-from tf_yarn import Experiment, TaskSpec, run_on_yarn
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 import winequality
 
 logger = logging.getLogger(__name__)

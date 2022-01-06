@@ -3,20 +3,14 @@
 """
 import logging
 logging.basicConfig(level="INFO") # noqa
-import sys
 import getpass
-import gzip
-import subprocess
 import os
-import skein
-import numpy as np
 
-from functools import partial
 from datetime import datetime
 from tensorflow import keras
 
 import cluster_pack
-from tf_yarn import event, TaskSpec, Experiment, run_on_yarn, get_safe_experiment_fn
+from tf_yarn.tensorflow import TaskSpec, Experiment, run_on_yarn, get_safe_experiment_fn
 import winequality
 
 import tensorflow as tf

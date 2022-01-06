@@ -10,7 +10,7 @@ from subprocess import check_output
 import skein
 
 import cluster_pack
-from tf_yarn import Experiment, TaskSpec, run_on_yarn
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
 
 def model_fn(features, labels, mode):

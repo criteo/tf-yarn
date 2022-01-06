@@ -6,7 +6,8 @@ import re
 import skein
 import tensorflow as tf
 
-from tf_yarn import event, Experiment, KerasExperiment
+from tf_yarn import event
+from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn._internal import MonitoredThread
 from tf_yarn._task_commons import (
     _setup_container_logs, _get_cluster_tasks, get_task, get_task_description

@@ -13,7 +13,7 @@ from tf_yarn.tensorflow.tasks.tf_task_common import (
     _prepare_container, _matches_device_filters, _execute_dispatched_function,
     _wait_for_connected_tasks, _shutdown_container
 )
-from tf_yarn.__init__ import Experiment
+from tf_yarn.tensorflow import Experiment
 
 
 MODULE_TO_TEST = "tf_yarn.tensorflow.tasks.tf_task_common"

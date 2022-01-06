@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 
 import cluster_pack
-from tf_yarn import TaskSpec, KerasExperiment, run_on_yarn, get_safe_experiment_fn
+from tf_yarn.tensorflow import TaskSpec, KerasExperiment, run_on_yarn, get_safe_experiment_fn
 import winequality
 import tensorflow as tf
 

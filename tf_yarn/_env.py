@@ -16,7 +16,7 @@ class PythonEnvDescription(NamedTuple):
 
 
 INDEPENDENT_WORKERS_MODULE = "tf_yarn.tensorflow.tasks._independent_workers_task"
-TENSORBOARD_MODULE = "tf_yarn._tensorboard_task"
+TENSORBOARD_MODULE = "tf_yarn.tensorflow.tasks._tensorboard_task"
 CONDA_ENV_NAME = "pyenv"
 CONDA_CMD = f"{CONDA_ENV_NAME}/bin/python"
 

@@ -3,7 +3,7 @@ import os
 
 import skein
 
-from tf_yarn import Experiment, KerasExperiment
+from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn._task_commons import setup_logging, get_task, get_task_description
 setup_logging()
 
@@ -17,6 +17,8 @@ from tf_yarn import tensorboard
 _logger = logging.getLogger(__name__)
 
 
+# TODO: this taks could be agnostic of the ML framework
+# We only need to provide the model directory
 def main() -> None:
     _task_commons._log_sys_info()
     task_type, task_id = get_task_description()

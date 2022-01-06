@@ -6,7 +6,8 @@ import tensorflow as tf
 
 from tf_yarn import evaluator_metrics
 from tf_yarn.tensorflow import experiment, keras_experiment
-from tf_yarn import mlflow, cluster
+from tf_yarn import mlflow
+from tf_yarn._task_commons import n_try, is_chief
 
 
 logger = logging.getLogger(__name__)
@@ -30,9 +31,9 @@ class StepPerSecondHook(tf.estimator.StepCounterHook):
         )
 
     def _log_and_record(self, elapsed_steps: int, elapsed_time: float, global_step: int):
-        if cluster.is_chief():
+        if is_chief():
             steps_per_sec = elapsed_steps / elapsed_time
-            mlflow.log_metric(f"steps_per_sec_{cluster.n_try()}", steps_per_sec, step=global_step)
+            mlflow.log_metric(f"steps_per_sec_{n_try()}", steps_per_sec, step=global_step)
 
 
 def get_all_metrics(model_path):

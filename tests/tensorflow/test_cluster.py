@@ -6,9 +6,10 @@ from unittest import mock
 import pytest
 import skein
 
-from tf_yarn import cluster
+from tf_yarn.tensorflow import cluster
+from tf_yarn._task_commons import get_task_description
 
-MODULE_TO_TEST = "tf_yarn.cluster"
+MODULE_TO_TEST = "tf_yarn.tensorflow.cluster"
 
 
 def test_aggregate_spec():
@@ -29,7 +30,7 @@ def test_aggregate_spec():
 def test_get_task_description():
     with mock.patch.dict(os.environ):
         os.environ["SKEIN_CONTAINER_ID"] = "MYTASK_42"
-        assert "MYTASK", 42 == cluster.get_task_description()
+        assert "MYTASK", 42 == get_task_description()
 
 
 CURRENT_HOST = "1.1.1.1"

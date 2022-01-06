@@ -8,7 +8,7 @@ import tensorflow as tf
 import skein
 
 import tf_yarn
-from tf_yarn.cluster import get_task
+from tf_yarn._task_commons import get_task
 from tf_yarn import mlflow
 
 

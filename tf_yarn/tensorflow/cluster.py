@@ -6,8 +6,9 @@ import typing
 import skein
 import tensorflow as tf
 
-from . import _internal
-from . import event
+from tf_yarn import _internal
+from tf_yarn import event
+from tf_yarn._task_commons import get_task, get_task_description
 
 
 def aggregate_spec(client: skein.ApplicationClient,
@@ -19,50 +20,6 @@ def aggregate_spec(client: skein.ApplicationClient,
         task_type, _task_id = task.split(":", 1)
         spec.setdefault(task_type, []).append(sock_addr)
     return spec
-
-
-def n_try() -> int:
-    return int(os.getenv("TF_YARN_N_TRY", "0"))
-
-
-def get_task() -> str:
-    return os.getenv("SKEIN_CONTAINER_ID", "").replace("_", ":", 1)
-
-
-def get_task_type(task: str) -> str:
-    parts = task.split(':')
-    if len(parts) > 0:
-        return parts[0]
-    else:
-        return ""
-
-
-def is_worker(task_type: str = None) -> bool:
-    if not task_type:
-        task_type = get_task_type(get_task())
-
-    return task_type == 'worker'
-
-
-def is_evaluator(task_type: str = None) -> bool:
-    if not task_type:
-        task_type = get_task_type(get_task())
-
-    return task_type == 'evaluator'
-
-
-def is_chief(task_type: str = None) -> bool:
-    if not task_type:
-        task_type = get_task_type(get_task())
-
-    return task_type == 'chief'
-
-
-def get_task_description() -> typing.Tuple[str, int]:
-    task = get_task()
-    task_type, task_str = task.split(":", 1)
-    task_id: int = int(task_str)
-    return task_type, task_id
 
 
 def start_cluster(
@@ -90,7 +47,7 @@ def setup_tf_config(cluster_spec):
     task_type, task_id = get_task_description()
     _internal.xset_environ(TF_CONFIG=json.dumps({
         "cluster": cluster_spec,
-        "environment": "google" if is_fake_google_env(task_type) else "",
+        "environment": "google" if _is_fake_google_env(task_type) else "",
         "task": {"type": task_type, "index": task_id},
     }))
 
@@ -101,7 +58,7 @@ def start_tf_server(
 ) -> typing.Optional[tf.distribute.Server]:
 
     task_type, task_id = get_task_description()
-    if is_fake_google_env(task_type) and cluster_spec:
+    if _is_fake_google_env(task_type) and cluster_spec:
         server = tf.distribute.Server(
             tf.train.ClusterSpec(cluster_spec),
             job_name=task_type,
@@ -112,5 +69,5 @@ def start_tf_server(
     return None
 
 
-def is_fake_google_env(task_type: str) -> bool:
+def _is_fake_google_env(task_type: str) -> bool:
     return task_type != "evaluator" and task_type != "ps"

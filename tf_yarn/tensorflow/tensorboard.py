@@ -5,7 +5,8 @@ from typing import Optional, Iterable
 import skein
 from tensorboard import program
 
-from tf_yarn import _internal, event, cluster
+from tf_yarn import _internal, event
+from tf_yarn._task_commons import get_task
 
 _logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def get_termination_timeout():
 
 
 def start_tf_board(client: skein.ApplicationClient, tf_board_model_dir: str):
-    task = cluster.get_task()
+    task = get_task()
     os.environ['GCS_READ_CACHE_DISABLED'] = '1'
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION'] = 'cpp'
     os.environ['PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION_VERSION'] = '2'

@@ -28,12 +28,14 @@ import cluster_pack
 from tf_yarn import (
     _env,
     _internal,
-    cluster,
     constants,
     metrics,
     evaluator_metrics,
     mlflow,
     topologies
+)
+from tf_yarn._task_commons import (
+    get_task_type, is_chief, is_evaluator, is_worker
 )
 from tf_yarn.tensorflow import tensorboard, experiment, keras_experiment
 from tf_yarn.tensorflow.metrics import _add_monitor_to_experiment
@@ -619,25 +621,25 @@ def _handle_events(
                                                           - float(stages['container_start_time'])))
 
         train_eval_time_per_node[task] = None
-        task_type = cluster.get_task_type(task)
+        task_type = get_task_type(task)
         if 'train_eval_start_time' in stages and 'train_eval_stop_time' in stages and not exception:
             start_time = timedelta(seconds=float(stages['train_eval_start_time']))
             stop_time = timedelta(seconds=float(stages['train_eval_stop_time']))
             train_eval_time_per_node[task] = stop_time - start_time
-            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
+            if is_worker(task_type) or is_chief(task_type):
                 if start_time < min_training_start_time:
                     min_training_start_time = start_time
                 if stop_time > max_training_stop_time:
                     max_training_stop_time = stop_time
-            elif cluster.is_evaluator(task_type):
+            elif is_evaluator(task_type):
                 if start_time < min_eval_start_time:
                     min_eval_start_time = start_time
                 if stop_time > max_eval_stop_time:
                     max_eval_stop_time = stop_time
         else:
-            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
+            if is_worker(task_type) or is_chief(task_type):
                 valid_training_time = False
-            elif cluster.is_evaluator(task_type):
+            elif is_evaluator(task_type):
                 valid_eval_time = False
 
         header.append(f"{task:>16}  {sock_addr}  {status}  {logs}"

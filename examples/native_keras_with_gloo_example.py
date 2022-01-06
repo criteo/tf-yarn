@@ -113,7 +113,7 @@ def main():
             os.path.basename(winequality.__file__): winequality.__file__,
             os.path.basename(__file__): __file__,
         },
-        custom_task_module="tf_yarn.tasks.gloo_allred_task"
+        custom_task_module="tf_yarn.tensorflow.tasks.gloo_allred_task"
     )
 
 

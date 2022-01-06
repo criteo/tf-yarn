@@ -90,5 +90,5 @@ if __name__ == "__main__":
             **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
         },
-        custom_task_module="tf_yarn.tasks.gloo_allred_task"
+        custom_task_module="tf_yarn.tensorflow.tasks.gloo_allred_task"
     )

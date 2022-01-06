@@ -4,8 +4,9 @@ import logging.config
 from typing import Union, List
 
 import tensorflow as tf
+import skein
 
-from tf_yarn import event
+from tf_yarn.event import broadcast
 from tf_yarn import evaluator_metrics
 from tf_yarn.tensorflow import experiment, keras_experiment
 from tf_yarn import mlflow
@@ -68,7 +69,7 @@ class EvalMonitorHook(tf.estimator.SessionRunHook):
         self.broadcast('last_training_step', str(run_values.results))
 
     def broadcast(self, key: str, value: str):
-        event.broadcast(self.client, f'{self.task}/{key}', value)
+        broadcast(self.client, f'{self.task}/{key}', value)
 
 
 def get_all_metrics(model_path):

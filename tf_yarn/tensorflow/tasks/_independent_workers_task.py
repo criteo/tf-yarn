@@ -1,14 +1,13 @@
 import logging
 
-from tf_yarn._task_commons import (
-    setup_logging, _log_sys_info, _get_experiment
-)
+from tf_yarn._task_commons import setup_logging, _get_experiment
 setup_logging()
 
-from tf_yarn import _internal, Experiment, KerasExperiment
+from tf_yarn import _internal
+from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn.tensorflow.tasks.tf_task_common import (
     _execute_dispatched_function, _shutdown_container, _prepare_container,
-    get_task_description
+    get_task_description, _log_sys_info
 )
 from tf_yarn.tensorflow import cluster
 

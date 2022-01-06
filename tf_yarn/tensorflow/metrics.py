@@ -7,7 +7,6 @@ import tensorflow as tf
 import skein
 
 from tf_yarn.event import broadcast
-from tf_yarn import evaluator_metrics
 from tf_yarn.tensorflow import experiment, keras_experiment
 from tf_yarn import mlflow
 from tf_yarn._task_commons import n_try, is_chief, get_task
@@ -131,7 +130,7 @@ def _add_monitor_to_experiment(
         )
 
         monitored_eval_spec = my_experiment.eval_spec._replace(
-            hooks=(evaluator_metrics.EvalMonitorHook(), *my_experiment.eval_spec.hooks)
+            hooks=(EvalMonitorHook(), *my_experiment.eval_spec.hooks)
         )
 
         my_experiment = my_experiment._replace(

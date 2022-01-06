@@ -15,7 +15,8 @@ except (ModuleNotFoundError, ImportError) as e:
     warnings.warn("Horovod is not installed. See README for instructions to install it")
     raise e
 
-from tf_yarn import event, _task_commons, Experiment, KerasExperiment
+from tf_yarn import event, _task_commons
+from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn.tensorflow.tasks.evaluator_task import evaluator_fn
 from tf_yarn._task_commons import (
     setup_logging, get_task, is_chief, get_task_type, get_task_description

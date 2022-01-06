@@ -3,10 +3,6 @@ Example of using simple identity Estimator which just returns the input
 """
 import logging
 logging.basicConfig(level="INFO") # noqa
-import os
-import pwd
-import getpass
-from subprocess import check_output
 import skein
 
 import cluster_pack

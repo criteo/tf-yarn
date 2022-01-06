@@ -1,12 +1,13 @@
 import json
 from unittest import mock
 import traceback
-import skein
 import pytest
+
+import skein
 import tensorflow as tf
 
-from tf_yarn.experiment import Experiment
-from tf_yarn.keras_experiment import KerasExperiment
+from tf_yarn.tensorflow.experiment import Experiment
+from tf_yarn.tensorflow.keras_experiment import KerasExperiment
 from tf_yarn.client import (
     _setup_cluster_spec,
     get_safe_experiment_fn,

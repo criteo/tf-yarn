@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
 from tensorflow_estimator.python.estimator.training import EvalSpec
 
-from tf_yarn.experiment import Experiment
+from tf_yarn.tensorflow.experiment import Experiment
 from tf_yarn.tasks import evaluator_task
 from tf_yarn.tasks.evaluator_task import _get_step
 

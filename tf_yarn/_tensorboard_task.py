@@ -12,7 +12,7 @@ from tf_yarn import (
     _internal,
     event
 )
-from tf_yarn.tensorflow import tensorboard
+from tf_yarn import tensorboard
 
 _logger = logging.getLogger(__name__)
 

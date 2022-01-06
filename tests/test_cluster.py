@@ -70,7 +70,7 @@ def test_start_cluster_worker(task_name, task_index):
 def test_start_tf_server(task_name, task_index, is_server_started):
 
     CLUSTER_SPEC = {"worker": [f"worker0.{WORKER0_HOST}:{WORKER0_PORT}",
-                              f"worker1.{WORKER1_HOST}:{WORKER1_PORT}"],
+                               f"worker1.{WORKER1_HOST}:{WORKER1_PORT}"],
                     "ps": [f"ps0.{CURRENT_HOST}:{CURRENT_PORT}"]}
 
     with contextlib.ExitStack() as stack:

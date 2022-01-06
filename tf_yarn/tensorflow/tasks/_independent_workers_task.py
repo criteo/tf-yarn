@@ -1,11 +1,7 @@
 import logging
-import os
-import sys
 
-import tensorflow as tf
-
-from tf_yarn.tasks import logging as tf_yarn_logging
-tf_yarn_logging.setup()
+from tf_yarn._task_commons import setup_logging
+setup_logging()
 
 from tf_yarn import cluster, _task_commons, _internal, Experiment, KerasExperiment
 

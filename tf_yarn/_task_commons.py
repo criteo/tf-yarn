@@ -16,6 +16,13 @@ from tf_yarn._internal import MonitoredThread, iter_tasks
 _logger = logging.getLogger(__name__)
 
 
+def setup_logging():
+    # tensorflow imports in tf_yarn.__init__ already have set up some loggers
+    # erase them with a clean config
+    log_conf_file = os.path.join(os.path.dirname(__file__), "default.log.conf")
+    logging.config.fileConfig(log_conf_file)
+
+
 def _log_sys_info() -> None:
     _logger.info(f"Python {sys.version}")
     _logger.info(f"Skein {skein.__version__}")

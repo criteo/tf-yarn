@@ -1,4 +1,3 @@
-from unittest import mock
 import pytest
 
 from tf_yarn import topologies

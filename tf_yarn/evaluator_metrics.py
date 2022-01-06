@@ -1,11 +1,11 @@
 import logging
 import sys
-import tensorflow as tf
 import time
-import skein
 import warnings
-
 from typing import List, Dict, Tuple
+
+import tensorflow as tf
+import skein
 
 import tf_yarn
 from tf_yarn.cluster import get_task

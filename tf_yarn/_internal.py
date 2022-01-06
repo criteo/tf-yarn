@@ -10,7 +10,6 @@ from typing import (
     Iterator
 )
 from contextlib import contextmanager
-from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
 
 
@@ -94,16 +93,3 @@ def xset_environ(**kwargs):
             raise RuntimeError(f"{key} already set in os.environ: {value}")
 
     os.environ.update(kwargs)
-
-
-def _call(cmd, **kwargs):
-    logger.info(" ".join(cmd))
-    proc = Popen(cmd, stdout=PIPE, stderr=PIPE, **kwargs)
-    out, err = proc.communicate()
-    if proc.returncode:
-        logger.error(out)
-        logger.error(err)
-        raise CalledProcessError(proc.returncode, cmd)
-    else:
-        logger.debug(out)
-        logger.debug(err)

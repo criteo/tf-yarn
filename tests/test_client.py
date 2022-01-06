@@ -1,8 +1,8 @@
 import json
 from unittest import mock
 import traceback
-import pytest
 
+import pytest
 import skein
 import tensorflow as tf
 
@@ -84,8 +84,10 @@ def _experiment_fn(model_dir):
         return None
 
     return Experiment(
-        tf.estimator.LinearClassifier(feature_columns=[], model_dir=model_dir,
-        loss_reduction=tf.keras.losses.Reduction.SUM),
+        tf.estimator.LinearClassifier(
+            feature_columns=[], model_dir=model_dir,
+            loss_reduction=tf.keras.losses.Reduction.SUM
+        ),
         tf.estimator.TrainSpec(train_fn),
         tf.estimator.EvalSpec(eval_fn))
 
@@ -179,7 +181,7 @@ def test_container_log_status():
          {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
                       "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
           "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                      "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
+                          "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
          {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
     )
 

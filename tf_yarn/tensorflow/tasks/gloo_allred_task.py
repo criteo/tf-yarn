@@ -1,9 +1,10 @@
 import logging
 import os
-import skein
 from psutil import net_if_addrs
 from socket import AddressFamily
 import warnings
+
+import skein
 import tensorflow as tf
 
 try:
@@ -15,7 +16,9 @@ except (ModuleNotFoundError, ImportError) as e:
     raise e
 
 from tf_yarn import event, _task_commons, cluster, Experiment, KerasExperiment
-from tf_yarn.tasks.evaluator_task import evaluator_fn
+from tf_yarn.tensorflow.tasks.evaluator_task import evaluator_fn
+from tf_yarn._task_commons import setup_logging
+setup_logging()
 
 logger = logging.getLogger(__name__)
 

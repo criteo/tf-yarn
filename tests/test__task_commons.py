@@ -2,10 +2,8 @@ import contextlib
 from unittest import mock
 from unittest.mock import patch
 import pytest
-
-import os
-import time
 import json
+
 import cloudpickle
 import skein
 import tensorflow as tf

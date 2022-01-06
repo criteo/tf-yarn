@@ -4,10 +4,7 @@ from typing import Union, List
 
 import tensorflow as tf
 
-from tf_yarn import (
-    metrics,
-    evaluator_metrics
-)
+from tf_yarn import evaluator_metrics
 from tf_yarn.tensorflow import experiment, keras_experiment
 from tf_yarn import mlflow, cluster
 
@@ -84,7 +81,7 @@ def _add_monitor_to_experiment(
         training_hooks = list(my_experiment.train_spec.hooks)
 
         if my_experiment.config.log_step_count_steps is not None:
-            steps_per_second_hook = metrics.StepPerSecondHook(
+            steps_per_second_hook = StepPerSecondHook(
                 every_n_steps=my_experiment.config.log_step_count_steps
             )
             if not _hook_name_already_exists(steps_per_second_hook, training_hooks):

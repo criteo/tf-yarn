@@ -13,9 +13,9 @@ from tf_yarn import (
     _task_commons,
     _internal,
     cluster,
-    event,
-    tensorboard
+    event
 )
+from tf_yarn.tensorflow import tensorboard
 
 _logger = logging.getLogger(__name__)
 

@@ -36,7 +36,9 @@ def _create_dataloader(
 ) -> torch.utils.data.DataLoader:
     shuffle = True
     if "shuffle" in dataloader_kwargs:
-        shuffle = dataloader_kwargs["shuffle"]
+        _shuffle = dataloader_kwargs["shuffle"]
+        assert isinstance(_shuffle, bool)
+        shuffle = _shuffle
         dataloader_kwargs.pop("shuffle")
     sampler = DistributedSampler(dataset, shuffle=shuffle)
     return torch.utils.data.DataLoader(
@@ -44,7 +46,7 @@ def _create_dataloader(
     )
 
 
-def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: int) -> int:
+def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: int) -> None:
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
@@ -56,7 +58,7 @@ def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: in
         experiment.train_dataset, **experiment.dataloader_kwargs
     )
 
-    experiment.train_fn(ddp_model, trainloader, device)
+    experiment.train_fn(ddp_model, trainloader, f"cuda:{device}")
 
     dist.destroy_process_group()
     _logger.info("Done training")
@@ -90,7 +92,7 @@ def main() -> None:
     task_type, task_id = get_task_description()
 
     client = skein.ApplicationClient.from_current()
-    experiment = _get_experiment(client)
+    experiment: PytorchExperiment = _get_experiment(client)
     cluster_tasks = _get_cluster_tasks(client)
     n_workers_per_executor = experiment.n_workers_per_executor
 

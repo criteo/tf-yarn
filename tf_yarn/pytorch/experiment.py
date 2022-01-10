@@ -8,7 +8,7 @@ class PytorchExperiment(NamedTuple):
     model: torch.nn.Module
 
     # Main function run to train the model
-    # inputs: models, dataload and device (cpu:0, cpu:1, cuda:0, cuda:1 ...)
+    # inputs: model to train, dataloader and device (cpu:0, cpu:1, cuda:0, cuda:1 ...)
     # outputs: None
     train_fn: Callable[[torch.nn.Module, torch.utils.data.dataloader.DataLoader, str], None]
 

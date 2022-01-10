@@ -51,11 +51,11 @@ def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: in
 
     model = experiment.model.to(device)
     ddp_model = DDP(model, device_ids=[device])
-    
+
     trainloader = _create_dataloader(
         experiment.train_dataset, **experiment.dataloader_kwargs
     )
-    
+
     experiment.train_fn(ddp_model, trainloader, device)
 
     dist.destroy_process_group()
@@ -88,7 +88,7 @@ def _get_device(worker_id: int) -> int:
 def main() -> None:
     _log_sys_info()
     task_type, task_id = get_task_description()
-    
+
     client = skein.ApplicationClient.from_current()
     experiment = _get_experiment(client)
     cluster_tasks = _get_cluster_tasks(client)
@@ -96,10 +96,10 @@ def main() -> None:
 
     world_size = len([t for t in cluster_tasks if "worker" in t]) * n_workers_per_executor
     _logger.info(
-        f"Task type: {task_type}; Task id: {task_id};" 
+        f"Task type: {task_type}; Task id: {task_id};"
         f"World_size: {world_size}: Cluster tasks: {cluster_tasks}"
     )
-    
+
     _setup_master(client, task_id)
 
     if n_workers_per_executor > 1:

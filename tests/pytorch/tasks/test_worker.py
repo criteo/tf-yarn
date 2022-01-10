@@ -1,4 +1,5 @@
 import os
+from tf_yarn.pytorch.experiment import DataLoaderArgs
 
 import mock
 import pytest
@@ -58,12 +59,15 @@ def test_create_dataloader(shuffle):
         def __len__(self) -> int:
             return 0
 
-    dataloader_kwargs = {"batch_size": 200, "shuffle": shuffle}
+    dataloader_args = DataLoaderArgs(batch_size=200, shuffle=shuffle)
     with mock.patch(f"{MODULE_UNDER_TEST}.DistributedSampler") as sampler_mock, \
             mock.patch(f"{MODULE_UNDER_TEST}.torch.utils.data.DataLoader") as dataloader_mock:
         dataset = _FakeDataset()
-        worker._create_dataloader(dataset, **dataloader_kwargs)
+        worker._create_dataloader(dataset, dataloader_args)
         sampler_mock.call_args_list == [mock.call(dataset, shuffle=shuffle)]
         dataloader_mock.call_args_list == [
-            mock.call(dataset, sampler=sampler_mock, batch_size=200, shuffle=False)
+            mock.call(
+                dataset, sampler=sampler_mock, batch_size=200, shuffle=False, num_workers=0,
+                pin_memory=False, drop_last=False, timeout=0, prefetch_factor=2
+            )
         ]

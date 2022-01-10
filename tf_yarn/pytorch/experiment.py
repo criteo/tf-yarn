@@ -1,6 +1,16 @@
-from typing import NamedTuple, Callable, Any, Dict
+from typing import NamedTuple, Callable, Optional
 
 import torch
+
+
+class DataLoaderArgs(NamedTuple):
+    batch_size: Optional[int] = 1
+    num_workers: int = 0
+    pin_memory: bool = False
+    drop_last: bool = False
+    timeout: float = 0
+    prefetch_factor: int = 2
+    shuffle: bool = False
 
 
 class PytorchExperiment(NamedTuple):
@@ -17,7 +27,7 @@ class PytorchExperiment(NamedTuple):
 
     # dataloader parameters (batch size, number of workers, collate function ...) used to
     # load and iterate over the training set
-    dataloader_kwargs: Dict[Any, Any] = {}
+    dataloader_args: DataLoaderArgs
 
     # Number of workers per executors
     n_workers_per_executor: int = 1

@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-from typing import Dict, Any
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -13,10 +12,10 @@ import skein
 from tf_yarn._task_commons import (
     setup_logging, get_task_description, _get_experiment, _get_cluster_tasks
 )
-from tf_yarn.pytorch.experiment import PytorchExperiment
+from tf_yarn import _internal, event
+from tf_yarn.pytorch.experiment import PytorchExperiment, DataLoaderArgs
 setup_logging()
 
-from tf_yarn import _internal, event
 
 _logger = logging.getLogger(__name__)
 
@@ -32,17 +31,16 @@ def _log_sys_info() -> None:
 
 
 def _create_dataloader(
-    dataset: torch.utils.data.Dataset, **dataloader_kwargs: Dict[Any, Any]
+    dataset: torch.utils.data.Dataset, dataloader_args: DataLoaderArgs
 ) -> torch.utils.data.DataLoader:
-    shuffle = True
-    if "shuffle" in dataloader_kwargs:
-        _shuffle = dataloader_kwargs["shuffle"]
-        assert isinstance(_shuffle, bool)
-        shuffle = _shuffle
-        dataloader_kwargs.pop("shuffle")
-    sampler = DistributedSampler(dataset, shuffle=shuffle)
+    sampler: DistributedSampler = DistributedSampler(
+        dataset, shuffle=dataloader_args.shuffle
+    )
     return torch.utils.data.DataLoader(
-        dataset, sampler=sampler, **dataloader_kwargs
+        dataset, sampler=sampler, batch_size=dataloader_args.batch_size,
+        num_workers=dataloader_args.num_workers, pin_memory=dataloader_args.pin_memory,
+        drop_last=dataloader_args.drop_last, timeout=dataloader_args.timeout,
+        prefetch_factor=dataloader_args.prefetch_factor, shuffle=False
     )
 
 
@@ -55,7 +53,7 @@ def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: in
     ddp_model = DDP(model, device_ids=[device])
 
     trainloader = _create_dataloader(
-        experiment.train_dataset, **experiment.dataloader_kwargs
+        experiment.train_dataset, experiment.dataloader_args
     )
 
     experiment.train_fn(ddp_model, trainloader, f"cuda:{device}")

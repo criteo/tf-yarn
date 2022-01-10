@@ -22,6 +22,7 @@ jobs:
           pip install .
           pip install -r tests-requirements.txt
           pip install tensorflow==2.4.1
+          pip install torch
       - name: Linter
         run: |
           pylama

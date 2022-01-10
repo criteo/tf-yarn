@@ -92,7 +92,8 @@ def main() -> None:
     task_type, task_id = get_task_description()
 
     client = skein.ApplicationClient.from_current()
-    experiment: PytorchExperiment = _get_experiment(client)
+    experiment = _get_experiment(client)
+    assert isinstance(experiment, PytorchExperiment)
     cluster_tasks = _get_cluster_tasks(client)
     n_workers_per_executor = experiment.n_workers_per_executor
 

@@ -1,10 +1,7 @@
-import glob
 import logging
 import os
 import platform
-import shutil
 import socket
-import tempfile
 from typing import (
     Optional,
     Tuple,
@@ -13,11 +10,8 @@ from typing import (
     Iterator
 )
 from contextlib import contextmanager
-from subprocess import Popen, CalledProcessError, PIPE
 from threading import Thread
-from ._criteo import get_requirements_file
 
-import setuptools
 
 logger = logging.getLogger(__name__)
 
@@ -99,16 +93,3 @@ def xset_environ(**kwargs):
             raise RuntimeError(f"{key} already set in os.environ: {value}")
 
     os.environ.update(kwargs)
-
-
-def _call(cmd, **kwargs):
-    logger.info(" ".join(cmd))
-    proc = Popen(cmd, stdout=PIPE, stderr=PIPE, **kwargs)
-    out, err = proc.communicate()
-    if proc.returncode:
-        logger.error(out)
-        logger.error(err)
-        raise CalledProcessError(proc.returncode, cmd)
-    else:
-        logger.debug(out)
-        logger.debug(err)

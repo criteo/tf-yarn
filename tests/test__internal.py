@@ -2,10 +2,6 @@ import errno
 import os
 import socket
 import subprocess
-import sys
-import tempfile
-import zipfile
-from subprocess import check_output
 
 import pytest
 

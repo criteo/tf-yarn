@@ -3,14 +3,10 @@ Example of using simple identity Estimator which just returns the input
 """
 import logging
 logging.basicConfig(level="INFO") # noqa
-import os
-import pwd
-import getpass
-from subprocess import check_output
 import skein
 
 import cluster_pack
-from tf_yarn import Experiment, TaskSpec, run_on_yarn
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
 
 def model_fn(features, labels, mode):

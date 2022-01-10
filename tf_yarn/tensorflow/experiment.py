@@ -1,5 +1,6 @@
-import tensorflow as tf
 from typing import NamedTuple
+
+import tensorflow as tf
 
 
 class Experiment(NamedTuple):

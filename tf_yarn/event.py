@@ -1,10 +1,9 @@
 import logging
 import time
 import traceback
+import typing
 
 import skein
-import typing
-import tensorflow as tf
 
 _logger = logging.getLogger(__name__)
 

@@ -1,14 +1,11 @@
 import logging
 import sys
-import tensorflow as tf
 import time
-import skein
 import warnings
-
 from typing import List, Dict, Tuple
 
-import tf_yarn
-from tf_yarn.cluster import get_task
+import skein
+
 from tf_yarn import mlflow
 
 
@@ -66,36 +63,3 @@ class EvaluatorMetricsLogger():
                     mlflow.log_metric(mlflow.format_key(f"{evaluator}_{key}_{self.n_try}"), stat)
             if len(cur_eval_stats) > 0:
                 logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
-
-
-class EvalMonitorHook(tf.estimator.SessionRunHook):
-    '''
-    Hook to generate statistics about evaluator usage
-    Usage: tf.estimator.EvalSpec(...,hooks=[Eval_analyzer_hook()])
-    '''
-    def __init__(self):
-        self.client = skein.ApplicationClient.from_current()
-        self.task = get_task()
-        self.step_counter = 0
-        self.eval_start_time = 0.0
-        self.eval_step_dur_accu = 0.0
-        self.start_time = time.time()
-
-    def before_run(self, run_context):
-        self.eval_start_time = time.time()
-        return tf.estimator.SessionRunArgs(tf.compat.v1.train.get_global_step())
-
-    def after_run(self, _run_context, run_values):
-        self.step_counter += 1
-        cur_time = time.time()
-        self.eval_step_dur_accu += cur_time - self.eval_start_time
-        self.broadcast('eval_step_mean_duration', str(self.eval_step_dur_accu / self.step_counter))
-        self.broadcast(
-            'awake_time_ratio',
-            str(self.eval_step_dur_accu / (cur_time - self.start_time))
-        )
-        self.broadcast('nb_eval_steps', str(self.step_counter))
-        self.broadcast('last_training_step', str(run_values.results))
-
-    def broadcast(self, key: str, value: str):
-        tf_yarn.event.broadcast(self.client, f'{self.task}/{key}', value)

@@ -1,11 +1,13 @@
+import json
 from unittest import mock
 import traceback
-import skein
+
 import pytest
+import skein
 import tensorflow as tf
 
-from tf_yarn.experiment import Experiment
-from tf_yarn.keras_experiment import KerasExperiment
+from tf_yarn.tensorflow.experiment import Experiment
+from tf_yarn.tensorflow.keras_experiment import KerasExperiment
 from tf_yarn.client import (
     _setup_cluster_spec,
     get_safe_experiment_fn,
@@ -13,6 +15,7 @@ from tf_yarn.client import (
     run_on_yarn,
     ContainerLogStatus
 )
+from tf_yarn import constants
 from tf_yarn.topologies import TaskSpec
 
 
@@ -27,39 +30,23 @@ sock_addrs = {
 @mock.patch("tf_yarn.client.skein.ApplicationClient")
 @pytest.mark.parametrize("tasks_instances, expected_spec", [
     ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
-     {'chief': ['addr1:port1'],
-      'ps': ['addr4:port4'],
-      'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9']
-      }
-     ),
-    ([('chief', 3)],
-     {'chief': ['addr1:port1', 'addr10:port10', 'addr11:port11']}
-     ),
-    ([('worker', 3), ('ps', 3)],
-     {'worker': ['addr7:port7', 'addr8:port8', 'addr9:port9'],
-      'ps': ['addr4:port4', 'addr5:port5', 'addr6:port6']
-      }
-     ),
-    ([('worker', 1), ('evaluator', 0)],
-     {'worker': ['addr7:port7']}
-     )
+     [['chief', 1], ['ps', 1], ['worker', 3]]),
+    ([('chief', 3)], [['chief', 3]]),
+    ([('worker', 3), ('ps', 3)], [['worker', 3], ['ps', 3]]),
+    ([('worker', 1), ('evaluator', 0)], [['worker', 1]])
 ])
 def test_setup_cluster_spec(
         mock_skein_app,
         tasks_instances,
         expected_spec):
     kv_store = dict()
-    for task_type, nb_instances in tasks_instances:
-        for i in range(nb_instances):
-            kv_store[f'{task_type}:{i}/init'] = sock_addrs[task_type][i].encode()
-
-    mock_skein_app.kv.wait = kv_store.get
-    cluster_spec = _setup_cluster_spec(
+    mock_skein_app.kv = kv_store
+    _setup_cluster_spec(
         tasks_instances,
         mock_skein_app
     )
 
-    assert cluster_spec.as_dict() == expected_spec
+    assert json.loads(kv_store[constants.KV_CLUSTER_INSTANCES].decode()) == expected_spec
 
 
 def test_kill_skein_on_exception():
@@ -97,8 +84,10 @@ def _experiment_fn(model_dir):
         return None
 
     return Experiment(
-        tf.estimator.LinearClassifier(feature_columns=[], model_dir=model_dir,
-        loss_reduction=tf.keras.losses.Reduction.SUM),
+        tf.estimator.LinearClassifier(
+            feature_columns=[], model_dir=model_dir,
+            loss_reduction=tf.keras.losses.Reduction.SUM
+        ),
         tf.estimator.TrainSpec(train_fn),
         tf.estimator.EvalSpec(eval_fn))
 
@@ -192,7 +181,7 @@ def test_container_log_status():
          {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
                       "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
           "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                      "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
+                          "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
          {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
     )
 

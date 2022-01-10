@@ -1,38 +1,40 @@
 import logging
 import os
+
 import skein
-import tensorflow as tf
 
-from typing import Optional
-
-from tf_yarn import Experiment, KerasExperiment
-from tf_yarn.tasks import logging as tf_yarn_logging
-tf_yarn_logging.setup()
+from tf_yarn.tensorflow import Experiment, KerasExperiment
+from tf_yarn.tensorflow.tasks.tf_task_common import _log_sys_info
+from tf_yarn._task_commons import (
+    setup_logging, get_task, get_task_description, _get_cluster_tasks,
+    _setup_container_logs, _get_experiment
+)
+setup_logging()
 
 from tf_yarn import (
-    _task_commons,
     _internal,
-    cluster,
     event,
-    tensorboard
 )
+from tf_yarn import tensorboard
 
 _logger = logging.getLogger(__name__)
 
 
+# TODO: this taks could be agnostic of the ML framework
+# We only need to provide the model directory
 def main() -> None:
-    _task_commons._log_sys_info()
-    task_type, task_id = cluster.get_task_description()
-    task = cluster.get_task()
+    _log_sys_info()
+    task_type, task_id = get_task_description()
+    task = get_task()
     client = skein.ApplicationClient.from_current()
 
-    _task_commons._setup_container_logs(client)
-    cluster_tasks = _task_commons._get_cluster_tasks(client)
+    _setup_container_logs(client)
+    cluster_tasks = _get_cluster_tasks(client)
 
     model_dir = os.getenv('TB_MODEL_DIR', "")
     if not model_dir:
         _logger.info("Read model_dir from estimator config")
-        experiment = _task_commons._get_experiment(client)
+        experiment = _get_experiment(client)
         if isinstance(experiment, Experiment):
             model_dir = experiment.estimator.config.model_dir
         elif isinstance(experiment, KerasExperiment):

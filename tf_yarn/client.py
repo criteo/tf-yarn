@@ -1,4 +1,3 @@
-
 import importlib
 import logging
 import logging.config
@@ -6,12 +5,7 @@ import uuid
 import os
 import tempfile
 import time
-
-import cloudpickle
 import json
-import skein
-import tensorflow as tf
-
 from typing import (
     Dict,
     Optional,
@@ -19,45 +13,40 @@ from typing import (
     NamedTuple,
     Callable,
     Union,
-    List
+    List,
+    Any
 )
 from contextlib import suppress, contextmanager
-from functools import partial
-
 from threading import Thread
 from datetime import timedelta
+
+import cloudpickle
+import skein
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
-
 import cluster_pack
 
 from tf_yarn import (
     _env,
     _internal,
-    cluster,
     constants,
     metrics,
     evaluator_metrics,
     mlflow,
-    tensorboard,
-    event,
-    experiment,
-    keras_experiment,
     topologies
 )
+from tf_yarn._task_commons import (
+    get_task_type, is_chief, is_evaluator, is_worker
+)
+from tf_yarn import tensorboard
 
 YARN_LOG_TRIES = 15
-
-ExperimentFn = Callable[[], experiment.Experiment]
-
-KerasExperimentFn = Callable[[], keras_experiment.KerasExperiment]
-
-
-TASK_SPEC_NONE = topologies.single_server_topology()
 
 logger = logging.getLogger(__name__)
 
 here = os.path.dirname(__file__)
+
+ExperimentFn = Callable[[], Any]
 
 
 class SkeinCluster(NamedTuple):
@@ -164,18 +153,15 @@ def _maybe_zip_task_files(files, tempdir):
 def _setup_cluster_spec(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient
-) -> tf.train.ClusterSpec:
+) -> None:
     tasks_not_in_cluster = ['evaluator', 'tensorboard']
     cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
     app.kv[constants.KV_CLUSTER_INSTANCES] = json.dumps(cluster_instances).encode()
-    return tf.train.ClusterSpec(
-        cluster.aggregate_spec(app, list(_internal.iter_tasks(cluster_instances)))
-    )
 
 
 def _setup_skein_cluster(
         pyenvs: Dict[topologies.NodeLabel, _env.PythonEnvDescription],
-        task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
+        task_specs: Dict[str, topologies.TaskSpec],
         *,
         custom_task_module: Optional[str] = None,
         skein_client: skein.Client = None,
@@ -253,67 +239,14 @@ def _setup_skein_cluster(
         return SkeinCluster(skein_client, app, task_instances, event_listener, events)
 
 
-def _hook_name_already_exists(
-        hook: tf.estimator.SessionRunHook,
-        hooks: List[tf.estimator.SessionRunHook]) -> bool:
-    hook_name = type(hook).__name__
-    return len([h for h in hooks
-                if type(h).__name__ == hook_name]) > 0
-
-
-def _add_monitor_to_experiment(
-    my_experiment: Union[experiment.Experiment, keras_experiment.KerasExperiment]
-) -> Union[experiment.Experiment, keras_experiment.KerasExperiment]:
-    if isinstance(my_experiment, experiment.Experiment):
-        logger.info(f"configured training hooks: {my_experiment.train_spec.hooks}")
-
-        training_hooks = list(my_experiment.train_spec.hooks)
-
-        if my_experiment.config.log_step_count_steps is not None:
-            steps_per_second_hook = metrics.StepPerSecondHook(
-                every_n_steps=my_experiment.config.log_step_count_steps
-            )
-            if not _hook_name_already_exists(steps_per_second_hook, training_hooks):
-                training_hooks.append(steps_per_second_hook)
-            else:
-                logger.warning("do not add StepPerSecondHook as there is already one configured")
-
-        monitored_train_spec = my_experiment.train_spec._replace(
-            hooks=training_hooks
-        )
-
-        monitored_eval_spec = my_experiment.eval_spec._replace(
-            hooks=(evaluator_metrics.EvalMonitorHook(), *my_experiment.eval_spec.hooks)
-        )
-
-        my_experiment = my_experiment._replace(
-            eval_spec=monitored_eval_spec, train_spec=monitored_train_spec)
-    elif isinstance(my_experiment, keras_experiment.KerasExperiment):
-        logger.warning("equivalent of StepPerSecondHook not yet implemented for KerasExperiment")
-    else:
-        raise ValueError("experiment must be an Experiment or a KerasExperiment")
-    return my_experiment
-
-
-def _add_monitor_to_keras_experiment(
-    experiment: keras_experiment.KerasExperiment
-) -> keras_experiment.KerasExperiment:
-    return experiment
-
-
 def _run_on_cluster(
-    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
+    experiment_fn: ExperimentFn,
     skein_cluster: SkeinCluster,
     eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
     n_try: int = 0
 ) -> Optional[metrics.Metrics]:
-    def _new_experiment_fn():
-        return _add_monitor_to_experiment(experiment_fn())
-
-    new_experiment_fn = _new_experiment_fn
-
     # Attempt serialization early to avoid allocating unnecesary resources
-    serialized_fn = cloudpickle.dumps(new_experiment_fn)
+    serialized_fn = cloudpickle.dumps(experiment_fn)
     with skein_cluster.client:
         return _execute_and_await_termination(
             skein_cluster,
@@ -333,8 +266,8 @@ def _default_acls_all_access() -> skein.model.ACLs:
 
 def run_on_yarn(
     pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
-    experiment_fn: Union[ExperimentFn, KerasExperimentFn],
-    task_specs: Dict[str, topologies.TaskSpec] = TASK_SPEC_NONE,
+    experiment_fn: ExperimentFn,
+    task_specs: Dict[str, topologies.TaskSpec],
     *,
     skein_client: skein.Client = None,
     files: Dict[str, str] = None,
@@ -351,7 +284,7 @@ def run_on_yarn(
     """Run an experiment on YARN.
 
     The implementation allocates a service with the requested number
-    of instances for each distributed TensorFlow task type. Each
+    of instances for each distributed task type. Each
     instance runs ``_dispatch_task`` which roughly does the following.
 
     1. Reserve a TCP port and communicate the resulting socket address
@@ -507,13 +440,6 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
         return experiment_fn(*args)
 
     return _safe_exp_fn
-
-
-def _send_config_proto(
-        skein_cluster: SkeinCluster,
-        tf_session_config: tf.compat.v1.ConfigProto):
-    serialized_fn = cloudpickle.dumps(tf_session_config)
-    skein_cluster.app.kv[constants.KV_TF_SESSION_CONFIG] = serialized_fn
 
 
 @contextmanager
@@ -685,25 +611,25 @@ def _handle_events(
                                                           - float(stages['container_start_time'])))
 
         train_eval_time_per_node[task] = None
-        task_type = cluster.get_task_type(task)
+        task_type = get_task_type(task)
         if 'train_eval_start_time' in stages and 'train_eval_stop_time' in stages and not exception:
             start_time = timedelta(seconds=float(stages['train_eval_start_time']))
             stop_time = timedelta(seconds=float(stages['train_eval_stop_time']))
             train_eval_time_per_node[task] = stop_time - start_time
-            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
+            if is_worker(task_type) or is_chief(task_type):
                 if start_time < min_training_start_time:
                     min_training_start_time = start_time
                 if stop_time > max_training_stop_time:
                     max_training_stop_time = stop_time
-            elif cluster.is_evaluator(task_type):
+            elif is_evaluator(task_type):
                 if start_time < min_eval_start_time:
                     min_eval_start_time = start_time
                 if stop_time > max_eval_stop_time:
                     max_eval_stop_time = stop_time
         else:
-            if cluster.is_worker(task_type) or cluster.is_chief(task_type):
+            if is_worker(task_type) or is_chief(task_type):
                 valid_training_time = False
-            elif cluster.is_evaluator(task_type):
+            elif is_evaluator(task_type):
                 valid_eval_time = False
 
         header.append(f"{task:>16}  {sock_addr}  {status}  {logs}"

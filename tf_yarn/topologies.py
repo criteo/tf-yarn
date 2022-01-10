@@ -1,7 +1,7 @@
-import skein
-
 from enum import Enum
-from typing import Dict, NamedTuple, Union
+from typing import Dict, Union
+
+import skein
 
 GB = 2**10
 MAX_MEMORY_CONTAINER = 48 * GB
@@ -101,6 +101,7 @@ def single_server_topology(
     return topology
 
 
+# Topology to use for TensorFlow distributed training with parameter server strategy
 def ps_strategy_topology(
     nb_workers: int = 2,
     nb_ps: int = 1,

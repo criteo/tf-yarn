@@ -2,9 +2,9 @@ import logging
 import sys
 import os
 import uuid
-import cluster_pack
-
 from typing import Dict, Collection, Tuple
+
+import cluster_pack
 
 _logger = logging.getLogger(__name__)
 

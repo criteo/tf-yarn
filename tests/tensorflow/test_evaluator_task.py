@@ -7,9 +7,9 @@ import tensorflow as tf
 from tensorflow.python.training.checkpoint_state_pb2 import CheckpointState
 from tensorflow_estimator.python.estimator.training import EvalSpec
 
-from tf_yarn.experiment import Experiment
-from tf_yarn.tasks import evaluator_task
-from tf_yarn.tasks.evaluator_task import _get_step
+from tf_yarn.tensorflow.experiment import Experiment
+from tf_yarn.tensorflow.tasks import evaluator_task
+from tf_yarn.tensorflow.tasks.evaluator_task import _get_step
 
 checkpoints = {
    "/path/to/model/dir/model.ckpt-0",
@@ -29,12 +29,16 @@ checkpoints = {
 ])
 def test_evaluate(evaluated_ckpts, ckpt_to_export):
     with mock.patch('tf_yarn._task_commons._get_experiment') as experiment_mock, \
-            mock.patch('tf_yarn.tasks.evaluator_task._get_evaluated_checkpoint') \
+            mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_evaluated_checkpoint') \
             as _get_evaluated_checkpoint, \
-            mock.patch('tf_yarn.tasks.evaluator_task._get_all_checkpoints') \
+            mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_all_checkpoints') \
             as _get_checkpoints, \
-            mock.patch('tf_yarn.tasks.evaluator_task.tf.io.gfile.exists') as exists_mock, \
-            mock.patch('tf_yarn.tasks.evaluator_task.tf.io.gfile.listdir') as listdir_mock:
+            mock.patch(
+                'tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.exists'
+            ) as exists_mock, \
+            mock.patch(
+                'tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.listdir'
+            ) as listdir_mock:
         exists_mock.side_effect = lambda *args, **kwargs: True
         listdir_mock.side_effect = lambda *args, **kwargs: evaluated_ckpts
         mock_exporter = mock.Mock(spec=tf.estimator.Exporter)
@@ -78,7 +82,7 @@ def test_evaluate(evaluated_ckpts, ckpt_to_export):
     (None, []),
 ])
 def test__get_all_checkpoints(checkpoint_state, checkpoints):
-    with mock.patch("tf_yarn.tasks.evaluator_task.tf.train.get_checkpoint_state"
+    with mock.patch("tf_yarn.tensorflow.tasks.evaluator_task.tf.train.get_checkpoint_state"
                     ) as get_checkpoint_state_mock:
         get_checkpoint_state_mock.side_effect = lambda *args, **kwargs: checkpoint_state
         assert evaluator_task._get_all_checkpoints("dir") == checkpoints

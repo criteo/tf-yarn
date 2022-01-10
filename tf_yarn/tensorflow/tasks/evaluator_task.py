@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 import skein
 import tensorflow as tf
 
-from tf_yarn import _task_commons, event, metrics, cluster, Experiment, KerasExperiment
-from tf_yarn.tasks import logging as tf_yarn_logging
-
-tf_yarn_logging.setup()
+from tf_yarn import _task_commons, event
+from tf_yarn.tensorflow import Experiment, KerasExperiment
+from tf_yarn.tensorflow import metrics
+from tf_yarn._task_commons import setup_logging, get_task, get_task_description
+setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +142,8 @@ def _get_evaluated_checkpoint(eval_dir):
 
 def main():
     client = skein.ApplicationClient.from_current()
-    task = cluster.get_task()
-    task_type, task_id = cluster.get_task_description()
+    task = get_task()
+    task_type, task_id = get_task_description()
     event.init_event(client, task, "127.0.0.1:0")
     _task_commons._setup_container_logs(client)
 

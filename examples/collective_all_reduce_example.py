@@ -8,7 +8,7 @@ import getpass
 import winequality
 from datetime import datetime
 import cluster_pack
-from tf_yarn import Experiment, TaskSpec, run_on_yarn
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
 logger = logging.getLogger(__name__)
 
@@ -90,5 +90,5 @@ if __name__ == "__main__":
             **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
         },
-        custom_task_module="tf_yarn.tasks.gloo_allred_task"
+        custom_task_module="tf_yarn.tensorflow.tasks.gloo_allred_task"
     )

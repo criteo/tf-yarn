@@ -36,8 +36,6 @@ def save_ckpt(
     resolved_fs, _ = filesystem.resolve_filesystem_and_path(model_dir)
     if not resolved_fs.exists(model_dir):
         resolved_fs.mkdir(model_dir)
-    else:
-        print("model dir exists")
     model_ckpt_path = os.path.join(model_dir, f"model_{epoch}.pt")
     with resolved_fs.open(model_ckpt_path, "wb") as fd:
         torch.save(state, fd)

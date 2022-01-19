@@ -47,10 +47,10 @@ def _create_dataloader(
 def _train(device: int, rank: int, world_size: int) -> None:
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
-    
+
     client = skein.ApplicationClient.from_current()
     _setup_master(client, rank)
-    
+
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
     experiment = _get_experiment(client)

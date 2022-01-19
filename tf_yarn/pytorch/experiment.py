@@ -18,9 +18,13 @@ class PytorchExperiment(NamedTuple):
     model: torch.nn.Module
 
     # Main function run to train the model
-    # inputs: model to train, dataloader and device (cpu:0, cpu:1, cuda:0, cuda:1 ...)
+    # inputs: model to train, dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...)
+    # and rank (worker id)
     # outputs: None
-    train_fn: Callable[[torch.nn.Module, torch.utils.data.dataloader.DataLoader, str], None]
+    train_fn: Callable[
+        [torch.nn.Module, torch.utils.data.dataloader.DataLoader, str, int],
+        None
+    ]
 
     # Training set
     train_dataset: torch.utils.data.Dataset

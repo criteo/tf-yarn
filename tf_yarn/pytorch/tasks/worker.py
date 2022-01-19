@@ -62,7 +62,7 @@ def _train(device: int, rank: int, world_size: int) -> None:
         experiment.train_dataset, experiment.dataloader_args
     )
 
-    experiment.train_fn(ddp_model, trainloader, f"cuda:{device}")
+    experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank)
 
     dist.destroy_process_group()
     _logger.info("Done training")
@@ -97,6 +97,7 @@ def main() -> None:
 
     client = skein.ApplicationClient.from_current()
     experiment = _get_experiment(client)
+    assert isinstance(experiment, PytorchExperiment)
     cluster_tasks = _get_cluster_tasks(client)
     n_workers_per_executor = experiment.n_workers_per_executor
 

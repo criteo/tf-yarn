@@ -44,11 +44,16 @@ def _create_dataloader(
     )
 
 
-def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: int) -> None:
+def _train(device: int, rank: int, world_size: int) -> None:
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
+    
+    client = skein.ApplicationClient.from_current()
+    _setup_master(client, rank)
+    
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
+    experiment = _get_experiment(client)
     model = experiment.model.to(device)
     ddp_model = DDP(model, device_ids=[device])
 
@@ -62,8 +67,8 @@ def _train(experiment: PytorchExperiment, device: int, rank: int, world_size: in
     _logger.info("Done training")
 
 
-def _setup_master(client: skein.ApplicationClient, task_id: int) -> None:
-    if task_id == 0:
+def _setup_master(client: skein.ApplicationClient, rank: int) -> None:
+    if rank == 0:
         with _internal.reserve_sock_addr() as host_port:
             event.broadcast(client, MASTER_ADDR, host_port[0])
             event.broadcast(client, MASTER_PORT, str(host_port[1]))
@@ -100,15 +105,14 @@ def main() -> None:
         f"World_size: {world_size}: Cluster tasks: {cluster_tasks}"
     )
 
-    _setup_master(client, task_id)
-
     if n_workers_per_executor > 1:
         workers = list()
+        mp.set_start_method("spawn")
         for n in range(n_workers_per_executor):
             worker = mp.Process(
                 target=_train,
                 args=(
-                    experiment, _get_device(n), (task_id * n_workers_per_executor) + n, world_size
+                    _get_device(n), (task_id * n_workers_per_executor) + n, world_size
                 )
             )
             worker.start()
@@ -117,7 +121,7 @@ def main() -> None:
         for worker in workers:
             worker.join()
     else:
-        _train(experiment, 0, task_id, world_size)
+        _train(0, task_id, world_size)
 
 
 if __name__ == "__main__":

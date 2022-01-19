@@ -54,6 +54,7 @@ def _train(device: int, rank: int, world_size: int) -> None:
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
     experiment = _get_experiment(client)
+    assert isinstance(experiment, PytorchExperiment)
     model = experiment.model.to(device)
     ddp_model = DDP(model, device_ids=[device])
 

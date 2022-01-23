@@ -44,14 +44,16 @@ def _create_dataloader(
     )
 
 
-def _train(device: int, rank: int, world_size: int) -> None:
+def _train(
+    device: int, rank: int, world_size: int, collective_ops_backend: str
+) -> None:
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
 
     client = skein.ApplicationClient.from_current()
     _setup_master(client, rank)
 
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    dist.init_process_group(collective_ops_backend, rank=rank, world_size=world_size)
 
     experiment = _get_experiment(client)
     assert isinstance(experiment, PytorchExperiment)
@@ -91,6 +93,13 @@ def _get_device(worker_id: int) -> int:
         raise RuntimeError("Multi-CPU training is not supported yet")
 
 
+def _get_collective_ops_backend(n_workers_per_executor: int) -> str:
+    # If a GPU is used by multiple workers, using NCCL can result in a deadlock
+    # So in this case, we use gloo for collective ops
+    return "nccl" if n_workers_per_executor <= torch.cuda.device_count() \
+         else "gloo"
+
+
 def main() -> None:
     _log_sys_info()
     task_type, task_id = get_task_description()
@@ -114,7 +123,8 @@ def main() -> None:
             worker = mp.Process(
                 target=_train,
                 args=(
-                    _get_device(n), (task_id * n_workers_per_executor) + n, world_size
+                    _get_device(n), (task_id * n_workers_per_executor) + n, world_size,
+                    _get_collective_ops_backend(n_workers_per_executor)
                 )
             )
             worker.start()
@@ -123,7 +133,7 @@ def main() -> None:
         for worker in workers:
             worker.join()
     else:
-        _train(0, task_id, world_size)
+        _train(0, task_id, world_size, "nccl")
 
 
 if __name__ == "__main__":

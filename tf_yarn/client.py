@@ -376,13 +376,12 @@ def run_on_yarn(
         If the final status of the YARN application is ``"FAILED"``.
     """
     updated_files = _add_editable_requirements(files)
-    if not pyenv_zip_path:
-        pyenv_zip_path, _ = cluster_pack.upload_env()
+    _pyenv_zip_path = pyenv_zip_path if pyenv_zip_path else cluster_pack.upload_env()
 
     if nb_retries < 0:
         raise ValueError(f'nb_retries must be greater or equal to 0. Got {nb_retries}')
 
-    pyenvs = _setup_pyenvs(pyenv_zip_path)
+    pyenvs = _setup_pyenvs(_pyenv_zip_path)
 
     n_try = 0
     while True:

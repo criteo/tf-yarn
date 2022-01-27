@@ -98,10 +98,7 @@ def get_safe_exp_fn():
 
 
 def main():
-    pyenv_zip_path, _ = cluster_pack.upload_env()
-    editable_requirements = cluster_pack.get_editable_requirements()
     run_on_yarn(
-        pyenv_zip_path,
         get_safe_exp_fn(),
         task_specs={
             "chief": TaskSpec(memory="2 GiB", vcores=4),
@@ -109,7 +106,6 @@ def main():
             "evaluator": TaskSpec(memory="2 GiB", vcores=1)
         },
         files={
-            **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
             os.path.basename(__file__): __file__,
         },

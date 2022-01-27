@@ -67,10 +67,7 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-    pyenv_zip_path, env_name = cluster_pack.upload_env()
-    editable_requirements = cluster_pack.get_editable_requirements()
     run_on_yarn(
-        pyenv_zip_path,
         experiment_fn,
         task_specs={
             "chief": TaskSpec(memory="2 GiB", vcores=4),
@@ -78,7 +75,6 @@ if __name__ == "__main__":
             "tensorboard": TaskSpec(memory="2 GiB", vcores=1, tb_model_dir=HDFS_DIR)
         },
         files={
-            **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
         }
     )

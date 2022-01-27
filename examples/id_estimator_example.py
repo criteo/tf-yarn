@@ -5,7 +5,6 @@ import logging
 logging.basicConfig(level="INFO") # noqa
 import skein
 
-import cluster_pack
 from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
 
@@ -45,19 +44,13 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-    pyenv_zip_path, env_name = cluster_pack.upload_env()
-    editable_requirements = cluster_pack.get_editable_requirements()
     # skein.Client is useful when multiple learnings run in parallel
     # and share one single skein JAVA process
     with skein.Client() as client:
         run_on_yarn(
-            pyenv_zip_path,
             experiment_fn,
             task_specs={
                 "chief": TaskSpec(memory="1 GiB", vcores=1)
-            },
-            files={
-                **editable_requirements,
             },
             skein_client=client
         )

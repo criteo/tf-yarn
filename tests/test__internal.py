@@ -31,7 +31,7 @@ def test_reserve_sock_addr():
             sock.bind((host, port))
 
         # Ensure that the iterator holds the sockets open.
-        assert exc_info.value.errno == errno.EADDRINUSE
+        assert exc_info.value.errno in [errno.EADDRINUSE, errno.EADDRNOTAVAIL]
 
 
 def test_xset_environ(monkeypatch):

@@ -7,7 +7,6 @@ import os
 import getpass
 import mlflow
 import requests
-import skein
 
 from datetime import datetime
 
@@ -91,18 +90,13 @@ if __name__ == "__main__":
 
     run_id = mlflow.start_run(experiment_id=experiment_id).info.run_id
 
-    pyenv_zip_path, env_name = cluster_pack.upload_env()
-    editable_requirements = cluster_pack.get_editable_requirements()
-
     run_on_yarn(
-        pyenv_zip_path,
         experiment_fn,
         task_specs={
             "chief": TaskSpec(memory="1 GiB", vcores=1),
             "evaluator": TaskSpec(memory="1 GiB", vcores=1)
         },
         files={
-            **editable_requirements,
             os.path.basename(winequality.__file__): winequality.__file__,
         }
     )

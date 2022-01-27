@@ -265,10 +265,10 @@ def _default_acls_all_access() -> skein.model.ACLs:
 
 
 def run_on_yarn(
-    pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
     experiment_fn: ExperimentFn,
     task_specs: Dict[str, topologies.TaskSpec],
     *,
+    pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]] = None,
     skein_client: skein.Client = None,
     files: Dict[str, str] = None,
     env: Dict[str, str] = {},
@@ -298,24 +298,25 @@ def run_on_yarn(
     Parameters
     ----------
 
-    pyenv_zip_path
-        Path to an archive of a python environment to be deployed
-        It can be a zip conda env or a pex archive
-        In case of GPU/CPU cluster, provide a dictionnary with both
-        environments.
-
     experiment_fn
         A function constructing the estimator alongside the train
         and eval specs.
-
-    skein_client
-        Skein client used to submit yarn jobs
 
     task_specs
         Resources to allocate for each task type. The keys
         must be a subset of ``"chief"``, ``"worker"``, ``"ps"``, and
         ``"evaluator"``. The minimal spec must contain at least
         ``"chief"``.
+
+    pyenv_zip_path
+        Path to an archive of a python environment to be deployed
+        It can be a zip conda env or a pex archive
+        In case of GPU/CPU cluster, provide a dictionnary with both
+        environments. If none is provided, the current python environment
+        will be packaged in a pex
+
+    skein_client
+        Skein client used to submit yarn jobs
 
     files
         Local files or directories to upload to the container.
@@ -374,10 +375,13 @@ def run_on_yarn(
     RunFailed
         If the final status of the YARN application is ``"FAILED"``.
     """
+    updated_files = _add_editable_requirements(files)
+    _pyenv_zip_path = pyenv_zip_path if pyenv_zip_path else cluster_pack.upload_env()
+
     if nb_retries < 0:
         raise ValueError(f'nb_retries must be greater or equal to 0. Got {nb_retries}')
 
-    pyenvs = _setup_pyenvs(pyenv_zip_path)
+    pyenvs = _setup_pyenvs(_pyenv_zip_path)
 
     n_try = 0
     while True:
@@ -386,7 +390,7 @@ def run_on_yarn(
                 pyenvs=pyenvs,
                 task_specs=task_specs,
                 skein_client=skein_client,
-                files=files,
+                files=updated_files,
                 env=env,
                 queue=queue,
                 acls=acls,
@@ -440,6 +444,16 @@ def get_safe_experiment_fn(full_fn_name: str, *args):
         return experiment_fn(*args)
 
     return _safe_exp_fn
+
+
+def _add_editable_requirements(files: Optional[Dict[str, str]]):
+    editable_requirements = cluster_pack.get_editable_requirements()
+    if files is None:
+        files = dict()
+    for dirname, path in editable_requirements.items():
+        if dirname not in files:
+            files[dirname] = path
+    return files
 
 
 @contextmanager

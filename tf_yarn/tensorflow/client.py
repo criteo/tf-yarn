@@ -15,7 +15,6 @@ DEFAULT_TASK_SPEC = topologies.single_server_topology()
 
 
 def run_on_yarn(
-    pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]],
     experiment_fn: Union[ExperimentFn, KerasExperimentFn],
     task_specs: Dict[str, topologies.TaskSpec] = DEFAULT_TASK_SPEC,
     *args,
@@ -25,7 +24,6 @@ def run_on_yarn(
         return _add_monitor_to_experiment(experiment_fn())
 
     return client.run_on_yarn(
-        pyenv_zip_path,
         _new_experiment_fn,
         task_specs,
         *args,

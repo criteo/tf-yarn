@@ -63,7 +63,7 @@ def test_kill_skein_on_exception():
                     event_listener=None, events=None,
                     tasks=[])
                 try:
-                    run_on_yarn(None, None, {})
+                    run_on_yarn(None, {}, pyenv_zip_path="/path/to/env")
                 except Exception:
                     print(traceback.format_exc())
                     pass
@@ -160,12 +160,13 @@ def test_retry_run_on_yarn(nb_retries, nb_failures):
 
         try:
             run_on_yarn(
-                "path/to/env", lambda: Experiment(None, None, None),
+                lambda: Experiment(None, None, None),
                 task_specs={
                     "chief": TaskSpec(memory=16 * gb, vcores=16),
                     "worker": TaskSpec(memory=16 * gb, vcores=16, instances=1),
                     "ps": TaskSpec(memory=16 * gb, vcores=16, instances=1)
                 },
+                pyenv_zip_path="path/to/env",
                 nb_retries=nb_retries
             )
         except Exception:

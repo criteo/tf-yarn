@@ -450,7 +450,7 @@ def _add_editable_requirements(files: Optional[Dict[str, str]]):
     editable_requirements = cluster_pack.get_editable_requirements()
     if files is None:
         files = dict()
-    for dirname, path in editable_requirements.values():
+    for dirname, path in editable_requirements.items():
         if dirname not in files:
             files[dirname] = path
     return files

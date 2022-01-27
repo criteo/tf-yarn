@@ -27,7 +27,7 @@ class Net(nn.Module):
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -42,9 +42,9 @@ def training_loop(
 ):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-    
+
     model_ckpt_path = "viewfs://root/user/g.racic/toy_model_ckpt"
-    
+
     for epoch in range(10):
         start = time.perf_counter()
         trainloader.sampler.set_epoch(epoch)
@@ -75,7 +75,7 @@ def experiment_fn():
     )
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
                                             download=True, transform=transform)
-    
+
     return PytorchExperiment(
         model=Net(),
         train_fn=training_loop,
@@ -88,6 +88,8 @@ def experiment_fn():
 if __name__ == "__main__":
     run_on_yarn(
         experiment_fn=experiment_fn,
-        task_specs={"worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)},
+        task_specs={
+            "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)
+        },
         queue="ml-gpu"
     )

@@ -1,19 +1,25 @@
+from contextlib import contextmanager
 import logging
 import os
 import sys
+import tempfile
+from typing import Generator
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 import torch.multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
 import skein
+from cluster_pack import filesystem
 
 from tf_yarn._task_commons import (
     setup_logging, get_task_description, _get_experiment, _get_cluster_tasks
 )
 from tf_yarn import _internal, event
 from tf_yarn.pytorch.experiment import PytorchExperiment, DataLoaderArgs
+from tf_yarn import tensorboard
 setup_logging()
 
 
@@ -64,10 +70,48 @@ def _train(
         experiment.train_dataset, experiment.dataloader_args
     )
 
-    experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank)
+    with tempfile.TemporaryDirectory() as tmp:
+        with _tensorboard(tmp, client):
+            tb_writer = SummaryWriter(tmp)
+            experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
+            tb_writer.flush()
+            tb_writer.close()
+
+        if experiment.tensorboard_hdfs_dir:
+            worker_tb_dir = os.path.join(experiment.tensorboard_hdfs_dir, f"worker{rank}")
+            _upload_tensorboard_on_hdfs(tmp, worker_tb_dir)
 
     dist.destroy_process_group()
     _logger.info("Done training")
+
+
+@contextmanager
+def _tensorboard(
+    tensorboard_dir: str, client: skein.ApplicationClient
+) -> Generator[None, None, None]:
+    task_type, task_id = get_task_description()
+
+    thread = _internal.MonitoredThread(
+        name=f"{task_type}:{task_id}",
+        target=tensorboard.start_tf_board,
+        args=(client, tensorboard_dir),
+        daemon=True)
+    thread.start()
+
+    yield
+
+    timeout = tensorboard.get_termination_timeout()
+    thread.join(timeout)
+
+
+def _upload_tensorboard_on_hdfs(local_dir: str, hdfs_dir: str) -> None:
+    resolved_fs, _ = filesystem.resolve_filesystem_and_path(hdfs_dir)
+    if not resolved_fs.exists(hdfs_dir):
+        resolved_fs.mkdir(hdfs_dir)
+    for f in os.listdir(local_dir):
+        hdfs_file_path = os.path.join(hdfs_dir, f)
+        local_file_path = os.path.join(local_dir, f)
+        resolved_fs.put(local_file_path, hdfs_file_path)
 
 
 def _setup_master(client: skein.ApplicationClient, rank: int) -> None:

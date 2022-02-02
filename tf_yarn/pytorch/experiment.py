@@ -37,4 +37,4 @@ class PytorchExperiment(NamedTuple):
     n_workers_per_executor: int = 1
 
     # HDFS directory where tensorboard results will be written at the end of the training
-    tensorboard_hdfs_dir: str = None
+    tensorboard_hdfs_dir: Optional[str] = None

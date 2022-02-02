@@ -1,7 +1,9 @@
+from contextlib import contextmanager
 import logging
 import os
 import sys
 import tempfile
+from typing import Generator
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -69,25 +71,11 @@ def _train(
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        _logger.info(f"Starting tensorboard on {tmp}")
-        task_type, task_id = get_task_description()
-
-        thread = _internal.MonitoredThread(
-            name=f"{task_type}:{task_id}",
-            target=tensorboard.start_tf_board,
-            args=(client, tmp),
-            daemon=True)
-        thread.start()
-
-        tb_writer = SummaryWriter(tmp)
-        experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
-        tb_writer.flush()
-        tb_writer.close()
-
-        _logger.info(f"Stopping tensorboard ...")
-        timeout = tensorboard.get_termination_timeout()
-        thread.join(timeout)
-        _logger.info(f"tensorboard stopped ...")
+        with _tensorboard(tmp, client):
+            tb_writer = SummaryWriter(tmp)
+            experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
+            tb_writer.flush()
+            tb_writer.close()
 
         if experiment.tensorboard_hdfs_dir:
             worker_tb_dir = os.path.join(experiment.tensorboard_hdfs_dir, f"worker{rank}")
@@ -97,8 +85,10 @@ def _train(
     _logger.info("Done training")
 
 
-def _start_tensorboard(tensorboard_dir, client):
-    _logger.info(f"Starting tensorboard on {tensorboard_dir}")
+@contextmanager
+def _tensorboard(
+    tensorboard_dir: str, client: skein.ApplicationClient
+) -> Generator[None, None, None]:
     task_type, task_id = get_task_description()
 
     thread = _internal.MonitoredThread(
@@ -108,11 +98,13 @@ def _start_tensorboard(tensorboard_dir, client):
         daemon=True)
     thread.start()
 
+    yield
+
     timeout = tensorboard.get_termination_timeout()
     thread.join(timeout)
 
 
-def _upload_tensorboard_on_hdfs(local_dir: str, hdfs_dir: str):
+def _upload_tensorboard_on_hdfs(local_dir: str, hdfs_dir: str) -> None:
     resolved_fs, _ = filesystem.resolve_filesystem_and_path(hdfs_dir)
     if not resolved_fs.exists(hdfs_dir):
         resolved_fs.mkdir(hdfs_dir)

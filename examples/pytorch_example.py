@@ -38,17 +38,19 @@ def training_loop(
     model: torch.nn.Module,
     trainloader: torch.utils.data.dataloader.DataLoader,
     device: str,
-    rank: int
+    rank: int,
+    tb_writer:torch.utils.tensorboard.writer.SummaryWriter
 ):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     model_ckpt_path = "viewfs://root/user/g.racic/toy_model_ckpt"
 
+    train_ite_num = 0
+    running_loss = 0.0
+    running_ite = 0
     for epoch in range(10):
-        start = time.perf_counter()
         trainloader.sampler.set_epoch(epoch)
-        running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             inputs, labels = data
             optimizer.zero_grad()
@@ -59,12 +61,14 @@ def training_loop(
 
             # print statistics
             running_loss += loss.item()
+            running_ite += 1
             if i % 2000 == 1999:    # print every 2000 mini-batches
                 print(f'[{os.getpid()}] [{epoch + 1}, {i + 1}] loss: {running_loss / 2000}')
+                tb_writer.add_scalar(f'training_loss_sum', running_loss / running_ite, train_ite_num)
                 running_loss = 0.0
-        total_duration = time.perf_counter() - start
+                running_ite = 0
+            train_ite_num += 1
         model_ckpt.save_ckpt(model_ckpt_path, model, optimizer, epoch)
-        print(f"[{os.getpid()}] Total duration for epoch {epoch} in secs: {total_duration}")
 
     print('Finished Training')
 

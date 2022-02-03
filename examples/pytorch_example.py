@@ -39,7 +39,7 @@ def training_loop(
     trainloader: torch.utils.data.dataloader.DataLoader,
     device: str,
     rank: int,
-    tb_writer:torch.utils.tensorboard.writer.SummaryWriter
+    tb_writer: torch.utils.tensorboard.writer.SummaryWriter
 ):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
@@ -64,7 +64,9 @@ def training_loop(
             running_ite += 1
             if i % 2000 == 1999:    # print every 2000 mini-batches
                 print(f'[{os.getpid()}] [{epoch + 1}, {i + 1}] loss: {running_loss / 2000}')
-                tb_writer.add_scalar(f'training_loss_sum', running_loss / running_ite, train_ite_num)
+                tb_writer.add_scalar(
+                    'training_loss_sum', running_loss / running_ite, train_ite_num
+                )
                 running_loss = 0.0
                 running_ite = 0
             train_ite_num += 1

@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Generator
+from typing import Generator, Optional
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -39,9 +39,9 @@ def _log_sys_info() -> None:
 def _create_dataloader(
     dataset: torch.utils.data.Dataset, dataloader_args: DataLoaderArgs
 ) -> torch.utils.data.DataLoader:
-    sampler: DistributedSampler = DistributedSampler(
-        dataset, shuffle=dataloader_args.shuffle
-    )
+    sampler: Optional[DistributedSampler] = \
+        DistributedSampler(dataset, shuffle=dataloader_args.shuffle) \
+        if not isinstance(dataset, torch.utils.data.IterableDataset) else None
     return torch.utils.data.DataLoader(
         dataset, sampler=sampler, batch_size=dataloader_args.batch_size,
         num_workers=dataloader_args.num_workers, pin_memory=dataloader_args.pin_memory,
@@ -53,6 +53,7 @@ def _create_dataloader(
 def _train(
     device: int, rank: int, world_size: int, collective_ops_backend: str
 ) -> None:
+    os.environ["NCCL_DEBUG"] = "INFO"
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
 
@@ -71,11 +72,10 @@ def _train(
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        with _tensorboard(tmp, client):
-            tb_writer = SummaryWriter(tmp)
-            experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
-            tb_writer.flush()
-            tb_writer.close()
+        tb_writer = SummaryWriter(tmp)
+        experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
+        tb_writer.flush()
+        tb_writer.close()
 
         if experiment.tensorboard_hdfs_dir:
             worker_tb_dir = os.path.join(experiment.tensorboard_hdfs_dir, f"worker{rank}")

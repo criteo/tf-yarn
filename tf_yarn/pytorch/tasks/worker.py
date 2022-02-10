@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import tempfile
-from typing import Generator
+from typing import Generator, Optional
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -39,7 +39,8 @@ def _log_sys_info() -> None:
 def _create_dataloader(
     dataset: torch.utils.data.Dataset, dataloader_args: DataLoaderArgs
 ) -> torch.utils.data.DataLoader:
-    sampler = DistributedSampler(dataset, shuffle=dataloader_args.shuffle) \
+    sampler: Optional[DistributedSampler] = \
+        DistributedSampler(dataset, shuffle=dataloader_args.shuffle) \
         if not isinstance(dataset, torch.utils.data.IterableDataset) else None
     return torch.utils.data.DataLoader(
         dataset, sampler=sampler, batch_size=dataloader_args.batch_size,

@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Generator
+from typing import Optional, Generator, List
 import multiprocessing as mp
 
 from torch.utils.data import IterableDataset
@@ -15,9 +15,11 @@ logger = logging.getLogger()
 class ParquetDataset(IterableDataset):
     def __init__(
         self, dataset_path: str, batch_size: int,
-        num_samples: Optional[int] = None
+        num_samples: Optional[int] = None,
+        columns: List[str] = None
     ) -> None:
         self.fs, _ = resolve_filesystem_and_path(dataset_path)
+        self.columns = columns
         self.num_samples = num_samples if num_samples \
             else _read_num_samples(dataset_path, self.fs)
         self.dataset_file_paths = [
@@ -34,7 +36,11 @@ class ParquetDataset(IterableDataset):
                 parquet_file = pq.ParquetFile(f)
                 # Drop last batch because all-reduce ops require batches to have the same
                 # sizes
-                batches = list(parquet_file.iter_batches(batch_size=self.batch_size))[:-1]
+                batches = list(
+                    parquet_file.iter_batches(
+                        batch_size=self.batch_size, columns=self.columns
+                    )
+                )[:-1]
                 n_batches = len(batches)
                 n_batches_per_worker = n_batches // self.num_workers
                 assert n_batches_per_worker > 0

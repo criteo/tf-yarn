@@ -162,7 +162,7 @@ def main() -> None:
 
     if n_workers_per_executor > 1:
         workers = list()
-        mp.set_start_method("spawn")
+        mp.set_start_method("spawn", force=True)
         for n in range(n_workers_per_executor):
             worker = mp.Process(
                 target=_train,

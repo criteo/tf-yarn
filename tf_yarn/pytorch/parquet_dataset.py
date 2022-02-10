@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Generator, List
+from typing import Optional, List
 import multiprocessing as mp
 
 from torch.utils.data import IterableDataset
@@ -30,7 +30,7 @@ class ParquetDataset(IterableDataset):
         self.num_workers = dist.get_world_size() if dist.is_initialized() else 1
         logger.info(f"worker_id: {self.worker_id}; num_workers: {self.num_workers}")
 
-    def __iter__(self) -> Generator[pyarrow.lib.RecordBatch, None, None]:
+    def __iter__(self):
         for dataset_file_path in self.dataset_file_paths:
             with self.fs.base_fs.open(dataset_file_path) as f:
                 parquet_file = pq.ParquetFile(f)
@@ -56,7 +56,7 @@ class ParquetDataset(IterableDataset):
 
 
 def _read_num_samples(dataset_path: str, fs: EnhancedFileSystem) -> int:
-    mp.set_start_method('spawn')
+    mp.set_start_method('spawn', force=True)
     dataset_file_paths = [
         f for f in fs.base_fs.ls(dataset_path) if f.endswith(".parquet")
     ]

@@ -49,4 +49,4 @@ class PytorchExperiment(NamedTuple):
     # DistributedDataParallel parameters. Refer to Pytorch documentation
     # (https://pytorch.org/docs/stable/_modules/torch/nn/parallel
     # /distributed.html#DistributedDataParallel)
-    ddp_args: DistributedDataParallelArgs = None
+    ddp_args: Optional[DistributedDataParallelArgs] = None

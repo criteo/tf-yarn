@@ -65,7 +65,8 @@ def _train(
     experiment = _get_experiment(client)
     assert isinstance(experiment, PytorchExperiment)
     model = experiment.model.to(device)
-    ddp_model = DDP(model, device_ids=[device])
+    ddp_kwargs = experiment.ddp_args._asdict() if experiment.ddp_args else {}
+    ddp_model = DDP(model, device_ids=[device], **ddp_kwargs)
 
     trainloader = _create_dataloader(
         experiment.train_dataset, experiment.dataloader_args

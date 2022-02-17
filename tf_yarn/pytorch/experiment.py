@@ -13,6 +13,13 @@ class DataLoaderArgs(NamedTuple):
     shuffle: bool = False
 
 
+class DistributedDataParallelArgs(NamedTuple):
+    broadcast_buffers: bool = True
+    bucket_cap_mb: int = 25
+    find_unused_parameters: bool = False
+    gradient_as_bucket_view: bool = False
+
+
 class PytorchExperiment(NamedTuple):
     # Model to train
     model: torch.nn.Module
@@ -38,3 +45,8 @@ class PytorchExperiment(NamedTuple):
 
     # HDFS directory where tensorboard results will be written at the end of the training
     tensorboard_hdfs_dir: Optional[str] = None
+
+    # DistributedDataParallel parameters. Refer to Pytorch documentation
+    # (https://pytorch.org/docs/stable/_modules/torch/nn/parallel
+    # /distributed.html#DistributedDataParallel)
+    ddp_args: DistributedDataParallelArgs = None

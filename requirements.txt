@@ -1,4 +1,4 @@
 cluster-pack
 skein>=0.8,<0.9
-tensorboard==2.4.1
+tensorboard>=2.4.1,<3
 pyarrow

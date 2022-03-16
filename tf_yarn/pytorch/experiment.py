@@ -24,11 +24,11 @@ class PytorchExperiment(NamedTuple):
     # Model to train
     model: torch.nn.Module
 
-    # Main function run to train the model
+    # Main function run to train the model. This function is executed by every worker
     # inputs: model to train, dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...)
     # and rank (worker id)
     # outputs: None
-    train_fn: Callable[
+    main_fn: Callable[
         [torch.nn.Module, torch.utils.data.dataloader.DataLoader, str, int],
         None
     ]

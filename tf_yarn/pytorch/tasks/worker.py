@@ -74,7 +74,7 @@ def _train(
 
     with tempfile.TemporaryDirectory() as tmp:
         tb_writer = SummaryWriter(tmp)
-        experiment.train_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
+        experiment.main_fn(ddp_model, trainloader, f"cuda:{device}", rank, tb_writer)
         tb_writer.flush()
         tb_writer.close()
 

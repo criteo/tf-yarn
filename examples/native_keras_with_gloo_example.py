@@ -1,15 +1,22 @@
 """
-    Full example of using TF-Yarn to run Keras on YARN.
+Full example of using TF-Yarn to run Keras on YARN.
+
+1. Download winequality-red.csv from the Wine Quality dataset at UCI
+    ML repository
+    (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
+2. Upload it to HDFS
 """
+
+
 import logging
 logging.basicConfig(level="INFO") # noqa
 import getpass
 import os
-
 from datetime import datetime
 
 import cluster_pack
-from tf_yarn.tensorflow import TaskSpec, KerasExperiment, run_on_yarn, get_safe_experiment_fn
+from cluster_pack import filesystem
+from tf_yarn.tensorflow import TaskSpec, KerasExperiment, run_on_yarn
 import winequality
 import tensorflow as tf
 
@@ -24,27 +31,17 @@ except (ModuleNotFoundError):
     )
     pass
 
-USER = getpass.getuser()
 
-"""
-1. Download winequality-*.csv from the Wine Quality dataset at UCI
-   ML repository
-   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
-2. Upload it to HDFS
-3. Pass a full URI to either of the CSV files to the example
-"""
+USER = getpass.getuser()
 WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
 
-"""
-Output path of the learned model on hdfs
-"""
+# Output path of the learned model on hdfs
 HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
-
 HVD_SIZE = 2
 
 
-def experiment_fn(hdfs_dir: str) -> KerasExperiment:
+def experiment_fn() -> KerasExperiment:
     def convert_to_tensor(x, y):
         return (tf.convert_to_tensor(value=list(x.values()), dtype=tf.float32),
                 tf.convert_to_tensor(value=y, dtype=tf.int32))
@@ -72,7 +69,7 @@ def experiment_fn(hdfs_dir: str) -> KerasExperiment:
     model.compile(loss='sparse_categorical_crossentropy',
                   optimizer=opt,
                   metrics=['accuracy'])
-    path_to_checkpoint = f"{hdfs_dir}" + "/checkpoint-{epoch}"
+    path_to_checkpoint = f"{HDFS_DIR}" + "/checkpoint-{epoch}"
     my_callbacks = [
         tf.keras.callbacks.ModelCheckpoint(path_to_checkpoint),
         hvd.keras.callbacks.BroadcastGlobalVariablesCallback(0),
@@ -83,23 +80,20 @@ def experiment_fn(hdfs_dir: str) -> KerasExperiment:
     }
     return KerasExperiment(
         model=model,
-        model_dir=hdfs_dir,
+        model_dir=HDFS_DIR,
         train_params=train_params,
         input_data_fn=input_data_fn,
         target_data_fn=None,
         validation_data_fn=validation_data_fn)
 
 
-# there seem to be pickling issues with Keras
-# the experiment function is uploaded without pickling the experiment
-# also see https://github.com/tensorflow/tensorflow/issues/32159
-def get_safe_exp_fn():
-    return get_safe_experiment_fn("native_keras_with_gloo_example.experiment_fn", HDFS_DIR)
-
-
 def main():
+    fs, _ = filesystem.resolve_filesystem_and_path(WINE_EQUALITY_FILE)
+    if not fs.exists(WINE_EQUALITY_FILE):
+        raise Exception(f"{WINE_EQUALITY_FILE} not found")
+
     run_on_yarn(
-        get_safe_exp_fn(),
+        experiment_fn,
         task_specs={
             "chief": TaskSpec(memory="2 GiB", vcores=4),
             "worker": TaskSpec(memory="2 GiB", vcores=4, instances=(HVD_SIZE - 1)),

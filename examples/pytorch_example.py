@@ -1,5 +1,6 @@
 import os
-import time
+import getpass
+from uuid import uuid4
 
 import torch
 import torch.nn as nn
@@ -34,7 +35,7 @@ class Net(nn.Module):
         return x
 
 
-def training_loop(
+def main_fn(
     model: torch.nn.Module,
     trainloader: torch.utils.data.dataloader.DataLoader,
     device: str,
@@ -44,7 +45,8 @@ def training_loop(
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
-    model_ckpt_path = "viewfs://root/user/g.racic/toy_model_ckpt"
+    model_ckpt_path = f"viewfs://root/user/{getpass.getuser()}/toy_model_ckpt_{str(uuid4())}"
+    print(f"Will checkpoint model in {model_ckpt_path}")
 
     train_ite_num = 0
     running_loss = 0.0
@@ -84,7 +86,7 @@ def experiment_fn():
 
     return PytorchExperiment(
         model=Net(),
-        train_fn=training_loop,
+        main_fn=main_fn,
         train_dataset=trainset,
         dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
         n_workers_per_executor=2

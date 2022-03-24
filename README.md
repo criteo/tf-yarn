@@ -1,34 +1,30 @@
-# tf-yarnᵝ
-
-tf-yarn is a Python library we have built at Criteo for training TensorFlow models on a Hadoop/YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
-
-It supports running on one worker or on multiple workers with different distribution strategies and it can run on CPUs or GPUs using just a few lines of code.
-
-Its API provides an easy entry point for working with Estimators and Keras. Please refer to the [examples](https://github.com/criteo/tf-yarn/tree/master/examples) for some code samples.
-
-[MLflow](https://www.mlflow.org/docs/latest/quickstart.html) is supported for all kind of trainings (one worker/distributed).
-More infos [here](https://github.com/criteo/tf-yarn/blob/master/docs/MLflow.md).
-
-[Tensorboard](https://github.com/criteo/tf-yarn/blob/master/docs/Tensorboard.md) can be spawned in a separate container during learnings.
-
-Two alternatives to TensorFlow's distribution strategies are available:
-[Horovod with gloo](https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md) and [tf-collective-all-reduce](https://github.com/criteo/tf-collective-all-reduce)
+# tf-yarn
 
 ![tf-yarn](https://github.com/criteo/tf-yarn/blob/master/skein.png?raw=true)
 
-## Installation
+tf-yarn is a Python library we have built at Criteo for training Pytorch and TensorFlow models on a Hadoop/YARN cluster. An introducing blog post can be found [here](https://medium.com/criteo-labs/train-tensorflow-models-on-yarn-in-just-a-few-lines-of-code-ba0f354f38e3).
 
-### Install with Pip
+It supports mono and multi-worker training, different distribution strategies and can run on CPUs or GPUs with just a few lines of code.
 
-Note that in order to support both tensorflow cpu and gpu in a single package, tf-yarn doesn't depend directly on tensorflow.
-You can either run `pip install tf-yarn` then install tensorflow or tensorflow_gpu, or use `pip install tf-yarn[cpu]` to do it all in one command.
-The supported versions of tensorflow are in the range 1.15.0 to 2.2.0. Install a version in that range to use tf yarn.
+
+# Prerequisites
+
+tf-yarn only supports Python ≥3.6.
+
+
+# Installation
+
+Note that tf-yarn does not directly depends on the ML frameworks it supports (TensorFlow, torch ...). That way, TensorFlow users don't install torch and conversely by installing tf-yarn. So you must install the ML framework(s) that you use separately (`pip install tensorflow`, `pip install torch` ...).
+
+
+## Install with Pip
 
 ```bash
-$ pip install tf-yarn[cpu]
+$ pip install tf-yarn
 ```
 
-### Install from source
+
+## Install from source
 
 ```bash
 $ git clone https://github.com/criteo/tf-yarn
@@ -36,11 +32,12 @@ $ cd tf-yarn
 $ pip install .
 ```
 
-### Prerequisites
 
-tf-yarn only supports Python ≥3.6.
+# TensorFlow prerequisites
 
-Make sure to have Tensorflow working with HDFS by setting up all the environment variables as described [here](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/hadoop.md).
+Supported versions: [1.15.0 to 2.2.0].
+
+Make sure to have Tensorflow working with HDFS by setting up all the environment variables as described [here](https://docs.w3cub.com/tensorflow~guide/deploy/hadoop).
 
 You can run the `check_hadoop_env` script to check that your setup is OK (it has been installed by tf_yarn):
 
@@ -57,237 +54,285 @@ $ check_hadoop_env
 # INFO:tf_yarn.bin.check_hadoop_env:Hadoop setup: OK
 ```
 
-### run_on_yarn
 
-The only abstraction tf-yarn adds on top of the ones already present in
-TensorFlow is `experiment_fn`. It is a function returning a triple (wrapped in an `Experiment` object) of one `Estimator` and two specs -- `TrainSpec` and `EvalSpec`.
+# Quick start
 
-Here is a stripped down `experiment_fn` from one of the provided [examples][linear_classifier_example] to give you an idea of how it might look:
+Distributing the training of a model with tf-yarn can be decomposed in two steps:
+1. Describe your experiment: write the code that will be executed by the workers involved in the training. This includes the instantiation of the model to train, the training dataset (optionally the validation dataset) and the training loop.
+2. Run your experiment: execute your code on yarn.
+
+Refer to the part dedicated to your ML framework (TensorFlow, Pytorch ...) for a detailed description of these two steps
+
+
+## TensorFlow
+
+tf-yarn supports Keras API and the Estimator API (which was the only high-level API of the first TensorFlow releases).
+
+
+### Describe your experiment
+
+
+#### Keras API
+
+A Keras experiment is described by an instance of `tf_yarn.tensorflow.KerasExperiment` composed of the following elements:
+
+- model: compiled Keras model to train
+- model_dir: location where the model will be checkpointed
+- train_params: training parameters that will be provided `model.fit`. This does not include the training examples (input and target data)
+- input_data_fn: function returning the input data (features only) to train the model on
+- target_data_fn: function returning the target data (labels only) to train the model on
+- validation_data_fn: function returning the data to evaluate the model on
+
+Example:
 
 ```python
-from tf_yarn import Experiment
+from tf_yarn.tensorflow import KerasExperiment
+
+def input_data_fn():
+    dataset = ...
+    return dataset
+        .shuffle(1000)
+        .batch(128)
+        .repeat()
+
+def validation_data_fn():
+    dataset = ...
+    return dataset
+        .shuffle(1000)
+        .batch(128)
+
+model = tf.keras.Sequential()
+...
+opt = tf.keras.optimizers.Adadelta(1.0 * HVD_SIZE)
+model.compile(loss='sparse_categorical_crossentropy',
+                optimizer=opt,
+                metrics=['accuracy'])
+train_params = {
+    "steps_per_epoch": 100,
+    "callbacks": my_callbacks
+}
+
+experiment = KerasExperiment(
+    model=model,
+    model_dir=hdfs_dir,
+    train_params=train_params,
+    input_data_fn=input_data_fn,
+    target_data_fn=None,
+    validation_data_fn=validation_data_fn
+)
+```
+
+
+#### Estimator API
+
+The experiment is described by an instance of `tf_yarn.tensorflow.Experiment` composed of the following elements:
+- estimator: the model to train
+- train_spec: an instance of [tf.estimator.TrainSpec](https://www.tensorflow.org/api_docs/python/tf/estimator/TrainSpec)
+- eval_spec: an instance of [tf.estimator.EvalSpec](https://www.tensorflow.org/api_docs/python/tf/estimator/EvalSpec)
+
+```python
+from tf_yarn.tensorflow import Experiment
+
+estimator = tf.estimator.Estimator(model_fn=model_fn)
+train_spec = tf.estimator.TrainSpec(input_fn, max_steps=1)
+eval_spec = tf.estimator.EvalSpec(input_fn, steps=1)
+experiment = Experiment(estimator, train_spec, eval_spec)
+```
+
+
+### Run your experiment
+
+To run your experiment on yarn, simply call the method `tf_yarn.tensorflow.run_on_yarn`. The only mandatory parameter is experiment_fn which must be a function accepting no parameter and returning your object `tf_yarn.tensorflow.KerasExperiment` or `tf_yarn.tensorflow.Experiment` which describes your experiment.
+
+```python
+from tf_yarn.tensorflow import run_on_yarn, KerasExperiment
 
 def experiment_fn():
-  # ...
-  estimator = tf.estimator.DNNClassifier(...)
-  return Experiment(
-    estimator,
-    tf.estimator.TrainSpec(train_input_fn, max_steps=...),
-    tf.estimator.EvalSpec(eval_input_fn)
- )
+    ...
+    return KerasExperiment(
+        model=model,
+        model_dir=hdfs_dir,
+        train_params=train_params,
+        input_data_fn=input_data_fn,
+        target_data_fn=None,
+        validation_data_fn=validation_data_fn
+    )
+
+run_on_yarn(
+    experiment_fn
+)
 ```
 
-An experiment can be scheduled on YARN using the run_on_yarn function which takes three required arguments:
-
-- `pyenv_zip_path` which contains the tf-yarn modules and dependencies like TensorFlow to be shipped to the cluster. pyenv_zip_path can be generated easily with a helper function based on the current installed virtual environment;
-- `experiment_fn` as described above;
-- `task_specs` dictionary specifying how much resources to allocate for each of the distributed TensorFlow task type.
-
-The example uses the [Wine Quality][wine-quality] dataset from UCI ML repository. With just under 5000 training instances available, there is no need for multi-node training, meaning that a chief complemented by an evaluator would manage just fine. Note that each task will be executed in its own YARN container.
+The default distribution strategy is [ParameterServerStrategy](https://www.tensorflow.org/tutorials/distribute/parameter_server_training) which belongs to the group of asynchronous distribution strategies.
+Although this distribution strategy works very well with the Estimator API, we did not manage to make it work with the Keras API (with TensorFlow <= 2.2). So we advise Keras users to use [horovod gloo](https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md) for distributing the training. Note that horovod gloo is a synchronous distribution strategy based on all-reduce ops:
 
 ```python
-from tf_yarn import TaskSpec, run_on_yarn
-import cluster_pack
+from tf_yarn.tensorflow import run_on_yarn, KerasExperiment
 
-pyenv_zip_path, _ = cluster_pack.upload_env()
+def experiment_fn():
+    ...
+    return KerasExperiment(
+        model=model,
+        model_dir=hdfs_dir,
+        train_params=train_params,
+        input_data_fn=input_data_fn,
+        target_data_fn=None,
+        validation_data_fn=validation_data_fn
+    )
+
 run_on_yarn(
-    pyenv_zip_path,
+    experiment_fn,
+    custom_task_module="tf_yarn.tensorflow.tasks.gloo_allred_task"
+)
+```
+
+
+## Pytorch
+
+
+### Describe your experiment
+
+A Pytorch experiment is described by an instance of `tf_yarn.pytorch.PytorchExperiment` composed of the following elements:
+
+- model: model to train
+- main_fn: Main function run to train the model. This function is executed by all workers involved in the training. It must accept these inputs: model to train, train dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...) allocated to the worker for the training and rank (worker id).
+- Training dataset: instannce of `torch.utils.data.Dataset` used to train the model.
+- dataloader_args: parameters (batch size, number of workers, collate function ...) passed to the dataloader used to load and iterate over the training dataset. Instance of `DataLoaderArgs`.
+- n_workers_per_executor: number of workers per yarn executor.
+- tensorboard_hdfs_dir: HDFS directory where tensorboard results will be written at the end of the training
+- ddp_args: DistributedDataParallel parameters. Refer to [Pytorch documentation](https://pytorch.org/docs/stable/_modules/torch/nn/parallel/distributed.html#DistributedDataParallel). Instance of `DistributedDataParallelArgs`
+
+```python
+from tf_yarn.pytorch import PytorchExperiment
+
+def main_fn(
+    model: torch.nn.Module,
+    trainloader: torch.utils.data.dataloader.DataLoader,
+    device: str,
+    rank: int
+):
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    for epoch in range(10):
+        trainloader.sampler.set_epoch(epoch)
+        for i, data in enumerate(trainloader, 0):
+            ...
+
+transform = transforms.Compose(
+    [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+)
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True, transform=transform)
+
+experiment = PytorchExperiment(
+    model=model,
+    main_fn=main_fn,
+    train_dataset=trainset,
+    dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
+    n_workers_per_executor=2
+)
+```
+
+
+### Run your experiment
+
+To run your experiment on yarn, simply call the method `tf_yarn.pytorch.run_on_yarn`. The only mandatory parameters are:
+- experiment_fn: must be a function accepting no parameter and returning your object `tf_yarn.pytorch.PytorchExperiment` which describes your experiment.
+- task_specs: describe yarn resources that you want to use for your experiment.
+
+```python
+from tf_yarn.pytorch import run_on_yarn, PytorchExperiment, TaskSpec
+
+def experiment_fn():
+    ...
+    return PytorchExperiment(
+        model=model,
+        main_fn=main_fn,
+        train_dataset=trainset,
+        dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
+        n_workers_per_executor=2
+    )
+
+run_on_yarn(
     experiment_fn,
     task_specs={
-        "chief": TaskSpec(memory="2 GiB", vcores=4),
-        "evaluator": TaskSpec(memory="2 GiB", vcores=1),
-        "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
+        "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)
     }
 )
 ```
 
-The final bit is to forward the `winequality.py` module to the YARN containers,
-in order for the tasks to be able to import them:
+The distribution strategy is [DistributedDataParallel](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) which belongs to the family of synchronous distribution strategies.
+
+
+# run_on_yarn
+
+The method run_on_yarn exposes several parameters that let you configure the yarn job that will be created to train your model on yarn:
+
+- `pyenv_zip_path`: Path to an archive of your python environment that will be used by executors to run your experiment. It can be a zipped conda env or a pex archive.
+If your python environement is different between CPU and GPU, you can provide a dictionnary from `tf_yarn.topologies.NodeLabel` to a python environment. Example:
 
 ```python
-run_on_yarn(
-    ...,
-    files={
-        os.path.basename(winequality.__file__): winequality.__file__,
-    }
-)
-```
-
-Under the hood, the experiment function is shipped to each container, evaluated and then passed to the `train_and_evaluate` function.
-
-```python
-experiment = experiment_fn()
-tf.estimator.train_and_evaluate(
-  experiment.estimator,
-  experiment.train_spec,
-  experiment.eval_spec
-)
-```
-
-[linear_classifier_example]: https://github.com/criteo/tf-yarn/blob/master/examples/linear_classifier_example.py
-[wine-quality]: https://archive.ics.uci.edu/ml/datasets/Wine+Quality
-
-### Specificities using native Keras models instead of estimators
-
-When using a Keras model that is not converted into an estimator, `experiment_fn` returns a tuple (wrapped in a `KerasExperiment` object) composed of the following elements:
-
-- `model`: the compiled Keras model
-- `model_dir`: the location at which the model and its checkpoints will be saved
-- `train_params`: parameters that will be passed to the model fit method exluding input and target data
-- `input_data_fn`: function returning input data for the model fit method
-- `target_data_fn`: function returning target data for the model fit method
-- `validation_data_fn`: function returning input data for the model evaluate method
-
-Currently, Keras models are only supported using Horovod with Gloo as a distribution strategy (and not using MultiWorkerMirroredStrategy). Moreover, Keras models are only supported using Tensorflow 2. We provide an example describing how to use a Keras model with Horovod [examples][native_keras_with_gloo_example].
-
-## Distributed TensorFlow
-
-The following is a brief summary of the core distributed TensorFlow concepts relevant to training [estimators](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate) with the ParameterServerStrategy, as it is the distribution strategy activated by default when training Estimators on multiple nodes.
-
-Distributed TensorFlow operates in terms of tasks.
-A task has a type which defines its purpose in the distributed TensorFlow cluster:
-- `worker` tasks headed by the `chief` doing model training
-- `chief` task additionally handling checkpoints, saving/restoring the model, etc.
-- `ps`  tasks (aka parameter servers) storing the model itself. These tasks typically do not compute anything.
-Their sole purpose is serving the model variables
-- `evaluator` task periodically evaluating the model from the saved checkpoint
-
-The types of tasks can depend on the distribution strategy, for example, ps tasks are only used by ParameterServerStrategy.
-The following picture presents an example of a cluster setup with 2 workers, 1 chief, 1 ps and 1 evaluator.
-
-```
-+-----------+              +---------+   +----------+   +----------+
-| evaluator |        +-----+ chief:0 |   | worker:0 |   | worker:1 |
-+-----+-----+        |     +----^----+   +-----^----+   +-----^----+
-      ^              |          |            |              |
-      |              v          |            |              |
-      |        +-----+---+      |            |              |
-      |        | model   |   +--v---+        |              |
-      +--------+ exports |   | ps:0 <--------+--------------+
-               +---------+   +------+
-```
-
-The cluster is defined by a ClusterSpec, a mapping from task types to their associated network addresses. For instance, for the above example, it looks like that:
-
-```
-{
-  "chief": ["chief.example.com:2125"],
-  "worker": ["worker0.example.com:6784",
-             "worker1.example.com:6475"],
-  "ps": ["ps0.example.com:7419"],
-  "evaluator": ["evaluator.example.com:8347"]
-}
-```
-Starting a task in the cluster requires a ClusterSpec. This means that the spec should be fully known before starting any of the tasks.
-
-Once the cluster is known, we need to export the ClusterSpec through the [TF_CONFIG](https://cloud.google.com/ml-engine/docs/tensorflow/distributed-training-details) environment variable and start the TensorFlow server on each container.
-
-Then we can run the [train-and-evaluate](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate) function on each container.
-We just launch the same function as in local training mode, TensorFlow will automatically detect that we have set up a ClusterSpec and start a distributed learning.
-
-You can find more information about distributed Tensorflow [here](https://github.com/tensorflow/examples/blob/master/community/en/docs/deploy/distributed.md) and about distributed training Estimators [here](https://www.tensorflow.org/api_docs/python/tf/estimator/train_and_evaluate).
-
-## Training with multiple workers
-
-Activating the previous example in tf-yarn is just changing the cluster_spec by adding the additional `worker` and `ps` instances: 
-
-```python
-run_on_yarn(
-    ...,
-    task_specs={
-        "chief": TaskSpec(memory="2 GiB", vcores=4),
-        "worker": TaskSpec(memory="2 GiB", vcores=4, instances=2),
-        "ps": TaskSpec(memory="2 GiB", vcores=8),
-        "evaluator": TaskSpec(memory="2 GiB", vcores=1),
-        "tensorboard": TaskSpec(memory="2 GiB", vcores=1)
-    }
-)
-```
-
-## Configuring the Python interpreter and packages
-
-tf-yarn uses [cluster-pack](https://github.com/criteo/cluster-pack) to to ship an isolated virtual environment to the containers.
-(You should have installed the dependencies from `requirements.txt` into your virtual environment first `pip install -r requirements.txt`)
-This works if you use Anaconda and also with [Virtual Environments](https://docs.python.org/3/tutorial/venv.html).
-
-By default the generated package is a [pex][pex] package. cluster-pack will generate the pex package, upload it to hdfs and you can start tf_yarn by providing the hdfs path.
-
-```python
-import cluster_pack
-pyenv_zip_path, env_name = cluster_pack.upload_env()
-run_on_yarn(
-    pyenv_zip_path=pyenv_zip_path
-)
-```
-
-If you hosting evironment is Anaconda `upload_env` the packaging module will use [conda-pack][conda-pack] to create the package.
-
-You can also directly use the command line tools provided by [conda-pack][conda-pack] and [pex][pex] to generate the packages.
-
-For pex you can run this command in the root directory to create the package (it includes all requirements from setup.py)
-```
-pex . -o myarchive.pex
-```
-
-You can then run tf-yarn with your generated package:
-
-```python
-run_on_yarn(
-    pyenv_zip_path="myarchive.pex"
-)
-```
-
-[conda-pack]: https://conda.github.io/conda-pack/
-[pex]: https://pex.readthedocs.io/en/stable/
-
-## Running on GPU
-
-YARN does not have first-class support for GPU resources. A common workaround is
-to use [node labels][node-labels] where CPU-only nodes are unlabelled, while
-the GPU ones have a label. Furthermore, in this setting GPU nodes are
-typically bound to a separate queue which is different from the default one.
-
-Currently, tf-yarn assumes that the GPU label is ``"gpu"``. There are no
-assumptions on the name of the queue with GPU nodes, however, for the sake of
-example we wil use the name ``"ml-gpu"``.
-
-The default behaviour of `run_on_yarn` is to run on CPU-only nodes. In order
-to run on the GPU ones:
-
-1. Set the `queue` argument.
-2. Set `TaskSpec.label` to `NodeLabel.GPU` for relevant task types.
-   A good rule of a thumb is to run compute heavy `"chief"` and `"worker"`
-   tasks on GPU, while keeping `"ps"` and `"evaluator"` on CPU.
-
-```python
-import getpass
-import cluster_pack
 from tf_yarn import NodeLabel
-
-
-pyenv_zip_path, _ = cluster_pack.upload_env()
+...
 run_on_yarn(
-    pyenv_zip_path
-    experiment_fn,
+    ...,
+    pyenv_zip_path={
+        NodeLabel.CPU: "viewfs://root/path/to/env-cpu",
+        NodeLabel.GPU: "viewfs://root/path/to/env-gpu"
+    }
+)
+```
+
+If no archive is provided, tf-yarn will automatically package your active python environment in a pex.
+
+
+- `task_specs`: used to define the resources that you need for your experiment. Dictionary from task names (ps, worker, chief, evaluator, tensorboard ...) to `tf_yarn.topologies.TaskSpec`. Example:
+
+```python
+from tf_yarn import TaskSpec, NodeLabel
+...
+run_on_yarn(
+    ...,
     task_specs={
-        "chief": TaskSpec(memory="2 GiB", vcores=4, label=NodeLabel.GPU),
-        "evaluator": TaskSpec(memory="1 GiB", vcores=1)
-    },
+        "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU),
+        "tensorboard": TaskSpec(memory=16*2**10, vcores=4, instances=1, label=NodeLabel.CPU)
+    }
+)
+```
+
+In this example, we are requesting 2 executors with GPUs, 48 vcores and 48 GBs for workers and 1 executor with 4 vcores and 16 GBs for tensorboard.
+
+
+- `files`: local files or directories to upload on the executors. Dictionary from target location (on executor) to local location (on your local machine). Target locations must be relative to the executor root directory. Note that the executor root directory is appended to ``PYTHONPATH``. Therefore, any listed Python module will be importable.
+
+
+- `env`: environment variables to set on executors. Dictionary from variable name to variable value. Example:
+
+```python
+run_on_yarn(
+    ...,
+    env={"HADOOP_CONF_DIR": "/etc/hadoop/conf.all"}
+)
+```
+
+
+- `queue`: yarn queue to schedule your job in. Example:
+
+```python
+run_on_yarn(
+    ...,
     queue="ml-gpu"
 )
 ```
-The previous example applies to TensorFlow >= 1.15.
-For TensorFlow < 1.15 you need to call upload_env with tensorflow-gpu package and provide it to `run_on_yarn`.
 
-[node-labels]: https://hadoop.apache.org/docs/stable/hadoop-yarn/hadoop-yarn-site/NodeLabel.html
 
-## Accessing HDFS in the presence of [federation][federation]
+- `acls`: configures the application-level Access Control Lists (ACLs). Optional, defaults to ACLs all access. See `ACLs <https://jcrist.github.io/skein/specification.html#acls>` for details.
 
-`skein` the library underlying `tf_yarn` automatically acquires a delegation token
+
+- `file_systems`: `skein` the library underlying `tf_yarn` automatically acquires a delegation token
 for ``fs.defaultFS`` on security-enabled clusters. This should be enough for most
 use-cases. However, if your experiment needs to access data on namenodes other than
-the default one, you have to explicitly list them in the `file_systems` argument
-to `run_on_yarn`. This would instruct `skein` to acquire a delegation token for
+the default one, you have to explicitly list them in the `file_systems` argument. This would instruct `skein` to acquire a delegation token for
 these namenodes in addition to ``fs.defaultFS``:
 
 ```python
@@ -297,22 +342,17 @@ run_on_yarn(
 )
 ```
 
-Depending on the cluster configuration, you might need to point libhdfs to a
-different configuration folder. For instance:
+- `nb_retries`: number of times the yarn application is retried in case of failures
 
-```python
-run_on_yarn(
-    ...,
-    env={"HADOOP_CONF_DIR": "/etc/hadoop/conf.all"}
-)
-```
+- `name`: Name of the yarn application
 
-[federation]: https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/Federation.html
 
-## Running model evaluation independently
+# Model evaluation
+
+This feature is not supported for Pytorch.
 
 Model training and model evaluation can be run independently. To do so, you must
-use parameter `custom_task_module` of `run_on_yarn`.
+use the parameter `custom_task_module` of `run_on_yarn`.
 
 To run model training without evaluation:
 ```python
@@ -337,3 +377,18 @@ run_on_yarn(
     custom_task_module="tf_yarn.tasks.evaluator_task"
 )
 ```
+
+# Examples
+
+Please refer to the various examples available in [examples](https://github.com/criteo/tf-yarn/tree/master/examples)
+
+
+# Other documentations
+
+[MLflow](https://www.mlflow.org/docs/latest/quickstart.html) to track experiments.
+More infos [here](https://github.com/criteo/tf-yarn/blob/master/docs/MLflow.md).
+
+[Tensorboard](https://github.com/criteo/tf-yarn/blob/master/docs/Tensorboard.md) can be spawned in a separate container during learnings.
+
+Two alternatives to TensorFlow's distribution strategies are available:
+[Horovod with gloo](https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md) and [tf-collective-all-reduce](https://github.com/criteo/tf-collective-all-reduce)

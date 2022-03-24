@@ -77,8 +77,8 @@ tf-yarn supports Keras API and the Estimator API (which was the only high-level 
 A Keras experiment is described by an instance of `tf_yarn.tensorflow.KerasExperiment` composed of the following elements:
 
 - model: compiled Keras model to train
-- model_dir: location where the model will be checkpointed
-- train_params: training parameters that will be provided `model.fit`. This does not include the training examples (input and target data)
+- model_dir: hdfs directory where the model will be checkpointed
+- train_params: training parameters that will be provided to `model.fit`. This does not include the training examples (input and target data)
 - input_data_fn: function returning the input data (features only) to train the model on
 - target_data_fn: function returning the target data (labels only) to train the model on
 - validation_data_fn: function returning the data to evaluate the model on
@@ -196,11 +196,11 @@ A Pytorch experiment is described by an instance of `tf_yarn.pytorch.PytorchExpe
 
 - model: model to train
 - main_fn: Main function run to train the model. This function is executed by all workers involved in the training. It must accept these inputs: model to train, train dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...) allocated to the worker for the training and rank (worker id).
-- Training dataset: instannce of `torch.utils.data.Dataset` used to train the model.
-- dataloader_args: parameters (batch size, number of workers, collate function ...) passed to the dataloader used to load and iterate over the training dataset. Instance of `DataLoaderArgs`.
+- Training dataset: training dataset (instance of `torch.utils.data.Dataset`).
+- dataloader_args: parameters (batch size, number of workers, collate function ...) passed to the dataloader used to load and iterate over the training dataset. Instance of `tf_yarn.pytorch.DataLoaderArgs`.
 - n_workers_per_executor: number of workers per yarn executor.
 - tensorboard_hdfs_dir: HDFS directory where tensorboard results will be written at the end of the training
-- ddp_args: DistributedDataParallel parameters. Refer to [Pytorch documentation](https://pytorch.org/docs/stable/_modules/torch/nn/parallel/distributed.html#DistributedDataParallel). Instance of `DistributedDataParallelArgs`
+- ddp_args: DistributedDataParallel parameters. Refer to [Pytorch documentation](https://pytorch.org/docs/stable/_modules/torch/nn/parallel/distributed.html#DistributedDataParallel). Instance of `tf_yarn.pytorch.DistributedDataParallelArgs`
 
 ```python
 from tf_yarn.pytorch import PytorchExperiment
@@ -216,7 +216,8 @@ def main_fn(
     for epoch in range(10):
         trainloader.sampler.set_epoch(epoch)
         for i, data in enumerate(trainloader, 0):
-            ...
+            data = data.to(rank)
+            prediction = model(data)
 
 transform = transforms.Compose(
     [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]

@@ -9,7 +9,9 @@ except ModuleNotFoundError:
     warnings.warn(str)
 
 from tf_yarn.pytorch.client import run_on_yarn
-from tf_yarn.pytorch.experiment import PytorchExperiment, DataLoaderArgs
+from tf_yarn.pytorch.experiment import (
+    PytorchExperiment, DataLoaderArgs, DistributedDataParallelArgs
+)
 from tf_yarn.client import get_safe_experiment_fn, RunFailed
 from tf_yarn.metrics import Metrics
 from tf_yarn.topologies import (
@@ -19,5 +21,5 @@ from tf_yarn.topologies import (
 
 __all__ = [
     "PytorchExperiment", "DataLoaderArgs", "run_on_yarn", "RunFailed", "Metrics",
-    "TaskSpec", "NodeLabel", "get_safe_experiment_fn"
+    "TaskSpec", "NodeLabel", "get_safe_experiment_fn", "DistributedDataParallelArgs"
 ]

@@ -76,7 +76,7 @@ def main():
     fs, _ = filesystem.resolve_filesystem_and_path(WINE_EQUALITY_FILE)
     if not fs.exists(WINE_EQUALITY_FILE):
         raise Exception(f"{WINE_EQUALITY_FILE} not found")
-    
+
     # forcing call to model_to_estimator._save_first_checkpoint l457
     # https://github.com/tensorflow/estimator/blob/ \
     # 1d55f01d8af871a35ef83fc3354b9feaa671cbe1/tensorflow_estimator/python/estimator/keras.py

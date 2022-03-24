@@ -1,6 +1,8 @@
 """
 Example of using horovod
 """
+
+
 import logging
 logging.basicConfig(level="INFO") # noqa
 import os

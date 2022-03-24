@@ -1,38 +1,30 @@
 """
 Example of using LinearClassifier
-"""
-import logging
-logging.basicConfig(level="INFO") # noqa
-import os
-import pwd
-import getpass
-import sys
-import warnings
-import typing
-import skein
 
-from functools import partial
-from subprocess import check_output
-from datetime import datetime
-
-import cluster_pack
-from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
-import winequality
-
-USER = getpass.getuser()
-
-"""
-1. Download winequality-*.csv from the Wine Quality dataset at UCI
+1. Download winequality-red.csv from the Wine Quality dataset at UCI
    ML repository
    (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
 2. Upload it to HDFS
-3. Pass a full URI to either of the CSV files to the example
 """
-WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
 
-"""
-Output path of the learned model on hdfs
-"""
+
+import logging
+logging.basicConfig(level="INFO") # noqa
+import os
+import getpass
+
+from datetime import datetime
+
+import cluster_pack
+from cluster_pack import filesystem
+import winequality
+
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
+
+
+USER = getpass.getuser()
+WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
+# Output path of the learned model on hdfs
 HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
@@ -67,6 +59,10 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
+    fs, _ = filesystem.resolve_filesystem_and_path(WINE_EQUALITY_FILE)
+    if not fs.exists(WINE_EQUALITY_FILE):
+        raise Exception(f"{WINE_EQUALITY_FILE} not found")
+
     run_on_yarn(
         experiment_fn,
         task_specs={

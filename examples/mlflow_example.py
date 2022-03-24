@@ -1,35 +1,33 @@
 """
 Example of using simple identity Estimator which just returns the input
+
+1. Download winequality-red.csv from the Wine Quality dataset at UCI
+   ML repository
+   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
+2. Upload it to HDFS
 """
+
+
 import logging
 logging.basicConfig(level="INFO") # noqa
 import os
 import getpass
-import mlflow
 import requests
-
 from datetime import datetime
 
+import mlflow
 import cluster_pack
-from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
+from cluster_pack import filesystem
 import winequality
+
+from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
+
 
 logger = logging.getLogger(__name__)
 
 USER = getpass.getuser()
-
-"""
-1. Download winequality-*.csv from the Wine Quality dataset at UCI
-   ML repository
-   (https://archive.ics.uci.edu/ml/datasets/Wine+Quality).
-2. Upload it to HDFS
-3. Pass a full URI to either of the CSV files to the example
-"""
 WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
-
-"""
-Output path of the learned model on hdfs
-"""
+# Output path of the learned model on hdfs
 HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
@@ -37,7 +35,7 @@ HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
 def _get_fs_for_tests():
     criteo_env = os.getenv("CRITEO_ENV", "")
     if criteo_env:
-        return f"viewfs://{criteo_env}-pa4"
+        return f"viewfs://{criteo_env}-am6"
     else:
         return cluster_pack.get_default_fs()
 
@@ -75,6 +73,10 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
+    fs, _ = filesystem.resolve_filesystem_and_path(WINE_EQUALITY_FILE)
+    if not fs.exists(WINE_EQUALITY_FILE):
+        raise Exception(f"{WINE_EQUALITY_FILE} not found")
+
     # you need to install mlflow `pip install mlflow`
     # and set MLflow tracking uri
     mlflow.set_tracking_uri(os.getenv("CRITEO_MLFLOW_TRACKING_URI", ""))

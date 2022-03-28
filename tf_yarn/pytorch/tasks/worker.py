@@ -42,6 +42,12 @@ def _create_dataloader(
     sampler: Optional[DistributedSampler] = \
         DistributedSampler(dataset, shuffle=dataloader_args.shuffle) \
         if not isinstance(dataset, torch.utils.data.IterableDataset) else None
+    if not dataloader_args.drop_last:
+        _logger.error("/!\ Not dropping the last batch could result in a smaller "
+                      "batch size which could block your distributed training when aggregating "
+                      "tensors with allreduce/allgather. It will cause a memory corruption on "
+                      "the worker processing the smaller batch size and your training will fail "
+                      "or simply freeze. We strongly encourage setting DataLoaderArgs.drop_last to True")
     return torch.utils.data.DataLoader(
         dataset, sampler=sampler, batch_size=dataloader_args.batch_size,
         num_workers=dataloader_args.num_workers, pin_memory=dataloader_args.pin_memory,

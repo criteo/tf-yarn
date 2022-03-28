@@ -7,7 +7,12 @@ class DataLoaderArgs(NamedTuple):
     batch_size: Optional[int] = 1
     num_workers: int = 0
     pin_memory: bool = False
-    drop_last: bool = False
+    # /!\ Not dropping the last batch could result in a smaller
+    # batch size which could block your distributed training when aggregating
+    # tensors with allreduce/allgather. It will cause a memory corruption on
+    # the worker processing the smaller batch size and your training will fail
+    # or simply freeze
+    drop_last: bool = True
     timeout: float = 0
     prefetch_factor: int = 2
     shuffle: bool = False

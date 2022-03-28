@@ -18,13 +18,14 @@ def find_latest_ckpt(model_dir: str) -> Optional[str]:
     latest_epoch = -1
     pattern = r".*model_(\d+).pt"
     resolved_fs, _ = filesystem.resolve_filesystem_and_path(model_dir)
-    for p in resolved_fs.ls(model_dir):
-        groups = re.match(pattern, p)
-        if groups:
-            epoch = int(groups.group(1))
-            if epoch > latest_epoch:
-                latest_ckpt = groups.group(0)
-                latest_epoch = epoch
+    if resolved_fs.exists(model_dir):
+        for p in resolved_fs.ls(model_dir):
+            groups = re.match(pattern, p)
+            if groups:
+                epoch = int(groups.group(1))
+                if epoch > latest_epoch:
+                    latest_ckpt = groups.group(0)
+                    latest_epoch = epoch
     return latest_ckpt
 
 

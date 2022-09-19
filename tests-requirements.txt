@@ -2,3 +2,7 @@ pytest
 pylama
 mypy==0.790
 mock
+
+# To fix module 'pyflakes.messages' has no attribute 'RedefinedInListComp'
+pyflakes==2.4.0
+pycodestyle==2.8.0

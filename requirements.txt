@@ -3,3 +3,4 @@ skein>=0.8,<0.9
 tensorboard<=2.4.1
 pyarrow
 psutil
+protobuf<4.21.0;python_version<"3.7"

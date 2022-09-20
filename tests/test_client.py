@@ -10,6 +10,7 @@ from tf_yarn.tensorflow.experiment import Experiment
 from tf_yarn.tensorflow.keras_experiment import KerasExperiment
 from tf_yarn.client import (
     _setup_cluster_spec,
+    _setup_to_use_cuda_archive,
     get_safe_experiment_fn,
     SkeinCluster,
     run_on_yarn,
@@ -47,6 +48,26 @@ def test_setup_cluster_spec(
     )
 
     assert json.loads(kv_store[constants.KV_CLUSTER_INSTANCES].decode()) == expected_spec
+
+
+def test_setup_to_use_cuda_archive():
+    actual_pre_script_hook = _setup_to_use_cuda_archive(
+        {"LD_LIBRARY_PATH": "cuda/usr/cuda-11.2/lib64"},
+        "",
+        "/user/prediction/cuda-runtimes/cuda-runtime-libs-11-2-2.tar.gz"
+    )
+    assert actual_pre_script_hook == \
+        "hdfs dfs -get /user/prediction/cuda-runtimes/cuda-runtime-libs-11-2-2.tar.gz; \
+         mkdir cuda; tar -xf cuda-runtime-libs-11-2-2.tar.gz -C ./cuda;"
+
+
+def test_setup_to_use_cuda_archive_without_env():
+    actual_pre_script_hook = _setup_to_use_cuda_archive(
+        {},
+        "",
+        "/user/prediction/cuda-runtimes/cuda-runtime-libs-11-2-2.tar.gz"
+    )
+    assert actual_pre_script_hook == ""
 
 
 def test_kill_skein_on_exception():

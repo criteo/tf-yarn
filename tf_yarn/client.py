@@ -150,6 +150,22 @@ def _maybe_zip_task_files(files, tempdir):
     return task_files
 
 
+def _setup_to_use_cuda_archive(
+    env: Dict[str, str],
+    pre_script_hook: str,
+    cuda_runtime_hdfs_path: str
+) -> str:
+    if "LD_LIBRARY_PATH" not in env:
+        logger.warning("No LD_LIBRARY_PATH found in env. \
+             Cuda archive won't be shipped and tensorflow will fallback to CPU usage.")
+        return pre_script_hook
+    cuda_archive_name = cuda_runtime_hdfs_path.split("/")[-1]
+    cuda_script = f"hdfs dfs -get {cuda_runtime_hdfs_path}; \
+         mkdir cuda; tar -xf {cuda_archive_name} -C ./cuda;"
+    pre_script_hook = f"{cuda_script}{pre_script_hook}"
+    return pre_script_hook
+
+
 def _setup_cluster_spec(
     task_instances: List[Tuple[str, int]],
     app: skein.ApplicationClient
@@ -172,13 +188,18 @@ def _setup_skein_cluster(
         file_systems: List[str] = None,
         name: str = "RunOnYarn",
         n_try: int = 0,
-        pre_script_hook: Optional[str] = None
+        pre_script_hook: Optional[str] = None,
+        cuda_runtime_hdfs_path: Optional[str] = None
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
         "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
         f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
     pre_script_hook = pre_script_hook if pre_script_hook else ""
+
+    if cuda_runtime_hdfs_path:
+        pre_script_hook = _setup_to_use_cuda_archive(env, pre_script_hook, cuda_runtime_hdfs_path)
+
     with tempfile.TemporaryDirectory() as tempdir:
         task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
         services = {}
@@ -279,7 +300,9 @@ def run_on_yarn(
     nb_retries: int = 0,
     custom_task_module: Optional[str] = None,
     name: str = "RunOnYarn",
-    pre_script_hook: Optional[str] = None
+    pre_script_hook: Optional[str] = None,
+    cuda_runtime_hdfs_path: Optional[str] = None
+
 ) -> Optional[metrics.Metrics]:
     """Run an experiment on YARN.
 
@@ -370,6 +393,13 @@ def run_on_yarn(
     pre_script_hook
         bash command to prepare Hadoop environment
 
+    cuda_runtime_hdfs_path
+        Path to the cuda runtime archive you want to ship on the cluster.
+        This is usefull to run tensorflow learning on gpu.
+        When using this option env must contain LD_LIBRARY_PATH key pointing to path
+        where cuda libs will be once the archive is unpacked in ./cuda
+        (e.g. '.cuda/usr/cuda-11.2/lib64' )
+
     Raises
     ------
     RunFailed
@@ -398,7 +428,8 @@ def run_on_yarn(
                 name=name,
                 n_try=n_try,
                 custom_task_module=custom_task_module,
-                pre_script_hook=pre_script_hook
+                pre_script_hook=pre_script_hook,
+                cuda_runtime_hdfs_path=cuda_runtime_hdfs_path
             )
             with _shutdown_on_exception(skein_cluster.app):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app)

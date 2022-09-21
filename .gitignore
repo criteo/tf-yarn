@@ -122,3 +122,6 @@ adapt_template.sh
 
 # MacOSX files
 .DS_Store
+
+# VSCode Config
+.vscode

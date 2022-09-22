@@ -398,7 +398,7 @@ def run_on_yarn(
         This is usefull to run tensorflow learning on gpu.
         When using this option env must contain LD_LIBRARY_PATH key pointing to path
         where cuda libs will be once the archive is unpacked in ./cuda
-        (e.g. '.cuda/usr/cuda-11.2/lib64' )
+        (e.g. 'cuda/usr/cuda-11.2/lib64' )
 
     Raises
     ------

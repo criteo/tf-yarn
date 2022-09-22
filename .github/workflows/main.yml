@@ -7,7 +7,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -21,14 +21,34 @@ jobs:
           pip install --upgrade pip
           pip install .
           pip install -r tests-requirements.txt
-          pip install tensorflow==2.5.0
-          pip install torch
       - name: Linter
         run: |
           pylama
       - name: Typer checker
         run: |
           mypy . --ignore-missing-imports
+
+
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]   
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install .
+          pip install -r tests-requirements.txt
+          pip install tensorflow==2.5.0
+          pip install torch
       - name: Tests
         run: |
           pytest -s tests

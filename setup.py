@@ -49,6 +49,8 @@ setuptools.setup(
     version=_check_add_criteo_environment("0.6.6"),
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
+    # We can't support after tf 2.6 for now beause of changes in estimator api
+    # With tf 2.5.2 there is an issue where evaluator does not see end of learning
     extras_require={
         "cpu": ["tensorflow>=1.15,<=2.5.0"],
         "gpu": ["tensorflow-gpu>=1.15,<=2.5.0"],

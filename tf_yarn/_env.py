@@ -21,4 +21,4 @@ def gen_task_cmd(pyenv: PythonEnvDescription,
     else:
         raise ValueError(f"Invalid task type: {task_type}")
 
-    return f"{pyenv.dispatch_task_cmd} -m {containers_module} "
+    return f"{pyenv.interpreter_cmd} -m {containers_module} "

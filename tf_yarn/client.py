@@ -177,7 +177,7 @@ def _setup_cluster_spec(
 
 
 def _setup_skein_cluster(
-        pyenvs: Dict[topologies.NodeLabel, _env.PythonEnvDescription],
+        pyenvs: Dict[topologies.NodeLabel, PythonEnvDescription],
         task_specs: Dict[str, topologies.TaskSpec],
         *,
         custom_task_module: Optional[str] = None,

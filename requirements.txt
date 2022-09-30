@@ -1,4 +1,4 @@
-cluster-pack>=0.2.18
+cluster-pack>=0.2.19
 skein>=0.8,<0.9
 tensorboard
 pyarrow

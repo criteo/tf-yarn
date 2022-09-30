@@ -50,10 +50,9 @@ setuptools.setup(
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     # We can't support after tf 2.6 for now beause of changes in estimator api
-    # With tf 2.5.2 there is an issue where evaluator does not see end of learning
     extras_require={
-        "cpu": ["tensorflow>=1.15,<=2.5.0"],
-        "gpu": ["tensorflow-gpu>=1.15,<=2.5.0"],
+        "cpu": ["tensorflow>=1.15,<2.6"],
+        "gpu": ["tensorflow-gpu>=1.15,<2.6"],
     },
     python_requires=">=3.6",
 

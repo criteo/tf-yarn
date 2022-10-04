@@ -46,7 +46,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.6.6"),
+    version=_check_add_criteo_environment("0.6.7"),
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     # We can't support after tf 2.6 for now beause of changes in estimator api

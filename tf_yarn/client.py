@@ -1,5 +1,4 @@
 import importlib
-import logging
 import logging.config
 import uuid
 import os
@@ -22,6 +21,8 @@ from datetime import timedelta
 
 import cloudpickle
 import skein
+from cluster_pack import get_pyenv_usage_from_archive
+from cluster_pack.packaging import PythonEnvDescription
 from skein.exceptions import SkeinError
 from skein.model import FinalStatus, ApplicationReport, ACLs
 import cluster_pack
@@ -91,15 +92,15 @@ class RunFailed(Exception):
 
 def _setup_pyenvs(
         pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]]
-) -> Dict[topologies.NodeLabel, _env.PythonEnvDescription]:
+) -> Dict[topologies.NodeLabel, PythonEnvDescription]:
     if isinstance(pyenv_zip_path, str):
-        pyenv = _env.gen_pyenv_from_existing_archive(pyenv_zip_path)
+        pyenv = get_pyenv_usage_from_archive(pyenv_zip_path)
         pyenvs = {
             topologies.NodeLabel.CPU: pyenv,
             topologies.NodeLabel.GPU: pyenv
         }
     else:
-        pyenvs = {label: _env.gen_pyenv_from_existing_archive(env_zip_path)
+        pyenvs = {label: get_pyenv_usage_from_archive(env_zip_path)
                   for label, env_zip_path in pyenv_zip_path.items()}
     return pyenvs
 
@@ -176,7 +177,7 @@ def _setup_cluster_spec(
 
 
 def _setup_skein_cluster(
-        pyenvs: Dict[topologies.NodeLabel, _env.PythonEnvDescription],
+        pyenvs: Dict[topologies.NodeLabel, PythonEnvDescription],
         task_specs: Dict[str, topologies.TaskSpec],
         *,
         custom_task_module: Optional[str] = None,

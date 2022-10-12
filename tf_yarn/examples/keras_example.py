@@ -9,6 +9,7 @@ Full example of using TF-Yarn to run Keras on YARN.
 
 
 import logging
+import re
 logging.basicConfig(level="INFO") # noqa
 import getpass
 import os
@@ -31,7 +32,7 @@ HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
-def experiment_fn() -> Experiment:
+def importable_experiment_fn(hdfs_dir: str) -> Experiment:
     def convert_to_tensor(x, y):
         return (tf.convert_to_tensor(value=list(x.values()), dtype=tf.float32),
                 tf.convert_to_tensor(value=y, dtype=tf.int32))
@@ -58,7 +59,7 @@ def experiment_fn() -> Experiment:
                   optimizer="sgd",
                   metrics=['accuracy'])
 
-    config = tf.estimator.RunConfig(model_dir=HDFS_DIR)
+    config = tf.estimator.RunConfig(model_dir=hdfs_dir)
     estimator = tf.keras.estimator.model_to_estimator(model, config=config)
     return Experiment(
         estimator,
@@ -70,6 +71,10 @@ def experiment_fn() -> Experiment:
             steps=10,
             start_delay_secs=0,
             throttle_secs=30))
+
+
+def experiment_fn() -> Experiment:
+    return importable_experiment_fn(HDFS_DIR)
 
 
 def main():

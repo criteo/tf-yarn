@@ -9,7 +9,6 @@ Full example of using TF-Yarn to run Keras on YARN.
 
 
 import logging
-import re
 logging.basicConfig(level="INFO") # noqa
 import getpass
 import os
@@ -18,9 +17,9 @@ from datetime import datetime
 from tensorflow import keras
 import cluster_pack
 from cluster_pack import filesystem
-import winequality
 import tensorflow as tf
 
+from tf_yarn.examples import winequality
 from tf_yarn.tensorflow import TaskSpec, Experiment, run_on_yarn
 
 

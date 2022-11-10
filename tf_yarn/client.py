@@ -40,6 +40,7 @@ from tf_yarn._task_commons import (
     get_task_type, is_chief, is_evaluator, is_worker
 )
 from tf_yarn import tensorboard
+from tf_yarn._criteo import is_criteo
 
 YARN_LOG_TRIES = 15
 
@@ -122,7 +123,7 @@ def _setup_task_env(
         **env,
         # Make Python modules/packages passed via ``files`` importable.
         "PYTHONPATH": ".:" + env.get("PYTHONPATH", ""),
-        "PEX_ROOT": os.path.join("/tmp", str(uuid.uuid4()))
+        "PEX_ROOT": _get_pex_root(),
     }
 
     if mlflow.use_mlflow:
@@ -725,3 +726,14 @@ def _get_app_logs(
                 exc_info=True)
         time.sleep(3)
     return None
+
+
+def _get_pex_root() -> str:
+    if "PEX_ROOT" in os.environ:
+        return os.environ["PEX_ROOT"]
+    random_str = str(uuid.uuid4())
+    if is_criteo():
+        # Use current working directory because /tmp is a shared folder with limited space
+        return f"./{random_str}"
+    else:
+        return os.path.join("/tmp", random_str)

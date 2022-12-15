@@ -16,6 +16,7 @@ class DataLoaderArgs(NamedTuple):
     timeout: float = 0
     prefetch_factor: int = 2
     shuffle: bool = False
+    collate_fn: Optional[Callable] = None
 
 
 class DistributedDataParallelArgs(NamedTuple):

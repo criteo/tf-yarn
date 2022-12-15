@@ -53,7 +53,8 @@ def _create_dataloader(
         dataset, sampler=sampler, batch_size=dataloader_args.batch_size,
         num_workers=dataloader_args.num_workers, pin_memory=dataloader_args.pin_memory,
         drop_last=dataloader_args.drop_last, timeout=dataloader_args.timeout,
-        prefetch_factor=dataloader_args.prefetch_factor, shuffle=False
+        prefetch_factor=dataloader_args.prefetch_factor, shuffle=False,
+        collate_fn=dataloader_args.collate_fn
     )
 
 

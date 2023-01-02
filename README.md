@@ -196,7 +196,7 @@ A Pytorch experiment is described by an instance of `tf_yarn.pytorch.PytorchExpe
 
 - model: model to train
 - main_fn: Main function run to train the model. This function is executed by all workers involved in the training. It must accept these inputs: model to train, train dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...) allocated to the worker for the training and rank (worker id).
-- Training dataset: training dataset (instance of `torch.utils.data.Dataset`).
+- Training dataset: training dataset (instance of `torch.utils.data.Dataset`, `webdataset.WebDataset` or `webdataset.DataPipeline`).
 - dataloader_args: parameters (batch size, number of workers, collate function ...) passed to the dataloader used to load and iterate over the training dataset. Instance of `tf_yarn.pytorch.DataLoaderArgs`.
 - n_workers_per_executor: number of workers per yarn executor.
 - tensorboard_hdfs_dir: HDFS directory where tensorboard results will be written at the end of the training

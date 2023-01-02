@@ -1,25 +1,29 @@
-from contextlib import contextmanager
 import logging
 import os
 import sys
 import tempfile
-from typing import Generator, Optional
+from contextlib import contextmanager
+from typing import Generator, Optional, Union
 
+import skein
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from torch.utils.tensorboard import SummaryWriter
-import skein
+import webdataset as wds
 from cluster_pack import filesystem
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.tensorboard import SummaryWriter
 
+from tf_yarn import _internal, event, tensorboard
 from tf_yarn._task_commons import (
-    setup_logging, get_task_description, _get_experiment, _get_cluster_tasks
+    _get_cluster_tasks,
+    _get_experiment,
+    get_task_description,
+    setup_logging,
 )
-from tf_yarn import _internal, event
-from tf_yarn.pytorch.experiment import PytorchExperiment, DataLoaderArgs
-from tf_yarn import tensorboard
+from tf_yarn.pytorch.experiment import DataLoaderArgs, PytorchExperiment
+
 setup_logging()
 
 
@@ -37,29 +41,49 @@ def _log_sys_info() -> None:
 
 
 def _create_dataloader(
-    dataset: torch.utils.data.Dataset, dataloader_args: DataLoaderArgs
-) -> torch.utils.data.DataLoader:
-    sampler: Optional[DistributedSampler] = \
-        DistributedSampler(dataset, shuffle=dataloader_args.shuffle) \
-        if not isinstance(dataset, torch.utils.data.IterableDataset) else None
+    dataset: Union[torch.utils.data.Dataset, wds.WebDataset, wds.DataPipeline],
+    dataloader_args: DataLoaderArgs,
+) -> Union[torch.utils.data.DataLoader, wds.WebLoader]:
+    if isinstance(dataset, (wds.WebDataset, wds.DataPipeline)):
+        return wds.WebLoader(
+            dataset,
+            batch_size=dataloader_args.batch_size,
+            num_workers=dataloader_args.num_workers,
+            pin_memory=dataloader_args.pin_memory,
+            drop_last=dataloader_args.drop_last,
+            timeout=dataloader_args.timeout,
+            prefetch_factor=dataloader_args.prefetch_factor,
+            persistent_workers=dataloader_args.persistent_workers,
+            shuffle=dataloader_args.shuffle,
+        )
+    sampler: Optional[DistributedSampler] = (
+        DistributedSampler(dataset, shuffle=dataloader_args.shuffle)
+        if not isinstance(dataset, torch.utils.data.IterableDataset)
+        else None
+    )
     if not dataloader_args.drop_last:
-        _logger.error("/!\\ Not dropping the last batch could result in a smaller "
-                      "batch size which could block your distributed training when aggregating "
-                      "tensors with allreduce/allgather. It will cause a memory corruption on "
-                      "the worker processing the smaller batch size and your training will fail "
-                      "or simply freeze. We strongly encourage setting DataLoaderArgs.drop_last "
-                      "to True")
+        _logger.error(
+            "/!\\ Not dropping the last batch could result in a smaller "
+            "batch size which could block your distributed training when aggregating "
+            "tensors with allreduce/allgather. It will cause a memory corruption on "
+            "the worker processing the smaller batch size and your training will fail "
+            "or simply freeze. We strongly encourage setting DataLoaderArgs.drop_last "
+            "to True"
+        )
     return torch.utils.data.DataLoader(
-        dataset, sampler=sampler, batch_size=dataloader_args.batch_size,
-        num_workers=dataloader_args.num_workers, pin_memory=dataloader_args.pin_memory,
-        drop_last=dataloader_args.drop_last, timeout=dataloader_args.timeout,
-        prefetch_factor=dataloader_args.prefetch_factor, shuffle=False
+        dataset,
+        sampler=sampler,
+        batch_size=dataloader_args.batch_size,
+        num_workers=dataloader_args.num_workers,
+        pin_memory=dataloader_args.pin_memory,
+        drop_last=dataloader_args.drop_last,
+        timeout=dataloader_args.timeout,
+        prefetch_factor=dataloader_args.prefetch_factor,
+        shuffle=dataloader_args.shuffle,
     )
 
 
-def _train(
-    device: int, rank: int, world_size: int, collective_ops_backend: str
-) -> None:
+def _train(device: int, rank: int, world_size: int, collective_ops_backend: str) -> None:
     os.environ["NCCL_DEBUG"] = "INFO"
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
     os.environ[PYTORCH_DPP_RANK] = str(rank)
@@ -75,9 +99,7 @@ def _train(
     ddp_kwargs = experiment.ddp_args._asdict() if experiment.ddp_args else {}
     ddp_model = DDP(model, device_ids=[device], **ddp_kwargs)
 
-    trainloader = _create_dataloader(
-        experiment.train_dataset, experiment.dataloader_args
-    )
+    trainloader = _create_dataloader(experiment.train_dataset, experiment.dataloader_args)
 
     with tempfile.TemporaryDirectory() as tmp:
         tb_writer = SummaryWriter(tmp)
@@ -103,7 +125,8 @@ def _tensorboard(
         name=f"{task_type}:{task_id}",
         target=tensorboard.start_tf_board,
         args=(client, tensorboard_dir),
-        daemon=True)
+        daemon=True,
+    )
     thread.start()
 
     yield
@@ -148,8 +171,7 @@ def _get_device(worker_id: int) -> int:
 def _get_collective_ops_backend(n_workers_per_executor: int) -> str:
     # If a GPU is used by multiple workers, using NCCL can result in a deadlock
     # So in this case, we use gloo for collective ops
-    return "nccl" if n_workers_per_executor <= torch.cuda.device_count() \
-         else "gloo"
+    return "nccl" if n_workers_per_executor <= torch.cuda.device_count() else "gloo"
 
 
 def main() -> None:
@@ -175,9 +197,11 @@ def main() -> None:
             worker = mp.Process(
                 target=_train,
                 args=(
-                    _get_device(n), (task_id * n_workers_per_executor) + n, world_size,
-                    _get_collective_ops_backend(n_workers_per_executor)
-                )
+                    _get_device(n),
+                    (task_id * n_workers_per_executor) + n,
+                    world_size,
+                    _get_collective_ops_backend(n_workers_per_executor),
+                ),
             )
             worker.start()
             workers.append(worker)

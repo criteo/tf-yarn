@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04 # Latest version supporting Python 3.6
 
     steps:
       - uses: actions/checkout@v2
@@ -30,11 +30,11 @@ jobs:
 
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04 # Latest version supporting Python 3.6
 
     strategy:
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]   
+        python-version: [3.6, 3.7, 3.8, 3.9] 
 
     steps:
       - uses: actions/checkout@v2
@@ -47,7 +47,7 @@ jobs:
           pip install --upgrade pip
           pip install .
           pip install -r tests-requirements.txt
-          pip install tensorflow==2.5.2
+          pip install tensorflow-io[tensorflow]
           pip install torch
       - name: Tests
         run: |

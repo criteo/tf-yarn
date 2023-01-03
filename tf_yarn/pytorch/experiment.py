@@ -1,4 +1,4 @@
-from typing import NamedTuple, Callable, Optional
+from typing import Callable, NamedTuple, Optional
 
 import torch
 
@@ -16,6 +16,7 @@ class DataLoaderArgs(NamedTuple):
     timeout: float = 0
     prefetch_factor: int = 2
     shuffle: bool = False
+    persistent_workers: bool = False
     collate_fn: Optional[Callable] = None
 
 
@@ -36,7 +37,7 @@ class PytorchExperiment(NamedTuple):
     # outputs: None
     main_fn: Callable[
         [torch.nn.Module, torch.utils.data.dataloader.DataLoader, str, int],
-        None
+        None,
     ]
 
     # Training set

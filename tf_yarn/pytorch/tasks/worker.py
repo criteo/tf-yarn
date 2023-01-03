@@ -80,6 +80,7 @@ def _create_dataloader(
         timeout=dataloader_args.timeout,
         prefetch_factor=dataloader_args.prefetch_factor,
         shuffle=dataloader_args.shuffle,
+        collate_fn=dataloader_args.collate_fn
     )
 
 

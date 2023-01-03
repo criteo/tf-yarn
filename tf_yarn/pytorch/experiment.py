@@ -17,6 +17,7 @@ class DataLoaderArgs(NamedTuple):
     prefetch_factor: int = 2
     shuffle: bool = False
     persistent_workers: bool = False
+    collate_fn: Optional[Callable] = None
 
 
 class DistributedDataParallelArgs(NamedTuple):

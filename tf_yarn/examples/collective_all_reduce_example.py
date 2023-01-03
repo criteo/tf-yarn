@@ -10,7 +10,6 @@ import getpass
 import winequality
 from datetime import datetime
 import cluster_pack
-import tensorflow_io as tfio
 from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
 logger = logging.getLogger(__name__)

@@ -19,7 +19,6 @@ from cluster_pack import filesystem
 from tf_yarn.tensorflow import TaskSpec, KerasExperiment, run_on_yarn
 import winequality
 import tensorflow as tf
-import tensorflow_io as tfio
 
 logger = logging.getLogger(__name__)
 

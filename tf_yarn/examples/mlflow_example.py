@@ -19,7 +19,6 @@ import mlflow
 import cluster_pack
 from cluster_pack import filesystem
 import winequality
-import tensorflow_io as tfio
 
 from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 

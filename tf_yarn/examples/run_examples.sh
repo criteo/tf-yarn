@@ -22,7 +22,6 @@ do
     . tf-yarn_test_env/bin/activate
     pip install --upgrade pip setuptools
     pip install tensorflow==${tf_version}
-    pip install tensorflow-io[tensorflow]
     if [[ $tf_version == "1.15.2" ]]; then
         # https://github.com/pantsbuild/pex/issues/913
         # only pex 2.1.1 is supported for tf 1.15

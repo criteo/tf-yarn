@@ -18,7 +18,6 @@ from tensorflow import keras
 import cluster_pack
 from cluster_pack import filesystem
 import tensorflow as tf
-import tensorflow_io as tfio
 
 from tf_yarn.examples import winequality
 from tf_yarn.tensorflow import TaskSpec, Experiment, run_on_yarn

@@ -49,6 +49,7 @@ jobs:
           pip install -r tests-requirements.txt
           pip install tensorflow-io[tensorflow]
           pip install torch
+          pip install webdataset
       - name: Tests
         run: |
           pytest -s tests

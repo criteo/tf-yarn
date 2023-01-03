@@ -1,7 +1,8 @@
 import os
 import re
 import logging
-from typing import Optional, Union, Dict, Any
+from tempfile import TemporaryDirectory
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -70,8 +71,10 @@ def save_ckpt(
     if not resolved_fs.exists(model_dir):
         resolved_fs.mkdir(model_dir)
     model_ckpt_path = os.path.join(model_dir, f"model_{epoch}.pt")
-    with resolved_fs.open(model_ckpt_path, "wb") as fd:
-        torch.save(state, fd)
+    with TemporaryDirectory() as tmpdir:
+        tmp_file = os.path.join(tmpdir, f"model_{epoch}.pt")
+        torch.save(state, tmp_file)
+        resolved_fs.put(tmp_file, model_ckpt_path)
     return model_ckpt_path
 
 

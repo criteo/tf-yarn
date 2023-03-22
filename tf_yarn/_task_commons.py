@@ -47,18 +47,6 @@ def _get_experiment(
         raise
     return experiment
 
-def _get_distributed_fcn(
-    client: skein.ApplicationClient
-) -> NamedTuple:
-    try:
-        experiment = cloudpickle.loads(client.kv.wait(constants.KV_DISTRIBUTED_FN))()
-    except Exception as e:
-        task = get_task()
-        event.start_event(client, task)
-        event.stop_event(client, task, e)
-        raise
-    return experiment
-
 
 def n_try() -> int:
     return int(os.getenv("TF_YARN_N_TRY", "0"))

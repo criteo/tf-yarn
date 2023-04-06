@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, Tuple
 import sys
 import logging
 import skein
@@ -32,7 +32,7 @@ class TaskParameters(NamedTuple):
     n_workers_per_executor: int = 1
 
 
-def setup_master(client: skein.ApplicationClient, rank: int) -> (str, int):
+def setup_master(client: skein.ApplicationClient, rank: int) -> Tuple[str, int]:
     if rank == 0:
         # ideally launching the train function on the master node should happen inside this context
         # manager, but existing tf-yarn jobs run correctly with the port reservation as is

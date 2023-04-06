@@ -17,20 +17,21 @@ MASTER_PORT = "MASTER_PORT"
 setup_logging()
 _logger = logging.getLogger(__name__)
 
+
 def _log_sys_info() -> None:
     _logger.info(f"Python {sys.version}")
     _logger.info(f"Skein {skein.__version__}")
-    
+
 
 class TaskParameters(NamedTuple):
-    task_type: str 
+    task_type: str
     task_id: int
     world_size: int
     master_address: str
     master_port: int
     n_workers_per_executor: int = 1
 
-    
+
 def setup_master(client: skein.ApplicationClient, rank: int) -> (str, int):
     if rank == 0:
         # ideally launching the train function on the master node should happen inside this context
@@ -46,7 +47,7 @@ def setup_master(client: skein.ApplicationClient, rank: int) -> (str, int):
 
     _logger.info(f'master: {master_addr}:{master_port}')
     return master_addr, master_port
-    
+
 
 def get_task():
     task_type, task_id = get_task_description()
@@ -69,7 +70,7 @@ def main():
     client = skein.ApplicationClient.from_current()
     experiment = _get_experiment(client)
     experiment()
-    
+
 
 if __name__ == "__main__":
     main()

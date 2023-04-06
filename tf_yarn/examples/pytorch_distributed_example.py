@@ -14,7 +14,7 @@ import cluster_pack
 
 
 def train_fcn():
-    local_rank = 0 # TBD later
+    local_rank = 0  # TBD later
     _, rank, size, master_addr, master_port, _ = get_task()
     print(f'master: {master_addr}:{master_port}')
 
@@ -25,7 +25,8 @@ def train_fcn():
     dist.init_process_group(backend='nccl', world_size=size, rank=rank)
 
     nb_epoch = 50
-    ########## Training
+
+    # ######### Training
     # Network def
     class Net(torch.nn.Module):
         def __init__(self):
@@ -61,17 +62,21 @@ def train_fcn():
 
     # Optimization params
     batch_size = 128
-    batch_size_per_gpu = 128 // size
+    batch_size_per_gpu = batch_size // size
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(ddp_model.parameters(), 1e-4)
 
     # Data loading + distributed sampler
-    # May fail on Yarn because nodes don't have access to /tmp
-    train_dataset = torchvision.datasets.MNIST(f'./tmp/mnist_{local_rank}', transform=torchvision.transforms.ToTensor(),
-                                               download=True)
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, num_replicas=size, rank=rank)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size_per_gpu, shuffle=False,
-                                               num_workers=4, pin_memory=True, sampler=train_sampler)
+    train_dataset = torchvision.datasets.MNIST(
+        f'./tmp/mnist_{local_rank}', transform=torchvision.transforms.ToTensor(), download=True
+    )
+    train_sampler = torch.utils.data.distributed.DistributedSampler(
+        train_dataset, num_replicas=size, rank=rank
+    )
+    train_loader = torch.utils.data.DataLoader(
+        dataset=train_dataset, batch_size=batch_size_per_gpu, shuffle=False, num_workers=4,
+        pin_memory=True, sampler=train_sampler
+    )
 
     # Training loop
     for epoch in range(nb_epoch):
@@ -85,7 +90,8 @@ def train_fcn():
             loss.backward()
             optimizer.step()
             if rank == 0 and i % 100 == 0:
-                print(f'Train epoch: {epoch} [{i* len(images)}/{len(train_loader.dataset)}]\tLoss: {loss.item()}')
+                print(f'Train epoch: {epoch} [{i* len(images)}/{len(train_loader.dataset)}]'
+                      f'\tLoss: {loss.item()}')
         # Some operations like model saving only on one process
         if rank == 0:
             print('saving model dict at ./tmp/model.pt')
@@ -97,7 +103,9 @@ if __name__ == "__main__":
     pyenv_path, _ = cluster_pack.upload_env(allow_large_pex=True)
     print(f"venv uploaded to {pyenv_path}")
 
-    task_specs = {"worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)}
+    task_specs = {
+        "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, label=NodeLabel.GPU)
+    }
 
     client.run_on_yarn(
         lambda: train_fcn,

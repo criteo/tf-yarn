@@ -7,9 +7,10 @@ import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
 
+from tf_yarn.distributed import client
 from tf_yarn.distributed.task import get_task
 from tf_yarn.topologies import TaskSpec, NodeLabel
-from tf_yarn import client
+
 import cluster_pack
 
 
@@ -110,7 +111,6 @@ if __name__ == "__main__":
     client.run_on_yarn(
         lambda: train_fcn,
         task_specs,
-        custom_task_module="tf_yarn.distributed.task",
         queue="ml-gpu",
         pyenv_zip_path=pyenv_path
     )

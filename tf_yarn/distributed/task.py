@@ -1,4 +1,4 @@
-from typing import NamedTuple, Tuple
+from typing import Callable, NamedTuple, Tuple
 import sys
 import logging
 import skein
@@ -10,6 +10,7 @@ from tf_yarn._task_commons import (
     get_task_description,
     setup_logging,
 )
+
 
 MASTER_ADDR = "MASTER_ADDR"
 MASTER_PORT = "MASTER_PORT"
@@ -69,6 +70,7 @@ def main():
     _log_sys_info()
     client = skein.ApplicationClient.from_current()
     experiment = _get_experiment(client)
+    assert isinstance(experiment, Callable)
     experiment()
 
 

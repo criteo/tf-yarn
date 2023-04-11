@@ -36,7 +36,6 @@ _logger = logging.getLogger(__file__)
 
 MASTER_ADDR = "MASTER_ADDR"
 MASTER_PORT = "MASTER_PORT"
-PYTORCH_DPP_RANK = "PYTORCH_DPP_RANK"
 
 
 def _log_sys_info() -> None:
@@ -92,7 +91,6 @@ def _create_dataloader(
 def _train(device: int, rank: int, world_size: int, collective_ops_backend: str) -> None:
     os.environ["NCCL_DEBUG"] = "INFO"
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
-    os.environ[PYTORCH_DPP_RANK] = str(rank)
 
     client = skein.ApplicationClient.from_current()
     _setup_master(client, rank)

@@ -1,4 +1,7 @@
 import os
+import getpass
+from uuid import uuid4
+
 import torch
 import torchvision
 
@@ -10,6 +13,7 @@ import torch.nn.functional as F
 from tf_yarn.distributed import client
 from tf_yarn.distributed.task import get_task
 from tf_yarn.topologies import TaskSpec, NodeLabel
+from tf_yarn.pytorch import model_ckpt
 
 import cluster_pack
 
@@ -19,10 +23,11 @@ def train_fcn():
     _, rank, size, master_addr, master_port, _ = get_task()
     print(f'master: {master_addr}:{master_port}')
 
+    model_path = f"viewfs://root/user/{getpass.getuser()}/tf-yarn-distribute-example_{str(uuid4())}"
+
     # Initialization of Pytorch distributed bakend
     os.environ['MASTER_ADDR'] = master_addr
     os.environ['MASTER_PORT'] = str(master_port)
-    os.environ["PYTORCH_DPP_RANK"] = str(rank)
     dist.init_process_group(backend='nccl', world_size=size, rank=rank)
 
     nb_epoch = 50
@@ -55,7 +60,8 @@ def train_fcn():
             return output
 
     # Set of exclusive GPU for the process
-    gpu = torch.device(f"cuda:{local_rank}")
+    device_str = f"cuda:{local_rank}"
+    gpu = torch.device(device_str)
 
     # Transfer the network to GPU + prepare it for distributed training (incl. weight broadcast)
     model = Net().to(gpu)
@@ -66,6 +72,9 @@ def train_fcn():
     batch_size_per_gpu = batch_size // size
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(ddp_model.parameters(), 1e-4)
+
+    checkpoint = model_ckpt.load_latest_ckpt(model_path, ddp_model, optimizer, device_str)
+    last_epoch = -1 if checkpoint is None else checkpoint["epoch"]
 
     # Data loading + distributed sampler
     train_dataset = torchvision.datasets.MNIST(
@@ -80,13 +89,13 @@ def train_fcn():
     )
 
     # Training loop
-    for epoch in range(nb_epoch):
+    for epoch in range(last_epoch + 1, nb_epoch):
         train_sampler.set_epoch(epoch)
         for i, (images, labels) in enumerate(train_loader):
             images = images.to(gpu, non_blocking=True)
             labels = labels.to(gpu, non_blocking=True)
             optimizer.zero_grad()
-            output = model(images)
+            output = ddp_model(images)
             loss = F.nll_loss(output, labels)
             loss.backward()
             optimizer.step()
@@ -95,8 +104,11 @@ def train_fcn():
                       f'\tLoss: {loss.item()}')
         # Some operations like model saving only on one process
         if rank == 0:
-            print('saving model dict at ./tmp/model.pt')
-            torch.save(ddp_model.state_dict(), './tmp/model.pt')
+            print(f'saving model checkpoint at {model_path}')
+            model_ckpt.save_ckpt(model_path, ddp_model, optimizer, epoch)
+
+    dist.destroy_process_group()
+    print("Done training")
 
 
 if __name__ == "__main__":

@@ -72,7 +72,8 @@ def main_fn(
                 running_loss = 0.0
                 running_ite = 0
             train_ite_num += 1
-        model_ckpt.save_ckpt(model_ckpt_path, model, optimizer, epoch)
+        if (rank == 0):
+            model_ckpt.save_ckpt(model_ckpt_path, model, optimizer, epoch)
 
     print('Finished Training')
 

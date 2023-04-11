@@ -2,13 +2,17 @@ import json
 import logging
 import os
 import typing
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Tuple
 
 import cloudpickle
 import skein
 
-from tf_yarn import event, constants
+from tf_yarn import _internal, event, constants
 from tf_yarn._internal import iter_tasks
+
+
+MASTER_ADDR = "MASTER_ADDR"
+MASTER_PORT = "MASTER_PORT"
 
 
 def setup_logging():
@@ -90,3 +94,19 @@ def get_task_description() -> typing.Tuple[str, int]:
     task_type, task_str = task.split(":", 1)
     task_id: int = int(task_str)
     return task_type, task_id
+
+
+def choose_master(client: skein.ApplicationClient, rank: int) -> Tuple[str, int]:
+    if rank == 0:
+        # ideally launching the train function on the master node should happen inside this context
+        # manager, but existing tf-yarn jobs run correctly with the port reservation as is
+        with _internal.reserve_sock_addr() as host_port:
+            master_addr = host_port[0]
+            master_port = host_port[1]
+            event.broadcast(client, MASTER_ADDR, master_addr)
+            event.broadcast(client, MASTER_PORT, str(master_port))
+    else:
+        master_addr = event.wait(client, MASTER_ADDR)
+        master_port = int(event.wait(client, MASTER_PORT))
+
+    return master_addr, master_port

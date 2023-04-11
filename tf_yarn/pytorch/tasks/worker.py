@@ -23,6 +23,7 @@ from tf_yarn import _internal, event, tensorboard
 from tf_yarn._task_commons import (
     _get_cluster_tasks,
     _get_experiment,
+    choose_master,
     get_task_description,
     setup_logging,
 )
@@ -151,17 +152,10 @@ def _upload_tensorboard_on_hdfs(local_dir: str, hdfs_dir: str) -> None:
 
 
 def _setup_master(client: skein.ApplicationClient, rank: int) -> None:
-    if rank == 0:
-        with _internal.reserve_sock_addr() as host_port:
-            event.broadcast(client, MASTER_ADDR, host_port[0])
-            event.broadcast(client, MASTER_PORT, str(host_port[1]))
-            os.environ[MASTER_ADDR] = host_port[0]
-            os.environ[MASTER_PORT] = str(host_port[1])
-    else:
-        master_addr = event.wait(client, MASTER_ADDR)
-        master_port = event.wait(client, MASTER_PORT)
-        os.environ[MASTER_ADDR] = master_addr
-        os.environ[MASTER_PORT] = master_port
+    addr, port = choose_master(client, rank)
+    os.environ[MASTER_ADDR] = addr
+    os.environ[MASTER_PORT] = str(port)
+    _logger.info(f'master: {addr}:{port}')
 
 
 def _get_device(worker_id: int) -> int:

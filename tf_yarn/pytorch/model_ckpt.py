@@ -53,7 +53,7 @@ def load_ckpt(
 
 
 def save_ckpt(
-    model_dir: str, model: Union[DDP, torch.nn.Module], optimizer: Optional[torch.optim.Optimizer],
+    model_dir: str, model: Union[DDP, torch.nn.Module], optimizer: torch.optim.Optimizer,
     epoch: int, **kwargs: Dict[Any, Any]
 ) -> str:
     state = {

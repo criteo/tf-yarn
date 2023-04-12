@@ -70,7 +70,6 @@ def train_fcn():
     # Optimization params
     batch_size = 128
     batch_size_per_gpu = batch_size // size
-    criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(ddp_model.parameters(), 1e-4)
 
     checkpoint = model_ckpt.load_latest_ckpt(model_path, ddp_model, optimizer, device_str)

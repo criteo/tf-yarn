@@ -22,6 +22,8 @@ except Exception:
 from tf_yarn import _internal, event, tensorboard
 from tf_yarn._task_commons import (
     _get_cluster_tasks,
+    _compute_world_size,
+    _get_nb_workers,
     _get_experiment,
     get_task_description,
     setup_logging,
@@ -187,11 +189,13 @@ def main() -> None:
     experiment = _get_experiment(client)
     assert isinstance(experiment, PytorchExperiment)
     cluster_tasks = _get_cluster_tasks(client)
-    n_workers_per_executor = experiment.n_workers_per_executor
+    n_workers_per_executor = _get_nb_workers(task_id, cluster_tasks)
+    world_size = _compute_world_size(cluster_tasks)
 
-    world_size = len([t for t in cluster_tasks if "worker" in t]) * n_workers_per_executor
-    _logger.info(f"Task type: {task_type}; Task id: {task_id};")
-    _logger.info(f"World_size: {world_size}: Cluster tasks: {cluster_tasks}")
+    _logger.info(
+        f"Task type: {task_type}; Task id: {task_id}; "
+        f"World_size: {world_size}: Cluster tasks: {cluster_tasks}"
+    )
 
     if n_workers_per_executor > 1:
         workers = list()
@@ -201,6 +205,7 @@ def main() -> None:
                 target=_train,
                 args=(
                     _get_device(n),
+                    # Todo: better computation of rank as sum[0:taskid](n_process(task))
                     (task_id * n_workers_per_executor) + n,
                     world_size,
                     _get_collective_ops_backend(n_workers_per_executor),

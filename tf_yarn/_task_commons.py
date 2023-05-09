@@ -35,6 +35,17 @@ def _get_cluster_tasks(
     return list(iter_tasks(json.loads(client.kv.wait(constants.KV_CLUSTER_INSTANCES).decode())))
 
 
+def _compute_world_size(cluster_tasks: List[str]):
+    return sum([int(task_str.split(':')[2]) for task_str in cluster_tasks])
+
+
+def _get_nb_workers(task_id:str, cluster_tasks:List[str]):
+    def match(task_str: str, id: int) -> bool:
+        return True if task_str.split(':')[1] == id else False
+
+    return [task_str.split(':')[2] for task_str in cluster_tasks if match(task_str, task_id)][0]
+
+
 def _get_experiment(
     client: skein.ApplicationClient
 ) -> NamedTuple:

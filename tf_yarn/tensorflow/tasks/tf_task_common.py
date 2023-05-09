@@ -107,7 +107,7 @@ def _wait_for_connected_tasks(client, all_tasks, device_filters, message='stop')
 
 
 def _matches_device_filters(task: str, device_filters: List[str]):
-    task_type, task_id = task.split(":", 1)
+    task_type, task_id, n_process = task.split(":")
     for device_filter in device_filters:
         [(filter_type, filter_id)] = re.findall(
             r"^/job:([a-z]+)(?:/task:(\d+))?$",

@@ -94,6 +94,8 @@ def _worker_fn(client, task, net_if):
 def _driver_fn(client, net_if):
     cluster_tasks = _task_commons._get_cluster_tasks(client)
     # Worker discovery
+
+    # TODO : fetch n_procvess_per_worker from cluster_tasks
     worker_list = [f"{net_if[1]}:{N_PROCESS_PER_WORKER}"]
     n_workers = 1
     for cluster_task in cluster_tasks:
@@ -104,6 +106,7 @@ def _driver_fn(client, net_if):
             n_workers += 1
 
     # Worker task allocation to workers
+    # ToDO: check if gloo_run needs to strip the nb_process_per_worker from cluster_tasks
     hosts = gloo_run.parse_hosts(','.join(worker_list))
     host_alloc_plan = gloo_run.get_host_assignments(hosts, n_workers)
     for host in host_alloc_plan:

@@ -20,17 +20,17 @@ MODULE_TO_TEST = "tf_yarn.tensorflow.tasks.tf_task_common"
 
 
 @pytest.mark.parametrize("task,device_filters", [
-    ("ps:0", ["/job:ps", "/job:worker/task:42"]),
-    ("worker:42", ["/job:ps", "/job:worker/task:42"])
+    ("ps:0:1", ["/job:ps", "/job:worker/task:42"]),
+    ("worker:42:2", ["/job:ps", "/job:worker/task:42"])
 ])
 def test_matches_device_filters(task, device_filters):
     assert _matches_device_filters(task, device_filters)
 
 
 @pytest.mark.parametrize("task,device_filters", [
-    ("chief:0", ["/job:ps", "/job:worker/task:42"]),
-    ("worker:0", ["/job:ps", "/job:worker/task:42"]),
-    ("evaluator:0", ["/job:ps", "/job:worker/task:42"])
+    ("chief:0:1", ["/job:ps", "/job:worker/task:42"]),
+    ("worker:0:2", ["/job:ps", "/job:worker/task:42"]),
+    ("evaluator:0:1", ["/job:ps", "/job:worker/task:42"])
 ])
 def test_does_not_match_device_filters(task, device_filters):
     assert not _matches_device_filters(task, device_filters)
@@ -47,7 +47,7 @@ def test__prepare_container():
         # fill client mock
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
         host_port = ('localhost', 1234)
-        instances = [('worker', 10), ('chief', 1)]
+        instances = [('worker', 10, 2), ('chief', 1, 1)]
         mocked_client.kv.wait.return_value = json.dumps(instances).encode()
         mocked_client_call.return_value = mocked_client
         (client, cluster_spec, cluster_tasks) = _prepare_container(host_port)

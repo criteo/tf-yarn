@@ -54,7 +54,7 @@ ExperimentFn = Callable[[], Any]
 class SkeinCluster(NamedTuple):
     client: skein.Client
     app: skein.ApplicationClient
-    tasks: List[Tuple[str, int]]
+    tasks: List[Tuple[str, int, int]]
     event_listener: Thread
     events: Dict[str, Dict[str, str]]
 
@@ -169,7 +169,7 @@ def _setup_to_use_cuda_archive(
 
 
 def _setup_cluster_spec(
-    task_instances: List[Tuple[str, int]],
+    task_instances: List[Tuple[str, int, int]],
     app: skein.ApplicationClient
 ) -> None:
     tasks_not_in_cluster = ['evaluator', 'tensorboard']
@@ -250,7 +250,8 @@ def _setup_skein_cluster(
         if skein_client is None:
             skein_client = skein.Client()
 
-        task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
+        task_instances = [(task_type, spec.instances, spec.nb_proc_per_worker)
+                          for task_type, spec in task_specs.items()]
         events: Dict[str, Dict[str, str]] = \
             {task: {} for task in _internal.iter_tasks(task_instances)}
         app = skein_client.submit_and_connect(spec)
@@ -563,7 +564,7 @@ def _execute_and_await_termination(
 
             containers = container_status.by_container_id()
             # add one for AM container
-            wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
+            wait_for_nb_logs = sum([instances for task, instances, _ in skein_cluster.tasks]) + 1
             logs = _get_app_logs(
                 skein_cluster.client,
                 skein_cluster.app,
@@ -586,8 +587,8 @@ def _execute_and_await_termination(
 
 
 def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],
-                        containers: Dict[str, Tuple[str, str]],
-                        n_try: int):
+                         containers: Dict[str, Tuple[str, str]],
+                         n_try: int):
     if not logs:
         return
 

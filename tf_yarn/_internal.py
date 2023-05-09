@@ -79,11 +79,11 @@ def reserve_sock_addr() -> Iterator[Tuple[str, int]]:
         yield (socket.getfqdn(), port)
 
 
-def iter_tasks(tasks: List[Tuple[str, int]]) -> Iterable[str]:
+def iter_tasks(tasks: List[Tuple[str, int, int]]) -> Iterable[str]:
     """Iterate the tasks in a TensorFlow cluster.
     """
-    for task_type, n_instances in tasks:
-        yield from (f"{task_type}:{task_id}" for task_id in range(n_instances))
+    for task_type, n_instances, nb_process in tasks:
+        yield from (f"{task_type}:{task_id}:{nb_process}" for task_id in range(n_instances))
 
 
 def xset_environ(**kwargs):

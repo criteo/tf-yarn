@@ -30,11 +30,12 @@ sock_addrs = {
 
 @mock.patch("tf_yarn.client.skein.ApplicationClient")
 @pytest.mark.parametrize("tasks_instances, expected_spec", [
-    ([('chief', 1), ('evaluator', 1), ('ps', 1), ('worker', 3)],
-     [['chief', 1], ['ps', 1], ['worker', 3]]),
-    ([('chief', 3)], [['chief', 3]]),
-    ([('worker', 3), ('ps', 3)], [['worker', 3], ['ps', 3]]),
-    ([('worker', 1), ('evaluator', 0)], [['worker', 1]])
+    ([('chief', 1, 1), ('evaluator', 1, 1), ('ps', 1, 1), ('worker', 3, 1)],
+     [['chief', 1, 1], ['ps', 1, 1], ['worker', 3, 1]]),
+    ([('chief', 3, 1)], [['chief', 3, 1]]),
+    ([('worker', 3, 1), ('ps', 3, 1)], [['worker', 3, 1], ['ps', 3, 1]]),
+    ([('worker', 1, 1), ('evaluator', 0, 1)], [['worker', 1, 1]]),
+    ([('worker', 1, 2), ('evaluator', 0, 1)], [['worker', 1, 2]])
 ])
 def test_setup_cluster_spec(
         mock_skein_app,

@@ -30,7 +30,7 @@ def train_fcn():
     os.environ['MASTER_PORT'] = str(master_port)
     dist.init_process_group(backend='nccl', world_size=size, rank=rank)
 
-    nb_epoch = 50
+    nb_epoch = 5
 
     # ######### Training
     # Network def
@@ -98,7 +98,7 @@ def train_fcn():
             loss = F.nll_loss(output, labels)
             loss.backward()
             optimizer.step()
-            if rank == 0 and i % 100 == 0:
+            if i % 100 == 0:
                 print(f'Train epoch: {epoch} [{i* len(images)}/{len(train_loader.dataset)}]'
                       f'\tLoss: {loss.item()}')
         # Some operations like model saving only on one process
@@ -106,6 +106,7 @@ def train_fcn():
             print(f'saving model checkpoint at {model_path}')
             model_ckpt.save_ckpt(model_path, ddp_model, optimizer, epoch)
 
+    dist.barrier()
     dist.destroy_process_group()
     print("Done training")
 

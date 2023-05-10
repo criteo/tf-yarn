@@ -27,7 +27,7 @@ from tf_yarn.pytorch.experiment import DataLoaderArgs, PytorchExperiment
 setup_logging()
 
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__file__)
 
 MASTER_ADDR = "MASTER_ADDR"
 MASTER_PORT = "MASTER_PORT"
@@ -186,10 +186,8 @@ def main() -> None:
     n_workers_per_executor = experiment.n_workers_per_executor
 
     world_size = len([t for t in cluster_tasks if "worker" in t]) * n_workers_per_executor
-    _logger.info(
-        f"Task type: {task_type}; Task id: {task_id};"
-        f"World_size: {world_size}: Cluster tasks: {cluster_tasks}"
-    )
+    _logger.info(f"Task type: {task_type}; Task id: {task_id};")
+    _logger.info(f"World_size: {world_size}: Cluster tasks: {cluster_tasks}")
 
     if n_workers_per_executor > 1:
         workers = list()

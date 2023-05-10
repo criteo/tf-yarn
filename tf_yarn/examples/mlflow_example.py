@@ -19,7 +19,7 @@ import mlflow
 import cluster_pack
 from cluster_pack import filesystem
 import winequality
-import tensorflow_io as tfio
+
 
 from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 
@@ -27,9 +27,10 @@ from tf_yarn.tensorflow import Experiment, TaskSpec, run_on_yarn
 logger = logging.getLogger(__name__)
 
 USER = getpass.getuser()
-WINE_EQUALITY_FILE = f"{cluster_pack.get_default_fs()}/user/{USER}/tf_yarn_test/winequality-red.csv"
+WINE_QUALITY_FILE = f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}" \
+                     f"/user/{USER}/tf_yarn_test/winequality-red.csv"
 # Output path of the learned model on hdfs
-HDFS_DIR = (f"{cluster_pack.get_default_fs()}/user/{USER}"
+HDFS_DIR = (f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")
 
 
@@ -44,15 +45,16 @@ def _get_fs_for_tests():
 def experiment_fn() -> Experiment:
     # To mitigate issue https://github.com/tensorflow/tensorflow/issues/32159 for tf >= 1.15
     import tensorflow as tf
+    import tensorflow_io as tfio
 
     def train_input_fn():
-        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="train")
+        dataset = winequality.get_dataset(WINE_QUALITY_FILE, split="train")
         return (dataset.shuffle(1000)
                 .batch(128)
                 .repeat())
 
     def eval_input_fn():
-        dataset = winequality.get_dataset(WINE_EQUALITY_FILE, split="test")
+        dataset = winequality.get_dataset(WINE_QUALITY_FILE, split="test")
         return (dataset.shuffle(1000)
                 .batch(128))
 
@@ -74,9 +76,9 @@ def experiment_fn() -> Experiment:
 
 
 if __name__ == "__main__":
-    fs, _ = filesystem.resolve_filesystem_and_path(WINE_EQUALITY_FILE)
-    if not fs.exists(WINE_EQUALITY_FILE):
-        raise Exception(f"{WINE_EQUALITY_FILE} not found")
+    fs, _ = filesystem.resolve_filesystem_and_path(WINE_QUALITY_FILE)
+    if not fs.exists(WINE_QUALITY_FILE):
+        raise Exception(f"{WINE_QUALITY_FILE} not found")
 
     # you need to install mlflow `pip install mlflow`
     # and set MLflow tracking uri
@@ -101,7 +103,8 @@ if __name__ == "__main__":
         },
         files={
             os.path.basename(winequality.__file__): winequality.__file__,
-        }
+        },
+        file_systems=['viewfs://root', 'hdfs://root']
     )
 
     mlflow.end_run()

@@ -35,7 +35,7 @@ do
     else
         pip install tensorflow-io==0.19.1 # also installs tensorflow==2.5.2
     fi
-    pip install mlflow
+    pip install mlflow-skinny
     export CRITEO_MLFLOW_TRACKING_URI="https://mlflow.da1.preprod.crto.in"
     echo ' '
     pip freeze |grep -e tensor -e pex -e horovod

@@ -9,7 +9,7 @@ import torchvision
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 
-
+import cluster_pack
 from tf_yarn.pytorch import run_on_yarn, TaskSpec, NodeLabel
 from tf_yarn.pytorch import PytorchExperiment, DataLoaderArgs
 from tf_yarn.pytorch import model_ckpt
@@ -94,10 +94,13 @@ def experiment_fn():
 
 
 if __name__ == "__main__":
+    zip_hdfs, _ = cluster_pack.upload_env(additional_repo='https://download.pytorch.org/whl/cu117',
+                                          allow_large_pex=True)
     run_on_yarn(
         experiment_fn=experiment_fn,
         task_specs={
             "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)
         },
+        pyenv_zip_path=zip_hdfs,
         queue="ml-gpu"
     )

@@ -14,6 +14,10 @@ from cluster_pack import filesystem
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
+try:
+    import tensorflow_io as tfio
+except Exception:
+    pass
 
 from tf_yarn import _internal, event, tensorboard
 from tf_yarn._task_commons import (

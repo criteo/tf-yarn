@@ -16,7 +16,7 @@ import cluster_pack
 
 logger = logging.getLogger(__name__)
 
-PATH_ON_HDFS = f"{cluster_pack.get_default_fs()}/tmp/{uuid.uuid4()}"
+PATH_ON_HDFS = f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}/tmp/{uuid.uuid4()}"
 FILENAME_ON_HDFS = "hello_tf_yarn.txt"
 FILEPATH_ON_HDFS = f"{PATH_ON_HDFS}/{FILENAME_ON_HDFS}"
 EXPECTED_CONTENT = "Hello tf-yarn!"

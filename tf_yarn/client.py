@@ -515,6 +515,7 @@ def _execute_and_await_termination(
     n_try: int = 0,
     poll_every_secs: int = 10
 ) -> Optional[metrics.Metrics]:
+    logger.info("posting serialized Experiment fcn to skein KV store")
     skein_cluster.app.kv[constants.KV_EXPERIMENT_FN] = serialized_fn
     eval_metrics_logger = evaluator_metrics.EvaluatorMetricsLogger(
         [task for task in _internal.iter_tasks(skein_cluster.tasks)
@@ -534,6 +535,8 @@ def _execute_and_await_termination(
     )
 
     state = None
+    container_log_urls: Dict[str, str] = {}
+
     while True:
         report = skein_cluster.client.application_report(skein_cluster.app.id)
         logger.info(
@@ -541,11 +544,22 @@ def _execute_and_await_termination(
         if state != report.state:
             logger.info(_format_app_report(report))
 
+        if state == "running":
+            try:
+                for key in skein_cluster.app.kv.keys():
+                    if '/logs' in key and key not in container_log_urls.keys():
+                        container_log_urls[key] = skein_cluster.app.kv.wait(key).decode()
+            except Exception:
+                pass  # accessing the kv if the app is not ready or closed raises, we just ignore
+
         if report.final_status != "undefined":
             skein_cluster.event_listener.join()
             log_events, result_metrics, container_status = _handle_events(skein_cluster.events,
                                                                           n_try)
             logger.info(log_events)
+            logger.info('container logs urls:')
+            for v in container_log_urls.values():
+                logger.info(v)
 
             containers = container_status.by_container_id()
             # add one for AM container

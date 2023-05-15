@@ -550,7 +550,7 @@ def _execute_and_await_termination(
                     if '/logs' in key and key not in container_log_urls.keys():
                         container_log_urls[key] = skein_cluster.app.kv.wait(key).decode()
             except Exception:
-                pass  # accessing the kv if the app is ont ready or closed raises, we just ignore
+                pass  # accessing the kv if the app is not ready or closed raises, we just ignore
 
         if report.final_status != "undefined":
             skein_cluster.event_listener.join()

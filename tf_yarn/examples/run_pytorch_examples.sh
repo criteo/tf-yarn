@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Run this script from root dir ./examples/run_examples.sh
+# Run this script from root dir ./tf_yarn/examples/run_pytorch_examples.sh
 #
 # Run all examples available with file name pattern *_example.py
 # This script prepares a virtual environment and example specific setup like downloading data.
@@ -8,6 +8,8 @@
 echo "run examples .."
 
 exit_code=0
+
+# the following packages must be installed in your (ubuntu) env for this to work
 # sudo apt install liblzma-dev lzma
 
 for pytorch_version in "1.13" "2.0"

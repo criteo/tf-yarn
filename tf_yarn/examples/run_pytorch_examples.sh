@@ -50,6 +50,7 @@ do
             echo "============================================="
         done
     popd
+    deactivate
 done
 
 exit $exit_code

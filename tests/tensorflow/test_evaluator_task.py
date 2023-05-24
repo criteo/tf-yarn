@@ -12,10 +12,10 @@ from tf_yarn.tensorflow.tasks import evaluator_task
 from tf_yarn.tensorflow.tasks.evaluator_task import _get_step
 
 checkpoints = {
-   "/path/to/model/dir/model.ckpt-0",
-   "/path/to/model/dir/model.ckpt-100",
-   "/path/to/model/dir/model.ckpt-200",
-   "/path/to/model/dir/model.ckpt-300"
+    "/path/to/model/dir/model.ckpt-0",
+    "/path/to/model/dir/model.ckpt-100",
+    "/path/to/model/dir/model.ckpt-200",
+    "/path/to/model/dir/model.ckpt-300"
 }
 
 
@@ -29,16 +29,14 @@ checkpoints = {
 ])
 def test_evaluate(evaluated_ckpts, ckpt_to_export):
     with mock.patch('tf_yarn._task_commons._get_experiment') as experiment_mock, \
-            mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_evaluated_checkpoint') \
-            as _get_evaluated_checkpoint, \
-            mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_all_checkpoints') \
-            as _get_checkpoints, \
-            mock.patch(
-                'tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.exists'
-            ) as exists_mock, \
-            mock.patch(
-                'tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.listdir'
-            ) as listdir_mock:
+        mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_evaluated_checkpoint') \
+        as _get_evaluated_checkpoint, \
+        mock.patch('tf_yarn.tensorflow.tasks.evaluator_task._get_all_checkpoints') \
+        as _get_checkpoints, \
+        mock.patch('tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.exists') as exists_mock, \
+        mock.patch('tf_yarn.tensorflow.tasks.evaluator_task.tf.io.gfile.listdir') \
+            as listdir_mock:
+
         exists_mock.side_effect = lambda *args, **kwargs: True
         listdir_mock.side_effect = lambda *args, **kwargs: evaluated_ckpts
         mock_exporter = mock.Mock(spec=tf.estimator.Exporter)

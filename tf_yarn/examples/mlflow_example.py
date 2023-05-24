@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 USER = getpass.getuser()
 WINE_QUALITY_FILE = f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}" \
-                     f"/user/{USER}/tf_yarn_test/winequality-red.csv"
+                    f"/user/{USER}/tf_yarn_test/winequality-red.csv"
 # Output path of the learned model on hdfs
 HDFS_DIR = (f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}/user/{USER}"
             f"/tf_yarn_test/tf_yarn_{int(datetime.now().timestamp())}")

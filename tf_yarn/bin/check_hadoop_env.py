@@ -69,7 +69,7 @@ def launch_remote_check(file: str) -> Tuple[bool, str]:
             files.update({'tf_yarn': tf_yarn_zip})
         service = skein.Service(
             script=f'./{archive_name} check_hadoop_env.py --file {file}',
-            resources=skein.Resources(2*1024, 1),
+            resources=skein.Resources(2 * 1024, 1),
             env={
                 'PEX_ROOT': '/tmp/{uuid.uuid4()}/',
                 'PYTHONPATH': '.:',

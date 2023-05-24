@@ -18,8 +18,8 @@ try:
     import horovod.tensorflow as hvd
 except (ModuleNotFoundError):
     logger.warning(
-       "horovod not installed. checkout "
-       "https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md"
+        "horovod not installed. checkout "
+        "https://github.com/criteo/tf-yarn/blob/master/docs/HorovodWithGloo.md"
     )
     pass
 
@@ -33,7 +33,7 @@ USER = getpass.getuser()
 3. Pass a full URI to either of the CSV files to the example
 """
 WINE_QUALITY_FILE = f"{cluster_pack.get_default_fs().replace('viewfs://', 'hdfs://')}" \
-                     f"/user/{USER}/tf_yarn_test/winequality-red.csv"
+                    f"/user/{USER}/tf_yarn_test/winequality-red.csv"
 
 """
 Output path of the learned model on hdfs

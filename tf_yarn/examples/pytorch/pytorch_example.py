@@ -99,7 +99,7 @@ if __name__ == "__main__":
     run_on_yarn(
         experiment_fn=experiment_fn,
         task_specs={
-            "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)
+            "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, label=NodeLabel.GPU)
         },
         pyenv_zip_path=zip_hdfs,
         queue="ml-gpu"

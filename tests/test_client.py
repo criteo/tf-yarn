@@ -200,11 +200,11 @@ def test_retry_run_on_yarn(nb_retries, nb_failures):
 
 def test_container_log_status():
     container_log_status = ContainerLogStatus(
-         {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                      "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
-          "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                          "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
-         {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
+        {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                     "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
+         "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                         "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
+        {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
     )
 
     containers = container_log_status.by_container_id()

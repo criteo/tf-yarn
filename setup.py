@@ -3,7 +3,7 @@ import setuptools
 
 here = os.path.abspath(os.path.dirname(__file__))
 
-DESCRIPTION = "Distributed TensorFlow on a YARN cluster"
+DESCRIPTION = "Distributed TensorFlow or pythorch on a YARN cluster"
 
 try:
     LONG_DESCRIPTION = open(os.path.join(here, "README.md"), encoding="utf-8").read()
@@ -28,8 +28,9 @@ CLASSIFIERS = [
     "Environment :: Console",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Topic :: Software Development :: Libraries"
 ]
 
@@ -46,14 +47,14 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     package_data={"tf_yarn": ["default.log.conf"]},
-    version=_check_add_criteo_environment("0.6.9"),
+    version=_check_add_criteo_environment("0.7.0"),
     install_requires=REQUIREMENTS,
     tests_require=["pytest", "hadoop-test-cluster"],
     extras_require={
         "cpu": ["tensorflow-io[tensorflow]>=0.8.0"],
         "gpu": ["tensorflow-io[tensorflow]>=0.8.0"],
     },
-    python_requires=">=3.6",
+    python_requires=">=3.7",
 
     maintainer="Criteo",
     maintainer_email="github@criteo.com",
@@ -61,7 +62,7 @@ setuptools.setup(
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
     classifiers=CLASSIFIERS,
-    keywords="tensorflow yarn",
+    keywords="tensorflow pytorch yarn",
     url="https://github.com/criteo/tf-yarn",
     entry_points={'console_scripts': [
         'check_hadoop_env = tf_yarn.bin.check_hadoop_env:main',

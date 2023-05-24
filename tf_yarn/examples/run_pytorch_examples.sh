@@ -28,13 +28,14 @@ do
         python3.9 -m pip install torch==1.13.1 torchvision==0.14.1 --index-url https://download.pytorch.org/whl/cu117
     else
         python3.9 -m pip install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu117
-        # Workaround for https://github.com/pytorch/pytorch/issues/97258
-        python3.9 -m pip install tensorflow==2.12.13 tensorflow_io==0.32.0
     fi
+    # Workaround for https://github.com/pytorch/pytorch/issues/97258
+    python3.9 -m pip install tensorflow==2.12.0 tensorflow_io==0.32.0
+
     python3.9 -m  pip install -e .
     python3.9 -m pip install webdataset==0.2.48 mlflow-skinny
 
-    python3.9 -m pip freeze |grep -e torch -e pex
+    python3.9 -m pip freeze |grep -e torch -e pex -e tensor
 
     # Execute examples
     pushd tf_yarn/examples/pytorch
@@ -50,6 +51,7 @@ do
             echo "============================================="
         done
     popd
+    deactivate
 done
 
 exit $exit_code

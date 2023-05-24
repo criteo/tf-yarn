@@ -1,6 +1,6 @@
 cluster-pack>=0.2.19
 skein>=0.8,<0.9
 tensorboard
+tensorflow_io
 pyarrow
 psutil
-protobuf<4.21.0;python_version<"3.7"

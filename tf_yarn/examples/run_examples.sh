@@ -18,27 +18,27 @@ do
     hdfs dfs -rm -r -f tf_yarn_test/tf_yarn_*
 
     # Setup environment
-    python3.6 -m venv tf-yarn_test_env
+    python3.9 -m venv tf-yarn_test_env
     . tf-yarn_test_env/bin/activate
-    pip install --upgrade pip setuptools wheel
-    pip install -e .
+    python3.9 -m pip install --upgrade pip setuptools wheel
+    python3.9 -m pip install -e .
     if [[ $tf_version == "1.15.2" ]]; then
-        pip install tensorflow-io==0.8.1 #also installs tensorflow==1.15.5
-        pip install tensorflow==${version} # force the correct version of tf after install of tfio
+        python3.9 -m pip install tensorflow-io==0.8.1 #also installs tensorflow==1.15.5
+        python3.9 -m pip install tensorflow==${version} # force the correct version of tf after install of tfio
 
         # https://github.com/pantsbuild/pex/issues/913
         # only pex 2.1.1 is supported for tf 1.15
-        pip install pex==2.1.1
+        python3.9 -m pip install pex==2.1.1
 
         #no version available for tf==2.5.2
-        pip install horovod==0.19.2+criteo.${tf_version}
+        python3.9 -m pip install horovod==0.19.2+criteo.${tf_version}
     else
-        pip install tensorflow-io==0.19.1 # also installs tensorflow==2.5.2
+        python3.9 -m pip install tensorflow-io==0.19.1 # also installs tensorflow==2.5.2
     fi
-    pip install mlflow-skinny
-    export CRITEO_MLFLOW_TRACKING_URI="https://mlflow.da1.preprod.crto.in"
+    python3.9 -m pip install mlflow-skinny
+    export CRITEO_MLFLOW_TRACKING_URI="https://mlflow.preprod.crto.in"
     echo ' '
-    pip freeze |grep -e tensor -e pex -e horovod
+    python3.9 -m pip freeze |grep -e tensor -e pex -e horovod
     echo ' '
 
     # Setup specific to examples
@@ -62,7 +62,7 @@ do
                 continue
             fi
             echo "executing $example with tf=${tf_version} .."
-            python $example
+            python3.9 $example
             if ! [ $? -eq 0 ]; then
                 exit_code=1
                 echo "error $example with tf=${tf_version}"
@@ -72,6 +72,7 @@ do
             echo "============================================="
         done
     popd
+    deactivate
 done
 
 exit $exit_code

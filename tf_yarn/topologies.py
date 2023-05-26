@@ -1,5 +1,6 @@
+import logging
 from enum import Enum
-from typing import Dict, Union
+from typing import Dict, Union, NamedTuple
 
 import skein
 
@@ -7,6 +8,9 @@ GB = 2**10
 MAX_MEMORY_CONTAINER = 48 * GB
 MAX_VCORES_CONTAINER = 48
 ALL_TASK_TYPES = {"chief", "worker", "ps", "evaluator", "tensorboard"}
+
+
+logger = logging.getLogger(__name__)
 
 
 class NodeLabel(Enum):
@@ -17,6 +21,34 @@ class NodeLabel(Enum):
     """
     CPU = ""  # Default.
     GPU = "gpu"
+
+
+class ContainerKey(NamedTuple):
+    type: str
+    id: int
+
+    def to_kv_str(self):
+        return f"{self.type}:{self.id}"
+
+    @staticmethod
+    def from_kv_str(kv_str: str):
+        try:
+            task_type, index = kv_str.split(":")
+            return ContainerKey(task_type, int(index))
+        except ValueError as e:
+            logger.error(f"impossible to create ContainerKey from {kv_str} because {e}")
+
+
+class ContainerTask(NamedTuple):
+    type: str
+    id: int
+    nb_proc: int
+
+    def to_container_key(self):
+        return ContainerKey(self.type, self.id)
+
+    def to_kv_str(self):
+        return f"{self.type}:{self.id}:{self.nb_proc}"
 
 
 class TaskSpec(object):

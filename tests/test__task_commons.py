@@ -26,7 +26,7 @@ def test__get_experiment_object():
 
 def test__get_experiment_exception():
     with contextlib.ExitStack() as stack:
-        stack.enter_context(patch(f'{MODULE_TO_TEST}.get_task'))
+        stack.enter_context(patch(f'{MODULE_TO_TEST}.get_task_key'))
         mocked_event = stack.enter_context(patch(f'{MODULE_TO_TEST}.event'))
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
 

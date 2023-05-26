@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import typing
 from typing import List, NamedTuple
 
 import cloudpickle
@@ -9,6 +8,7 @@ import skein
 
 from tf_yarn import event, constants
 from tf_yarn._internal import iter_tasks
+from tf_yarn.topologies import ContainerTask, ContainerKey
 
 
 def setup_logging():
@@ -19,7 +19,7 @@ def setup_logging():
 
 
 def _setup_container_logs(client):
-    task = get_task()
+    task = get_task_key()
     event.broadcast_container_start_time(client, task)
     container = next(c for c in client.get_containers()
                      if c.yarn_container_id == os.environ["CONTAINER_ID"])
@@ -31,19 +31,16 @@ def _setup_container_logs(client):
 
 def _get_cluster_tasks(
     client: skein.ApplicationClient
-) -> List[str]:
+) -> List[ContainerTask]:
     return list(iter_tasks(json.loads(client.kv.wait(constants.KV_CLUSTER_INSTANCES).decode())))
 
 
-def _compute_world_size(cluster_tasks: List[str]):
-    return sum([int(task_str.split(':')[2]) for task_str in cluster_tasks])
+def _compute_world_size(cluster_tasks: List[ContainerTask]):
+    return sum([task.nb_proc for task in cluster_tasks])
 
 
-def _get_nb_workers(task_id:str, cluster_tasks:List[str]):
-    def match(task_str: str, id: int) -> bool:
-        return True if task_str.split(':')[1] == id else False
-
-    return [task_str.split(':')[2] for task_str in cluster_tasks if match(task_str, task_id)][0]
+def _get_nb_workers(task_id: str, cluster_tasks: List[ContainerTask]):
+    return [task.nb_proc for task in cluster_tasks if task.id == task_id][0]
 
 
 def _get_experiment(
@@ -52,7 +49,7 @@ def _get_experiment(
     try:
         experiment = cloudpickle.loads(client.kv.wait(constants.KV_EXPERIMENT_FN))()
     except Exception as e:
-        task = get_task()
+        task = get_task_key()
         event.start_event(client, task)
         event.stop_event(client, task, e)
         raise
@@ -63,41 +60,26 @@ def n_try() -> int:
     return int(os.getenv("TF_YARN_N_TRY", "0"))
 
 
-def get_task() -> str:
-    return os.getenv("SKEIN_CONTAINER_ID", "").replace("_", ":", 1)
-
-
-def get_task_type(task: str) -> str:
-    parts = task.split(':')
-    if len(parts) > 0:
-        return parts[0]
-    else:
-        return ""
+def get_task_key() -> ContainerKey:
+    return ContainerKey.from_kv_str(os.getenv("SKEIN_CONTAINER_ID", "").replace("_", ":", 1))
 
 
 def is_worker(task_type: str = None) -> bool:
     if not task_type:
-        task_type = get_task_type(get_task())
+        task_type = get_task_key().type
 
     return task_type == 'worker'
 
 
 def is_evaluator(task_type: str = None) -> bool:
     if not task_type:
-        task_type = get_task_type(get_task())
+        task_type = get_task_key().type
 
     return task_type == 'evaluator'
 
 
 def is_chief(task_type: str = None) -> bool:
     if not task_type:
-        task_type = get_task_type(get_task())
+        task_type = get_task_key().type
 
     return task_type == 'chief'
-
-
-def get_task_description() -> typing.Tuple[str, int]:
-    task = get_task()
-    task_type, task_str = task.split(":", 1)
-    task_id: int = int(task_str)
-    return task_type, task_id

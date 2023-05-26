@@ -25,8 +25,8 @@ from tf_yarn._task_commons import (
     _compute_world_size,
     _get_nb_workers,
     _get_experiment,
-    get_task_description,
-    setup_logging,
+    get_task_key,
+    setup_logging
 )
 from tf_yarn.pytorch.experiment import DataLoaderArgs, PytorchExperiment
 
@@ -126,10 +126,10 @@ def _train(device: int, rank: int, world_size: int, collective_ops_backend: str)
 def _tensorboard(
     tensorboard_dir: str, client: skein.ApplicationClient
 ) -> Generator[None, None, None]:
-    task_type, task_id = get_task_description()
+    task_key = get_task_key()
 
     thread = _internal.MonitoredThread(
-        name=f"{task_type}:{task_id}",
+        name=f"{task_key.to_kv_str()}",
         target=tensorboard.start_tf_board,
         args=(client, tensorboard_dir),
         daemon=True,
@@ -183,17 +183,17 @@ def _get_collective_ops_backend(n_workers_per_executor: int) -> str:
 
 def main() -> None:
     _log_sys_info()
-    task_type, task_id = get_task_description()
+    task_key = get_task_key()
 
     client = skein.ApplicationClient.from_current()
     experiment = _get_experiment(client)
     assert isinstance(experiment, PytorchExperiment)
     cluster_tasks = _get_cluster_tasks(client)
-    n_workers_per_executor = _get_nb_workers(task_id, cluster_tasks)
+    n_workers_per_executor = _get_nb_workers(task_key.id, cluster_tasks)
     world_size = _compute_world_size(cluster_tasks)
 
     _logger.info(
-        f"Task type: {task_type}; Task id: {task_id}; "
+        f"Task type: {task_key.type}; Task id: {task_key.id}; "
         f"World_size: {world_size}: Cluster tasks: {cluster_tasks}"
     )
 
@@ -201,23 +201,25 @@ def main() -> None:
         workers = list()
         mp.set_start_method("spawn", force=True)
         for n in range(n_workers_per_executor):
+            rank = (task_key.id * n_workers_per_executor) + n
             worker = mp.Process(
                 target=_train,
                 args=(
                     _get_device(n),
                     # Todo: better computation of rank as sum[0:taskid](n_process(task))
-                    (task_id * n_workers_per_executor) + n,
+                    rank,
                     world_size,
                     _get_collective_ops_backend(n_workers_per_executor),
                 ),
             )
+            print(f"starting process {n} (rank {rank}) of task {task_key.to_kv_str()}")
             worker.start()
             workers.append(worker)
 
         for worker in workers:
             worker.join()
     else:
-        _train(0, task_id, world_size, "nccl")
+        _train(0, task_key.id, world_size, "nccl")
 
 
 if __name__ == "__main__":

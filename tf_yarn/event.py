@@ -5,6 +5,8 @@ import typing
 
 import skein
 
+from tf_yarn.topologies import ContainerKey
+
 _logger = logging.getLogger(__name__)
 
 
@@ -17,52 +19,52 @@ def wait(client: skein.ApplicationClient, key: str) -> str:
 
 
 def logs_event(client: skein.ApplicationClient,
-               task: str,
+               task_key: ContainerKey,
                logs: str) -> None:
-    broadcast(client, f"{task}/logs", logs)
+    broadcast(client, f"{task_key.to_kv_str()}/logs", logs)
 
 
 def url_event(client: skein.ApplicationClient,
-              task: str,
+              task_key: ContainerKey,
               url: str) -> None:
-    broadcast(client, f"{task}/url", url)
+    broadcast(client, f"{task_key.to_kv_str()}/url", url)
 
 
 def init_event(client: skein.ApplicationClient,
-               task: str,
+               task_key: ContainerKey,
                sock_addr: str) -> None:
-    broadcast(client, f"{task}/init", sock_addr)
+    broadcast(client, f"{task_key.to_kv_str()}/init", sock_addr)
 
 
 def start_event(client: skein.ApplicationClient,
-                task: str) -> None:
-    broadcast(client, f"{task}/start")
+                task_key: ContainerKey) -> None:
+    broadcast(client, f"{task_key.to_kv_str()}/start")
 
 
 def stop_event(client: skein.ApplicationClient,
-               task: str,
+               task_key: ContainerKey,
                e: typing.Optional[Exception]) -> None:
-    broadcast(client, f"{task}/stop", maybe_format_exception(e))
+    broadcast(client, f"{task_key.to_kv_str()}/stop", maybe_format_exception(e))
 
 
 def broadcast_train_eval_start_timer(client: skein.ApplicationClient,
-                                     task: str) -> None:
-    broadcast(client, f'{task}/train_eval_start_time', str(time.time()))
+                                     task_key: ContainerKey) -> None:
+    broadcast(client, f'{task_key.to_kv_str()}/train_eval_start_time', str(time.time()))
 
 
 def broadcast_train_eval_stop_timer(client: skein.ApplicationClient,
-                                    task: str) -> None:
-    broadcast(client, f'{task}/train_eval_stop_time', str(time.time()))
+                                    task_key: ContainerKey) -> None:
+    broadcast(client, f'{task_key.to_kv_str()}/train_eval_stop_time', str(time.time()))
 
 
 def broadcast_container_start_time(client: skein.ApplicationClient,
-                                   task: str) -> None:
-    broadcast(client, f'{task}/container_start_time', str(time.time()))
+                                   task_key: ContainerKey) -> None:
+    broadcast(client, f'{task_key.to_kv_str()}/container_start_time', str(time.time()))
 
 
 def broadcast_container_stop_time(client: skein.ApplicationClient,
-                                  task: str) -> None:
-    broadcast(client, f'{task}/container_stop_time', str(time.time()))
+                                  task_key: ContainerKey) -> None:
+    broadcast(client, f'{task_key.to_kv_str()}/container_stop_time', str(time.time()))
 
 
 def broadcast(

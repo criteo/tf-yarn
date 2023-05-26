@@ -2,38 +2,39 @@ import pytest
 from unittest import mock
 from tf_yarn.evaluator_metrics import EvaluatorMetricsLogger
 import tf_yarn
+from tf_yarn.topologies import ContainerTask, ContainerKey
 
 MONITORED_METRICS_MOCK = {
     'metric1': 'metric1 description',
     'metric2': 'metric2 description'
 }
 
-evaluator_list = ['eval1', 'eval2']
+evaluator_list = [ContainerTask('eval', 1, 1), ContainerTask('eval', 2, 1)]
 
 kv_stores = [
-    {'eval1/metric1': b'0.0', 'eval1/metric2': b'13.0',
-     'eval2/metric1': b'5.0', 'eval2/metric2': b'16.0'},
-    {'eval1/metric1': b'0.9', 'eval1/metric2': b'13.0',
-     'eval2/metric1': b'13.0', 'eval2/metric2': b'26.0'},
-    {'eval1/metric1': b'0.9', 'eval1/metric2': b'13.0',
-     'eval2/metric1': b'13.0', 'eval2/metric2': b'26.0'},
-    {'eval1/metric1': b'0.9', 'eval1/metric2': b'13.0',
-     'eval2/metric1': b'13.0', 'eval2/metric2': b'26.0'},
-    {'eval1/metric1': b'0.9', 'eval1/metric2': b'13.0',
-     'eval2/metric1': b'13.0', 'eval2/metric2': b'26.0'}
+    {'eval:1/metric1': b'0.0', 'eval:1/metric2': b'13.0',
+     'eval:2/metric1': b'5.0', 'eval:2/metric2': b'16.0'},
+    {'eval:1/metric1': b'0.9', 'eval:1/metric2': b'13.0',
+     'eval:2/metric1': b'13.0', 'eval:2/metric2': b'26.0'},
+    {'eval:1/metric1': b'0.9', 'eval:1/metric2': b'13.0',
+     'eval:2/metric1': b'13.0', 'eval:2/metric2': b'26.0'},
+    {'eval:1/metric1': b'0.9', 'eval:1/metric2': b'13.0',
+     'eval:2/metric1': b'13.0', 'eval:2/metric2': b'26.0'},
+    {'eval:1/metric1': b'0.9', 'eval:1/metric2': b'13.0',
+     'eval:2/metric1': b'13.0', 'eval:2/metric2': b'26.0'}
 ]
 
 last_metrics_list = [
-    {'eval1': {'metric1': None, 'metric2': None},
-     'eval2': {'metric1': None, 'metric2': None}},
-    {'eval1': {'metric1': 0.9, 'metric2': 13.0},
-     'eval2': {'metric1': 5.0, 'metric2': 16.0}},
-    {'eval1': {'metric1': None, 'metric2': None},
-     'eval2': {'metric1': None, 'metric2': None}},
-    {'eval1': {'metric1': None, 'metric2': None},
-     'eval2': {'metric1': None, 'metric2': None}},
-    {'eval1': {'metric1': None, 'metric2': None},
-     'eval2': {'metric1': None, 'metric2': None}}
+    {ContainerKey('eval', 1): {'metric1': None, 'metric2': None},
+     ContainerKey('eval', 2): {'metric1': None, 'metric2': None}},
+    {ContainerKey('eval', 1): {'metric1': 0.9, 'metric2': 13.0},
+     ContainerKey('eval', 2): {'metric1': 5.0, 'metric2': 16.0}},
+    {ContainerKey('eval', 1): {'metric1': None, 'metric2': None},
+     ContainerKey('eval', 2): {'metric1': None, 'metric2': None}},
+    {ContainerKey('eval', 1): {'metric1': None, 'metric2': None},
+     ContainerKey('eval', 2): {'metric1': None, 'metric2': None}},
+    {ContainerKey('eval', 1): {'metric1': None, 'metric2': None},
+     ContainerKey('eval', 2): {'metric1': None, 'metric2': None}}
 ]
 
 log_thresholds_list = [
@@ -42,15 +43,15 @@ log_thresholds_list = [
 ]
 
 logs_list = [
-    [(('Statistics for eval1: metric1 description: 0.0 metric2 description: 13.0',),),
-     (('Statistics for eval2: metric1 description: 5.0 metric2 description: 16.0',),)],
-    [(('Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)],
-    [(('Statistics for eval1: metric1 description: 0.9',),),
-     (('Statistics for eval2: metric2 description: 26.0',),)],
-    [(('Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
-     (('Statistics for eval2: metric2 description: 26.0',),)],
-    [(('Statistics for eval1: metric1 description: 0.9 metric2 description: 13.0',),),
-     (('Statistics for eval2: metric1 description: 13.0 metric2 description: 26.0',),)]
+    [(('Statistics for eval:1: metric1 description: 0.0 metric2 description: 13.0',),),
+     (('Statistics for eval:2: metric1 description: 5.0 metric2 description: 16.0',),)],
+    [(('Statistics for eval:2: metric1 description: 13.0 metric2 description: 26.0',),)],
+    [(('Statistics for eval:1: metric1 description: 0.9',),),
+     (('Statistics for eval:2: metric2 description: 26.0',),)],
+    [(('Statistics for eval:1: metric1 description: 0.9 metric2 description: 13.0',),),
+     (('Statistics for eval:2: metric2 description: 26.0',),)],
+    [(('Statistics for eval:1: metric1 description: 0.9 metric2 description: 13.0',),),
+     (('Statistics for eval:2: metric1 description: 13.0 metric2 description: 26.0',),)]
 ]
 
 
@@ -60,10 +61,6 @@ logs_list = [
 )
 def test_log(kv_store, last_metrics, log_thresholds, logs):
     tf_yarn.evaluator_metrics.MONITORED_METRICS = MONITORED_METRICS_MOCK
-
-    def skein_kv_get(self, key):
-        print(key)
-        return kv_store.get(key)
 
     with mock.patch('tf_yarn.evaluator_metrics.skein.ApplicationClient') as skein_app_mock,\
             mock.patch('tf_yarn.evaluator_metrics.logger') as logger_mock:

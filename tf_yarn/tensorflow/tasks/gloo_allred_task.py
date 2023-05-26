@@ -19,7 +19,7 @@ from tf_yarn import event, _task_commons
 from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn.tensorflow.tasks.evaluator_task import evaluator_fn
 from tf_yarn._task_commons import (
-    setup_logging, get_task, is_chief, get_task_type, get_task_description
+    setup_logging, get_task_key, is_chief
 )
 setup_logging()
 
@@ -56,7 +56,7 @@ def _worker_fn(client, task, net_if):
     experiment = _task_commons._get_experiment(client)
 
     if isinstance(experiment, Experiment):
-        if not is_chief(get_task_type(task)):
+        if not is_chief(task.type):
             # Overwrite config to do nothing but training to improve training speed
             experiment.estimator._model_dir = "."
             new_config = experiment.estimator.config.replace(
@@ -74,7 +74,7 @@ def _worker_fn(client, task, net_if):
             hooks=experiment.train_spec.hooks,
             max_steps=experiment.train_spec.max_steps)
     elif isinstance(experiment, KerasExperiment):
-        if not is_chief(get_task_type(task)):
+        if not is_chief(task.type):
             if experiment.train_params['callbacks'] is not None:
                 callbacks_to_keep = []
                 for callback in experiment.train_params['callbacks']:
@@ -100,7 +100,7 @@ def _driver_fn(client, net_if):
     n_workers = 1
     for cluster_task in cluster_tasks:
         if 'worker' in cluster_task:
-            worker_addr = event.wait(client, f"{cluster_task}/addr")
+            worker_addr = event.wait(client, f"{cluster_task.to_container_key().to_kv_str()}/addr")
             logger.info(f"{cluster_task}: {worker_addr}")
             worker_list.append(f"{worker_addr}:{N_PROCESS_PER_WORKER}")
             n_workers += 1
@@ -114,31 +114,30 @@ def _driver_fn(client, net_if):
             {host.rank},{host.size},{host.local_rank},\
             {host.local_size},{host.cross_rank},{host.cross_size}\
             """
-        event.broadcast(client, f"{get_task()}/{host.hostname}", host_info)
+        event.broadcast(client, f"{get_task_key()}/{host.hostname}", host_info)
 
     global_rendezv = RendezvousServer(verbose=1)
     global_rendezv_port = global_rendezv.start_server()
     global_rendezv.httpd.init(host_alloc_plan)
-    event.broadcast(client, f"{get_task()}/sock_addr", f"{net_if[1]}:{global_rendezv_port}")
+    event.broadcast(client, f"{get_task_key()}/sock_addr", f"{net_if[1]}:{global_rendezv_port}")
     return global_rendezv.listen_thread
 
 
 def main():
     client = skein.ApplicationClient.from_current()
-    task_type, task_id = get_task_description()
-    task = get_task()
+    task = get_task_key()
     event.init_event(client, task, "127.0.0.1:0")
     _task_commons._setup_container_logs(client)
     net_if = get_net_if()
 
-    if task_type == 'chief':
+    if task.type == 'chief':
         _driver_fn(client, net_if)
-    if task_type in ['worker', 'chief']:
+    if task.type in ['worker', 'chief']:
         _worker_fn(client, task, net_if)
-    elif task_type == 'evaluator':
+    elif task.type == 'evaluator':
         evaluator_fn(client)
     else:
-        logger.error(f'Unknown task type {task_type}')
+        logger.error(f'Unknown task type {task.type}')
 
     event.stop_event(client, task, None)
 

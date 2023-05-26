@@ -17,8 +17,7 @@ from tf_yarn.client import (
     ContainerLogStatus
 )
 from tf_yarn import constants
-from tf_yarn.topologies import TaskSpec
-
+from tf_yarn.topologies import TaskSpec, ContainerKey
 
 sock_addrs = {
     'chief': ['addr1:port1', 'addr10:port10', 'addr11:port11'],
@@ -201,16 +200,18 @@ def test_retry_run_on_yarn(nb_retries, nb_failures):
 
 def test_container_log_status():
     container_log_status = ContainerLogStatus(
-        {"chief:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                     "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
-         "evaluator:0": ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
-                         "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
-        {"chief:0": "SUCCEEDED", "evaluator:0": "FAILED"}
+        {ContainerKey("chief", 0):
+            ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                "containerlogs/container_e17294_1569204305368_264801_01_000002/myuser"),
+         ContainerKey("evaluator", 0):
+            ("http://ec-0d-9a-00-3a-c0.pa4.hpc.criteo.preprod:8042/node/"
+                "containerlogs/container_e95614_6456565654646_344343_01_000003/myuser")},
+        {ContainerKey("chief", 0): "SUCCEEDED", ContainerKey("evaluator", 0): "FAILED"}
     )
 
     containers = container_log_status.by_container_id()
 
-    assert containers["container_e17294_1569204305368_264801_01_000002"] == ("chief:0",
-                                                                             "SUCCEEDED")
-    assert containers["container_e95614_6456565654646_344343_01_000003"] == ("evaluator:0",
-                                                                             "FAILED")
+    assert containers["container_e17294_1569204305368_264801_01_000002"] == \
+           (ContainerKey("chief", 0), "SUCCEEDED")
+    assert containers["container_e95614_6456565654646_344343_01_000003"] == \
+           (ContainerKey("evaluator", 0), "FAILED")

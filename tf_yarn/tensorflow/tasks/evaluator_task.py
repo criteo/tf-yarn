@@ -9,7 +9,7 @@ import tensorflow as tf
 from tf_yarn import _task_commons, event
 from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn.tensorflow import metrics
-from tf_yarn._task_commons import setup_logging, get_task, get_task_description
+from tf_yarn._task_commons import setup_logging, get_task_key
 setup_logging()
 
 logger = logging.getLogger(__name__)
@@ -142,17 +142,16 @@ def _get_evaluated_checkpoint(eval_dir):
 
 def main():
     client = skein.ApplicationClient.from_current()
-    task = get_task()
-    task_type, task_id = get_task_description()
-    event.init_event(client, task, "127.0.0.1:0")
+    task_key = get_task_key()
+    event.init_event(client, task_key, "127.0.0.1:0")
     _task_commons._setup_container_logs(client)
 
-    if task_type == "evaluator":
+    if task_key.type == "evaluator":
         evaluator_fn(client)
     else:
-        logger.info(f"{task_type}:{task_id}: nothing to do")
+        logger.info(f"{task_key.to_kv_str()}: nothing to do")
 
-    event.stop_event(client, task, None)
+    event.stop_event(client, task_key, None)
 
 
 if __name__ == '__main__':

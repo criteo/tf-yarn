@@ -7,7 +7,7 @@ from typing import List, Dict, Tuple
 import skein
 
 from tf_yarn import mlflow
-
+from tf_yarn.topologies import ContainerTask
 
 MONITORED_METRICS = {
     'awake_time_ratio': 'Awake/idle ratio',
@@ -19,16 +19,16 @@ MONITORED_METRICS = {
 logger = logging.getLogger(__name__)
 
 
-class EvaluatorMetricsLogger():
+class EvaluatorMetricsLogger:
     def __init__(
         self,
-        evaluator_list: List[str],
+        evaluator_list: List[ContainerTask],
         app: skein.ApplicationClient,
         log_thresholds: Dict[str, Tuple[float, float]] = None,
         n_try: int = 0
     ):
         self.last_metrics = {
-            evaluator: {metric: None for metric in MONITORED_METRICS}
+            evaluator.to_container_key(): {metric: None for metric in MONITORED_METRICS}
             for evaluator in evaluator_list
         }
         self.evaluator_list = evaluator_list
@@ -51,15 +51,20 @@ class EvaluatorMetricsLogger():
 
     def log(self):
         for evaluator in self.evaluator_list:
+            evaluator_key = evaluator.to_container_key()
             cur_eval_stats = []
-            for key, value in MONITORED_METRICS.items():
-                stat = self.app.kv.get(f'{evaluator}/{key}', None)
+            for metric_key, value in MONITORED_METRICS.items():
+                stat = self.app.kv.get(f'{evaluator_key.to_kv_str()}/{metric_key}', None)
                 stat = float(stat.decode()) if stat else None
-                if stat is not None and stat != self.last_metrics[evaluator][key]:
-                    if key not in self.log_thresholds or\
-                            (self.log_thresholds[key][0] <= stat <= self.log_thresholds[key][1]):
+                if stat is not None and stat != self.last_metrics[evaluator_key][metric_key]:
+                    if metric_key not in self.log_thresholds or \
+                            (self.log_thresholds[metric_key][0]
+                             <= stat
+                             <= self.log_thresholds[metric_key][1]):
                         cur_eval_stats.append(f'{value}: {stat}')
-                    self.last_metrics[evaluator][key] = stat
-                    mlflow.log_metric(mlflow.format_key(f"{evaluator}_{key}_{self.n_try}"), stat)
+                    self.last_metrics[evaluator_key][metric_key] = stat
+                    mlflow.log_metric(mlflow.format_key(
+                        f"{evaluator_key}_{metric_key}_{self.n_try}"), stat)
             if len(cur_eval_stats) > 0:
-                logger.info(f'Statistics for {evaluator}: {" ".join(cur_eval_stats)}')
+                logger.info(
+                    f'Statistics for {evaluator_key.to_kv_str()}: {" ".join(cur_eval_stats)}')

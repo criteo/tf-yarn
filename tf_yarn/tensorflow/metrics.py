@@ -9,7 +9,7 @@ import skein
 from tf_yarn.event import broadcast
 from tf_yarn.tensorflow import experiment, keras_experiment
 from tf_yarn import mlflow
-from tf_yarn._task_commons import n_try, is_chief, get_task
+from tf_yarn._task_commons import n_try, is_chief, get_task_key
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class EvalMonitorHook(tf.estimator.SessionRunHook):
     '''
     def __init__(self):
         self.client = skein.ApplicationClient.from_current()
-        self.task = get_task()
+        self.task_key = get_task_key()
         self.step_counter = 0
         self.eval_start_time = 0.0
         self.eval_step_dur_accu = 0.0
@@ -68,7 +68,7 @@ class EvalMonitorHook(tf.estimator.SessionRunHook):
         self.broadcast('last_training_step', str(run_values.results))
 
     def broadcast(self, key: str, value: str):
-        broadcast(self.client, f'{self.task}/{key}', value)
+        broadcast(self.client, f'{self.task_key.to_kv_str()}/{key}', value)
 
 
 def get_all_metrics(model_path):

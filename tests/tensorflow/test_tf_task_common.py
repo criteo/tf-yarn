@@ -1,5 +1,6 @@
 
 import contextlib
+import os
 from unittest import mock
 from unittest.mock import patch
 import json
@@ -14,23 +15,23 @@ from tf_yarn.tensorflow.tasks.tf_task_common import (
     _wait_for_connected_tasks, _shutdown_container
 )
 from tf_yarn.tensorflow import Experiment
-
+from tf_yarn.topologies import ContainerTask, ContainerKey
 
 MODULE_TO_TEST = "tf_yarn.tensorflow.tasks.tf_task_common"
 
 
 @pytest.mark.parametrize("task,device_filters", [
-    ("ps:0", ["/job:ps", "/job:worker/task:42"]),
-    ("worker:42", ["/job:ps", "/job:worker/task:42"])
+    (ContainerTask("ps", 0, 1), ["/job:ps", "/job:worker/task:42"]),
+    (ContainerTask("worker", 42, 2), ["/job:ps", "/job:worker/task:42"])
 ])
 def test_matches_device_filters(task, device_filters):
     assert _matches_device_filters(task, device_filters)
 
 
 @pytest.mark.parametrize("task,device_filters", [
-    ("chief:0", ["/job:ps", "/job:worker/task:42"]),
-    ("worker:0", ["/job:ps", "/job:worker/task:42"]),
-    ("evaluator:0", ["/job:ps", "/job:worker/task:42"])
+    (ContainerTask("chief", 0, 1), ["/job:ps", "/job:worker/task:42"]),
+    (ContainerTask("worker", 0, 2), ["/job:ps", "/job:worker/task:42"]),
+    (ContainerTask("evaluator", 0, 1), ["/job:ps", "/job:worker/task:42"])
 ])
 def test_does_not_match_device_filters(task, device_filters):
     assert not _matches_device_filters(task, device_filters)
@@ -47,7 +48,7 @@ def test__prepare_container():
         # fill client mock
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
         host_port = ('localhost', 1234)
-        instances = [('worker', 10), ('chief', 1)]
+        instances = [('worker', 10, 2), ('chief', 1, 1)]
         mocked_client.kv.wait.return_value = json.dumps(instances).encode()
         mocked_client_call.return_value = mocked_client
         (client, cluster_spec, cluster_tasks) = _prepare_container(host_port)
@@ -66,9 +67,9 @@ def test__execute_dispatched_function():
             patch(f'{MODULE_TO_TEST}.tf.estimator.train_and_evaluate'))
         passed_args = []
         mocked_train.side_effect = lambda *args: passed_args.append(args)
-        mocked_task_description = \
-            stack.enter_context(patch(f'{MODULE_TO_TEST}.get_task_description'))
-        mocked_task_description.return_value = ("worker", "0")
+        mocked_task_key = \
+            stack.enter_context(patch(f'{MODULE_TO_TEST}.get_task_key'))
+        mocked_task_key.return_value = ContainerKey("worker", 0)
 
         mocked_client = mock.MagicMock(spec=skein.ApplicationClient)
         mocked_experiment = Experiment(None, None, None)
@@ -85,10 +86,11 @@ def test_wait_for_connected_tasks():
         mocked_event = stack.enter_context(patch(f'{MODULE_TO_TEST}.event'))
         mocked_filter = stack.enter_context(patch(f'{MODULE_TO_TEST}._matches_device_filters'))
         mocked_filter.return_value = True
-        tasks = ['task:1', 'task:2']
+        tasks = [ContainerTask('task', 1, 1), ContainerTask('task', 2, 1)]
         message = 'tag'
         _wait_for_connected_tasks(None, tasks, None, message)
-        calls = [mock.call(None, f'{task}/{message}') for task in tasks]
+        calls = [mock.call(
+            None, f'{task.to_container_key().to_kv_str()}/{message}') for task in tasks]
         mocked_event.wait.assert_has_calls(calls, any_order=True)
 
 
@@ -101,6 +103,7 @@ def test__shutdown_container():
         mocked_session_config = mock.MagicMock(spec=tf.compat.v1.ConfigProto)
         mocked_thread = mock.MagicMock(spec=MonitoredThread)
         mocked_thread.exception.return_value = Exception()
+        os.environ["SKEIN_CONTAINER_ID"] = "worker_0"
         with pytest.raises(Exception):
             _shutdown_container(None, None, mocked_session_config, mocked_thread)
 

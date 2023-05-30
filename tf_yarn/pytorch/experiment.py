@@ -47,9 +47,6 @@ class PytorchExperiment(NamedTuple):
     # load and iterate over the training set
     dataloader_args: DataLoaderArgs
 
-    # Number of workers per executors
-    n_workers_per_executor: int = 1
-
     # HDFS directory where tensorboard results will be written at the end of the training
     tensorboard_hdfs_dir: Optional[str] = None
 

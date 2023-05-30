@@ -36,11 +36,10 @@ from tf_yarn import (
     mlflow,
     topologies
 )
-from tf_yarn._task_commons import (
-    get_task_type, is_chief, is_evaluator, is_worker
-)
+from tf_yarn._task_commons import is_chief, is_evaluator, is_worker
 from tf_yarn import tensorboard
 from tf_yarn._criteo import is_criteo
+from tf_yarn.topologies import ContainerKey
 
 YARN_LOG_TRIES = 15
 
@@ -54,26 +53,26 @@ ExperimentFn = Callable[[], Any]
 class SkeinCluster(NamedTuple):
     client: skein.Client
     app: skein.ApplicationClient
-    tasks: List[Tuple[str, int]]
+    tasks: List[Tuple[str, int, int]]
     event_listener: Thread
-    events: Dict[str, Dict[str, str]]
+    events: Dict[ContainerKey, Dict[str, str]]
 
 
 class ContainerLogStatus(NamedTuple):
-    log_urls: Dict[str, str] = dict()
-    container_status: Dict[str, str] = dict()
+    log_urls: Dict[ContainerKey, str] = dict()
+    container_status: Dict[ContainerKey, str] = dict()
 
-    def by_container_id(self) -> Dict[str, Tuple[str, str]]:
-        containers: Dict[str, Tuple[str, str]] = {}
+    def by_container_id(self) -> Dict[str, Tuple[ContainerKey, str]]:
+        containers: Dict[str, Tuple[ContainerKey, str]] = {}
         if len(self.log_urls.keys()) != len(self.container_status.keys()):
             logger.warning("logs_urls and container_status dicts have not the same length")
             return containers
 
-        for task, url, status in zip(self.log_urls.keys(),
-                                     self.log_urls.values(),
-                                     self.container_status.values()):
+        for task_key, url, status in zip(self.log_urls.keys(),
+                                         self.log_urls.values(),
+                                         self.container_status.values()):
             container_id = self._get_container_id(url)
-            containers[container_id] = (task, status)
+            containers[container_id] = (task_key, status)
 
         return containers
 
@@ -153,9 +152,9 @@ def _maybe_zip_task_files(files, tempdir):
 
 
 def _setup_to_use_cuda_archive(
-    env: Dict[str, str],
-    pre_script_hook: str,
-    cuda_runtime_hdfs_path: str
+        env: Dict[str, str],
+        pre_script_hook: str,
+        cuda_runtime_hdfs_path: str
 ) -> str:
     if "LD_LIBRARY_PATH" not in env:
         logger.warning("No LD_LIBRARY_PATH found in env. \
@@ -169,8 +168,8 @@ def _setup_to_use_cuda_archive(
 
 
 def _setup_cluster_spec(
-    task_instances: List[Tuple[str, int]],
-    app: skein.ApplicationClient
+        task_instances: List[Tuple[str, int, int]],
+        app: skein.ApplicationClient
 ) -> None:
     tasks_not_in_cluster = ['evaluator', 'tensorboard']
     cluster_instances = [t for t in task_instances if t[0] not in tasks_not_in_cluster]
@@ -194,7 +193,7 @@ def _setup_skein_cluster(
         cuda_runtime_hdfs_path: Optional[str] = None
 ) -> SkeinCluster:
     os.environ["JAVA_TOOL_OPTIONS"] = \
-        "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 "\
+        "-XX:ParallelGCThreads=1 -XX:CICompilerCount=2 " \
         f"{os.environ.get('JAVA_TOOL_OPTIONS', '')}"
 
     pre_script_hook = pre_script_hook if pre_script_hook else ""
@@ -221,9 +220,9 @@ def _setup_skein_cluster(
                             set -x
                             {pre_script_hook}
                             {_env.gen_task_cmd(
-                                pyenv,
-                                task_type,
-                                custom_task_module)}
+                    pyenv,
+                    task_type,
+                    custom_task_module)}
                         ''',
                 resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
                 max_restarts=0,
@@ -250,23 +249,26 @@ def _setup_skein_cluster(
         if skein_client is None:
             skein_client = skein.Client()
 
-        task_instances = [(task_type, spec.instances) for task_type, spec in task_specs.items()]
-        events: Dict[str, Dict[str, str]] = \
-            {task: {} for task in _internal.iter_tasks(task_instances)}
+        container_info = [(task_type, spec.instances, spec.nb_proc_per_worker)
+                          for task_type, spec in task_specs.items()]
+        # we strip the number of task per container from the event keys,
+        # as events are tied to cnotainers and not processes
+        events: Dict[ContainerKey, Dict[str, str]] = {
+            task.to_container_key(): {} for task in _internal.iter_tasks(container_info)}
         app = skein_client.submit_and_connect(spec)
 
         # Start a thread which collects all events posted by all tasks in kv store
         event_listener = Thread(target=_aggregate_events, args=(app.kv, events), daemon=True)
         event_listener.start()
 
-        return SkeinCluster(skein_client, app, task_instances, event_listener, events)
+        return SkeinCluster(skein_client, app, container_info, event_listener, events)
 
 
 def _run_on_cluster(
-    experiment_fn: ExperimentFn,
-    skein_cluster: SkeinCluster,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    n_try: int = 0
+        experiment_fn: ExperimentFn,
+        skein_cluster: SkeinCluster,
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+        n_try: int = 0
 ) -> Optional[metrics.Metrics]:
     # Attempt serialization early to avoid allocating unnecesary resources
     serialized_fn = cloudpickle.dumps(experiment_fn)
@@ -288,22 +290,22 @@ def _default_acls_all_access() -> skein.model.ACLs:
 
 
 def run_on_yarn(
-    experiment_fn: ExperimentFn,
-    task_specs: Dict[str, topologies.TaskSpec],
-    *,
-    pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]] = None,
-    skein_client: skein.Client = None,
-    files: Dict[str, str] = None,
-    env: Dict[str, str] = {},
-    queue: str = "default",
-    acls: ACLs = _default_acls_all_access(),
-    file_systems: List[str] = None,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    nb_retries: int = 0,
-    custom_task_module: Optional[str] = None,
-    name: str = "RunOnYarn",
-    pre_script_hook: Optional[str] = None,
-    cuda_runtime_hdfs_path: Optional[str] = None
+        experiment_fn: ExperimentFn,
+        task_specs: Dict[str, topologies.TaskSpec],
+        *,
+        pyenv_zip_path: Union[str, Dict[topologies.NodeLabel, str]] = None,
+        skein_client: skein.Client = None,
+        files: Dict[str, str] = None,
+        env: Dict[str, str] = {},
+        queue: str = "default",
+        acls: ACLs = _default_acls_all_access(),
+        file_systems: List[str] = None,
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+        nb_retries: int = 0,
+        custom_task_module: Optional[str] = None,
+        name: str = "RunOnYarn",
+        pre_script_hook: Optional[str] = None,
+        cuda_runtime_hdfs_path: Optional[str] = None
 
 ) -> Optional[metrics.Metrics]:
     """Run an experiment on YARN.
@@ -509,17 +511,17 @@ def _shutdown_on_exception(app: skein.ApplicationClient):
 
 
 def _execute_and_await_termination(
-    skein_cluster: SkeinCluster,
-    serialized_fn: bytes,
-    eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
-    n_try: int = 0,
-    poll_every_secs: int = 10
+        skein_cluster: SkeinCluster,
+        serialized_fn: bytes,
+        eval_monitor_log_thresholds: Dict[str, Tuple[float, float]] = None,
+        n_try: int = 0,
+        poll_every_secs: int = 10
 ) -> Optional[metrics.Metrics]:
     logger.info("posting serialized Experiment fcn to skein KV store")
     skein_cluster.app.kv[constants.KV_EXPERIMENT_FN] = serialized_fn
     eval_metrics_logger = evaluator_metrics.EvaluatorMetricsLogger(
         [task for task in _internal.iter_tasks(skein_cluster.tasks)
-         if task.startswith('evaluator')],
+         if task.type == 'evaluator'],
         skein_cluster.app,
         eval_monitor_log_thresholds
     )
@@ -563,7 +565,7 @@ def _execute_and_await_termination(
 
             containers = container_status.by_container_id()
             # add one for AM container
-            wait_for_nb_logs = sum([instances for task, instances in skein_cluster.tasks]) + 1
+            wait_for_nb_logs = sum([instances for task, instances, _ in skein_cluster.tasks]) + 1
             logs = _get_app_logs(
                 skein_cluster.client,
                 skein_cluster.app,
@@ -586,15 +588,15 @@ def _execute_and_await_termination(
 
 
 def _save_logs_to_mlflow(logs: Optional[skein.model.ApplicationLogs],
-                        containers: Dict[str, Tuple[str, str]],
-                        n_try: int):
+                         containers: Dict[str, Tuple[ContainerKey, str]],
+                         n_try: int):
     if not logs:
         return
 
     for key, logs in logs.items():
         if key in containers:
             task, status = containers[key]
-            filename = mlflow.format_key(f"{task}_{status}_{n_try}")
+            filename = mlflow.format_key(f"{task.to_kv_str()}_{status}_{n_try}")
         else:
             filename = mlflow.format_key(f"{key}_{n_try}")
         mlflow.save_text_to_mlflow(logs, filename)
@@ -614,8 +616,8 @@ def _format_app_report(report: ApplicationReport) -> str:
 
 
 def _aggregate_events(
-    kv: skein.kv.KeyValueStore,
-    events: Dict[str, Dict[str, str]]
+        kv: skein.kv.KeyValueStore,
+        events: Dict[ContainerKey, Dict[str, str]]
 ) -> None:
     """
     Aggregate events from all dispatched tasks.
@@ -631,13 +633,18 @@ def _aggregate_events(
     with suppress(skein.exceptions.ConnectionError), queue:
         for evt in queue:
             if "/" in evt.key:
-                task, stage = evt.key.rsplit("/", 1)
-                events[task][stage] = evt.result.value.decode()
+                task_key_str, stage = evt.key.rsplit("/", 1)
+                task = ContainerKey.from_kv_str(task_key_str)
+                try:
+                    events[task][stage] = evt.result.value.decode()
+                except KeyError:
+                    print(f'faulty key: {task}')
+                    print(events)
 
 
 def _handle_events(
-    events: Dict[str, Dict[str, str]],
-    n_try: int
+        events: Dict[ContainerKey, Dict[str, str]],
+        n_try: int
 ) -> Tuple[str, metrics.Metrics, ContainerLogStatus]:
     header = []
     details = []
@@ -647,11 +654,11 @@ def _handle_events(
     max_eval_stop_time = timedelta.min
     valid_training_time = True
     valid_eval_time = True
-    container_duration: Dict[str, Optional[timedelta]] = dict()
-    train_eval_time_per_node: Dict[str, Optional[timedelta]] = dict()
-    container_log_urls: Dict[str, str] = dict()
-    container_status: Dict[str, str] = dict()
-    for task, stages in sorted(events.items()):
+    container_duration: Dict[ContainerKey, Optional[timedelta]] = dict()
+    train_eval_time_per_node: Dict[ContainerKey, Optional[timedelta]] = dict()
+    container_log_urls: Dict[ContainerKey, str] = dict()
+    container_status: Dict[ContainerKey, str] = dict()
+    for task_key, stages in sorted(events.items()):
         if "stop" in stages:
             status = "FAILED" if stages["stop"] else "SUCCEEDED"
         elif stages:
@@ -664,46 +671,47 @@ def _handle_events(
         exception = stages.get("stop", "")
         logs = stages.get("logs", "")
 
-        container_log_urls[task] = logs
-        container_status[task] = status
-        container_duration[task] = None
+        container_log_urls[task_key] = logs
+        container_status[task_key] = status
+        container_duration[task_key] = None
         if 'container_start_time' in stages and 'container_stop_time' in stages:
-            container_duration[task] = timedelta(seconds=(float(stages['container_stop_time'])
-                                                          - float(stages['container_start_time'])))
+            container_duration[task_key] = timedelta(
+                seconds=(float(stages['container_stop_time']) - float(stages['container_start_time']
+                                                                      )))
 
-        train_eval_time_per_node[task] = None
-        task_type = get_task_type(task)
+        train_eval_time_per_node[task_key] = None
+
         if 'train_eval_start_time' in stages and 'train_eval_stop_time' in stages and not exception:
             start_time = timedelta(seconds=float(stages['train_eval_start_time']))
             stop_time = timedelta(seconds=float(stages['train_eval_stop_time']))
-            train_eval_time_per_node[task] = stop_time - start_time
-            if is_worker(task_type) or is_chief(task_type):
+            train_eval_time_per_node[task_key] = stop_time - start_time
+            if is_worker(task_key.type) or is_chief(task_key.type):
                 if start_time < min_training_start_time:
                     min_training_start_time = start_time
                 if stop_time > max_training_stop_time:
                     max_training_stop_time = stop_time
-            elif is_evaluator(task_type):
+            elif is_evaluator(task_key.type):
                 if start_time < min_eval_start_time:
                     min_eval_start_time = start_time
                 if stop_time > max_eval_stop_time:
                     max_eval_stop_time = stop_time
         else:
-            if is_worker(task_type) or is_chief(task_type):
+            if is_worker(task_key.type) or is_chief(task_key.type):
                 valid_training_time = False
-            elif is_evaluator(task_type):
+            elif is_evaluator(task_key.type):
                 valid_eval_time = False
 
-        header.append(f"{task:>16}  {sock_addr}  {status}  {logs}"
-                      f"  Container duration: {container_duration[task]}"
-                      f"  Training/evaluation duration : {train_eval_time_per_node[task]}")
+        header.append(f"{task_key.to_kv_str():>16}  {sock_addr}  {status}  {logs}"
+                      f"  Container duration: {container_duration[task_key]}"
+                      f"  Training/evaluation duration : {train_eval_time_per_node[task_key]}")
 
         if exception:
-            details.append(f"Exception in task {task}:")
+            details.append(f"Exception in task {task_key.to_kv_str()}:")
             details.append(exception)
 
-    training_time = max_training_stop_time - min_training_start_time\
+    training_time = max_training_stop_time - min_training_start_time \
         if valid_training_time and min_training_start_time < timedelta.max else None
-    eval_time = max_eval_stop_time - min_eval_start_time\
+    eval_time = max_eval_stop_time - min_eval_start_time \
         if valid_eval_time and min_eval_start_time < timedelta.max else None
     header.append(f'Training time = {training_time}')
     header.append(f'Evaluation time = {eval_time}')
@@ -723,9 +731,9 @@ def _handle_events(
 
 
 def _get_app_logs(
-    client: skein.Client,
-    app: skein.ApplicationClient,
-    wait_for_nb_logs: int
+        client: skein.Client,
+        app: skein.ApplicationClient,
+        wait_for_nb_logs: int
 ) -> Optional[skein.model.ApplicationLogs]:
     for ind in range(YARN_LOG_TRIES):
         try:
@@ -736,7 +744,7 @@ def _get_app_logs(
                 return logs
         except Exception:
             logger.warn(
-                f"Cannot collect logs (attempt {ind+1}/{YARN_LOG_TRIES})",
+                f"Cannot collect logs (attempt {ind + 1}/{YARN_LOG_TRIES})",
                 exc_info=True)
         time.sleep(3)
     return None

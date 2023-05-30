@@ -10,17 +10,17 @@ from tf_yarn import event
 from tf_yarn.tensorflow import Experiment, KerasExperiment
 from tf_yarn._internal import MonitoredThread
 from tf_yarn._task_commons import (
-    _setup_container_logs, _get_cluster_tasks, get_task, get_task_description
+    _setup_container_logs, _get_cluster_tasks, get_task_key
 )
 from tf_yarn.tensorflow import cluster
-
+from tf_yarn.topologies import ContainerTask
 
 _logger = logging.getLogger(__name__)
 
 
 def _prepare_container(
     host_port: Tuple[str, int]
-) -> Tuple[skein.ApplicationClient, Dict[str, List[str]], List[str]]:
+) -> Tuple[skein.ApplicationClient, Dict[str, List[str]], List[ContainerTask]]:
     """Keep socket open while preparing container """
     client = skein.ApplicationClient.from_current()
     _setup_container_logs(client)
@@ -36,7 +36,7 @@ def _log_sys_info() -> None:
 
 
 def _gen_monitored_train_and_evaluate(client: skein.ApplicationClient):
-    task = get_task()
+    task = get_task_key()
 
     def train_and_evaluate(
             estimator: tf.estimator,
@@ -57,11 +57,11 @@ def _execute_dispatched_function(
     client: skein.ApplicationClient,
     experiment: Union[Experiment, KerasExperiment]
 ) -> MonitoredThread:
-    task_type, task_id = get_task_description()
-    _logger.info(f"Starting execution {task_type}:{task_id}")
+    task_key = get_task_key()
+    _logger.info(f"Starting execution {task_key.to_kv_str()}")
     if isinstance(experiment, Experiment):
         thread = MonitoredThread(
-            name=f"{task_type}:{task_id}",
+            name=f"{task_key.to_kv_str()}",
             target=_gen_monitored_train_and_evaluate(client),
             args=tuple(experiment),
             daemon=True)
@@ -70,14 +70,13 @@ def _execute_dispatched_function(
     else:
         raise ValueError("experiment must be an Experiment or a KerasExperiment")
     thread.start()
-    task = get_task()
-    event.start_event(client, task)
+    event.start_event(client, task_key)
     return thread
 
 
 def _shutdown_container(
     client: skein.ApplicationClient,
-    cluster_tasks: List[str],
+    cluster_tasks: List[ContainerTask],
     session_config: tf.compat.v1.ConfigProto,
     thread: Optional[MonitoredThread]
 ) -> None:
@@ -87,33 +86,33 @@ def _shutdown_container(
     # that ``device_filers`` are symmetric.
     exception = thread.exception if thread is not None and isinstance(thread, MonitoredThread) \
         else None
-    task = get_task()
-    event.stop_event(client, task, exception)
+    task_key = get_task_key()
+    event.stop_event(client, task_key, exception)
     _wait_for_connected_tasks(
         client,
         cluster_tasks,
         getattr(session_config, "device_filters", []))
 
-    event.broadcast_container_stop_time(client, task)
+    event.broadcast_container_stop_time(client, task_key)
 
     if exception is not None:
         raise exception from None
 
 
-def _wait_for_connected_tasks(client, all_tasks, device_filters, message='stop'):
+def _wait_for_connected_tasks(client, all_tasks: List[ContainerTask],
+                              device_filters, message='stop'):
     for task in all_tasks:
         if _matches_device_filters(task, device_filters):
-            event.wait(client, f"{task}/{message}")
+            event.wait(client, f"{task.to_container_key().to_kv_str()}/{message}")
 
 
-def _matches_device_filters(task: str, device_filters: List[str]):
-    task_type, task_id = task.split(":", 1)
+def _matches_device_filters(task: ContainerTask, device_filters: List[str]):
     for device_filter in device_filters:
         [(filter_type, filter_id)] = re.findall(
             r"^/job:([a-z]+)(?:/task:(\d+))?$",
             # Remove once https://github.com/tensorflow/tensorflow/pull/22566 is released
             device_filter.replace("master", "chief"))
-        if (filter_type == task_type and
-                (not filter_id or filter_id == task_id)):
+        if (filter_type == task.type and
+                (not filter_id or filter_id == str(task.id))):
             return True
     return not device_filters

@@ -11,6 +11,7 @@ from typing import (
 import skein
 
 from tf_yarn import mlflow
+from tf_yarn.topologies import ContainerKey
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,8 @@ logger = logging.getLogger(__name__)
 class Metrics(NamedTuple):
     total_training_duration: Optional[timedelta]
     total_eval_duration: Optional[timedelta]
-    container_duration: Dict[str, Optional[timedelta]]
-    train_eval_time_per_node: Dict[str, Optional[timedelta]]
+    container_duration: Dict[ContainerKey, Optional[timedelta]]
+    train_eval_time_per_node: Dict[ContainerKey, Optional[timedelta]]
 
     def log_mlflow(self, n_try: int):
         content = ""

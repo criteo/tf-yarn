@@ -198,7 +198,6 @@ A Pytorch experiment is described by an instance of `tf_yarn.pytorch.PytorchExpe
 - main_fn: Main function run to train the model. This function is executed by all workers involved in the training. It must accept these inputs: model to train, train dataloader, device (cpu:0, cpu:1, cuda:0, cuda:1 ...) allocated to the worker for the training and rank (worker id).
 - Training dataset: training dataset (instance of `torch.utils.data.Dataset`, `webdataset.WebDataset` or `webdataset.DataPipeline`).
 - dataloader_args: parameters (batch size, number of workers, collate function ...) passed to the dataloader used to load and iterate over the training dataset. Instance of `tf_yarn.pytorch.DataLoaderArgs`.
-- n_workers_per_executor: number of workers per yarn executor.
 - tensorboard_hdfs_dir: HDFS directory where tensorboard results will be written at the end of the training
 - ddp_args: DistributedDataParallel parameters. Refer to [Pytorch documentation](https://pytorch.org/docs/stable/_modules/torch/nn/parallel/distributed.html#DistributedDataParallel). Instance of `tf_yarn.pytorch.DistributedDataParallelArgs`
 
@@ -229,8 +228,7 @@ experiment = PytorchExperiment(
     model=model,
     main_fn=main_fn,
     train_dataset=trainset,
-    dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
-    n_workers_per_executor=2
+    dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2)
 )
 ```
 
@@ -244,20 +242,22 @@ To run your experiment on yarn, simply call the method `tf_yarn.pytorch.run_on_y
 ```python
 from tf_yarn.pytorch import run_on_yarn, PytorchExperiment, TaskSpec
 
+
 def experiment_fn():
     ...
     return PytorchExperiment(
         model=model,
         main_fn=main_fn,
         train_dataset=trainset,
-        dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
-        n_workers_per_executor=2
+        dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2)
     )
+
 
 run_on_yarn(
     experiment_fn,
     task_specs={
-        "worker": TaskSpec(memory=48*2**10, vcores=48, instances=2, label=NodeLabel.GPU)
+        "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, nb_proc_per_worker=2,
+                           label=NodeLabel.GPU)
     }
 )
 ```

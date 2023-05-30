@@ -90,7 +90,6 @@ def experiment_fn():
         main_fn=main_fn,
         train_dataset=trainset,
         dataloader_args=DataLoaderArgs(batch_size=4, num_workers=2),
-        n_workers_per_executor=2
     )
 
 
@@ -100,7 +99,8 @@ if __name__ == "__main__":
     run_on_yarn(
         experiment_fn=experiment_fn,
         task_specs={
-            "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, label=NodeLabel.GPU)
+            "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, nb_proc_per_worker=2,
+                               label=NodeLabel.GPU)
         },
         pyenv_zip_path=zip_hdfs,
         queue="ml-gpu"

@@ -44,15 +44,17 @@ def _compute_world_size(cluster_tasks: List[ContainerTask]):
     return sum([task.nb_proc for task in cluster_tasks])
 
 
-def _get_nb_workers(task_id: str, cluster_tasks: List[ContainerTask]):
+def _get_nb_workers(task_id: int, cluster_tasks: List[ContainerTask]):
     return [task.nb_proc for task in cluster_tasks if task.id == task_id][0]
 
 
-def _get_experiment(
-    client: skein.ApplicationClient
-) -> NamedTuple:
+def get_pickled_experiment(client: skein.ApplicationClient) -> bytes:
+    return client.kv.wait(constants.KV_EXPERIMENT_FN)
+
+
+def _get_experiment(client: skein.ApplicationClient) -> NamedTuple:
     try:
-        experiment = cloudpickle.loads(client.kv.wait(constants.KV_EXPERIMENT_FN))()
+        experiment = cloudpickle.loads(get_pickled_experiment(client))()
     except Exception as e:
         task = get_task_key()
         event.start_event(client, task)

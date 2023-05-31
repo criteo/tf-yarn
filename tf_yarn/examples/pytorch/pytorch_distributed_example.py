@@ -19,16 +19,22 @@ from tf_yarn.pytorch import model_ckpt
 import cluster_pack
 
 
-def train_fcn():
-    local_rank = 0  # TBD later
-    _, rank, size, master_addr, master_port, _ = get_task()
-    print(f'master: {master_addr}:{master_port}')
+# the following code assumes 1 local process per Gpu, several processes could run on the same Gpu
+# using something like
+#     n_gpus = torch.cuda.device_count()
+#     gpu_id = local_rank % n_gpus
+#     device_str = f"cuda:{gpu_id}"
+#     ddp_model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu_id])
+def train_fcn(local_rank: int):
+    _, rank, size, master_addr, master_port, n_worker_per_executor = get_task(local_rank)
 
     model_path = f"viewfs://root/user/{getpass.getuser()}/tf-yarn-distribute-example_{str(uuid4())}"
 
-    # Initialization of Pytorch distributed bakend
+    # Initialization of Pytorch distributed backend
     os.environ['MASTER_ADDR'] = master_addr
     os.environ['MASTER_PORT'] = str(master_port)
+
+    os.environ["NCCL_DEBUG"] = "INFO"
     dist.init_process_group(backend='nccl', world_size=size, rank=rank)
 
     nb_epoch = 5
@@ -120,11 +126,12 @@ if __name__ == "__main__":
     print(f"venv uploaded to {pyenv_path}")
 
     task_specs = {
-        "worker": TaskSpec(memory=48 * 2 ** 10, vcores=48, instances=2, label=NodeLabel.GPU)
+        "worker": TaskSpec(
+            memory=48 * 2 ** 10, vcores=48, instances=2, label=NodeLabel.GPU, nb_proc_per_worker=2)
     }
 
     client.run_on_yarn(
-        lambda: train_fcn,
+        train_fcn,
         task_specs,
         queue="ml-gpu",
         pyenv_zip_path=pyenv_path

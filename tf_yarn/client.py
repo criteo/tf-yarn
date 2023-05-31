@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 here = os.path.dirname(__file__)
 
-ExperimentFn = Callable[[], Any]
+ExperimentFn = Union[Callable[[], Any], Callable[[int], Any]]
 
 
 class SkeinCluster(NamedTuple):
@@ -202,7 +202,10 @@ def _setup_skein_cluster(
         pre_script_hook = _setup_to_use_cuda_archive(env, pre_script_hook, cuda_runtime_hdfs_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
+        print('setting up task files and environment')
+        with catchtime():
+            task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
+
         services = {}
         for task_type, task_spec in list(task_specs.items()):
             pyenv = pyenvs[task_spec.label]
@@ -416,8 +419,9 @@ def run_on_yarn(
     updated_files = _add_editable_requirements(files)
     _pyenv_zip_path = pyenv_zip_path
     if _pyenv_zip_path is None:
+        print("building and uploading venv")
         with catchtime():
-            cluster_pack.upload_env()[0]
+            _pyenv_zip_path = cluster_pack.upload_env()[0]
 
     if nb_retries < 0:
         raise ValueError(f'nb_retries must be greater or equal to 0. Got {nb_retries}')

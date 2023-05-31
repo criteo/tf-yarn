@@ -25,6 +25,7 @@ from tf_yarn._task_commons import (
     _compute_world_size,
     _get_nb_workers,
     _get_experiment,
+    compute_rank,
     choose_master,
     get_task_key,
     setup_logging
@@ -193,8 +194,7 @@ def main() -> None:
         workers = list()
         mp.set_start_method("spawn", force=True)
         for n in range(n_workers_per_executor):
-            # Todo: better computation of rank as sum[0:taskid](n_process(task))
-            rank = (task_key.id * n_workers_per_executor) + n
+            rank = compute_rank(task_key.id, n, n_workers_per_executor)
             worker = mp.Process(
                 target=_train,
                 args=(

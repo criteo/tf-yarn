@@ -113,7 +113,8 @@ def train_fcn():
 
 if __name__ == "__main__":
     print("packaging venv")
-    pyenv_path, _ = cluster_pack.upload_env(allow_large_pex=True)
+    pyenv_path, _ = cluster_pack.upload_env(
+        allow_large_pex=True, additional_repo='https://download.pytorch.org/whl/cu117')
     print(f"venv uploaded to {pyenv_path}")
 
     task_specs = {

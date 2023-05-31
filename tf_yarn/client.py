@@ -251,8 +251,6 @@ def _setup_skein_cluster(
 
         container_info = [(task_type, spec.instances, spec.nb_proc_per_worker)
                           for task_type, spec in task_specs.items()]
-        # we strip the number of task per container from the event keys,
-        # as events are tied to cnotainers and not processes
         events: Dict[ContainerKey, Dict[str, str]] = {
             task.to_container_key(): {} for task in _internal.iter_tasks(container_info)}
         app = skein_client.submit_and_connect(spec)

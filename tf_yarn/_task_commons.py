@@ -88,7 +88,7 @@ def is_chief(task_type: str = None) -> bool:
 
     return task_type == 'chief'
 
-  
+
 def choose_master(client: skein.ApplicationClient, rank: int) -> Tuple[str, int]:
     if rank == 0:
         # ideally launching the train function on the master node should happen inside this context

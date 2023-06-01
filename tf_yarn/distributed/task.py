@@ -9,6 +9,7 @@ from tf_yarn._task_commons import (
     choose_master,
     get_task_key,
     setup_logging,
+    catchtime
 )
 
 
@@ -51,7 +52,9 @@ def get_task():
 def main():
     _log_sys_info()
     client = skein.ApplicationClient.from_current()
-    experiment = _get_experiment(client)
+    print("Fetching Experiment function ...")
+    with catchtime():
+        experiment = _get_experiment(client)
     assert isinstance(experiment, Callable)
     experiment()
 

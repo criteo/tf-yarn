@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from typing import List, NamedTuple, Tuple
+from time import perf_counter
 
 import cloudpickle
 import skein
@@ -103,3 +104,20 @@ def choose_master(client: skein.ApplicationClient, rank: int) -> Tuple[str, int]
         master_port = int(event.wait(client, MASTER_PORT))
 
     return master_addr, master_port
+
+
+def compute_rank(task_id: int, local_rank: int, n_workers):
+    # Todo: better computation of rank as sum[0:taskid](n_process(task))
+    return (task_id * n_workers) + local_rank
+
+
+# Context manager to print time elapsed in a block of code
+class catchtime:
+    def __enter__(self):
+        self.time = perf_counter()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.time = perf_counter() - self.time
+        self.readout = f'Time: {self.time:.3f} seconds'
+        print(self.readout)

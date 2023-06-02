@@ -107,12 +107,15 @@ def _setup_pyenvs(
 
 def _setup_task_env(
         tempdir: str,
-        files: Dict[str, str] = None,
+        files: Dict[str, str] = {},
         env: Dict[str, str] = {},
         n_try: int = 0
 ):
-    task_files = _maybe_zip_task_files(files or {}, tempdir)
-    task_files[__package__] = cluster_pack.zip_path(here, False, tempdir)
+    with catchtime("package editable requirements"):
+        task_files = _maybe_zip_task_files(files, tempdir, verbose=True)
+
+    with catchtime(f"package current module: {__package__}"):
+        task_files[__package__] = cluster_pack.zip_path(here, False, tempdir)
 
     _add_to_env(env, "LIBHDFS_OPTS", "-Xms64m -Xmx512m")
 
@@ -140,12 +143,16 @@ def _add_to_env(env: Dict[str, str], env_name: str, opts: str):
         env[env_name] = f"{opts}"
 
 
-def _maybe_zip_task_files(files, tempdir):
+def _maybe_zip_task_files(files, tempdir, verbose=False):
     task_files = {}
     for target, source in files.items():
         assert target not in task_files
         if os.path.isdir(source):
-            source = cluster_pack.zip_path(source, False, tempdir)
+            if verbose:
+                with catchtime(f"Zip {target}"):
+                    source = cluster_pack.zip_path(source, False, tempdir)
+            else:
+                source = cluster_pack.zip_path(source, False, tempdir)
 
         task_files[target] = source
     return task_files
@@ -202,9 +209,7 @@ def _setup_skein_cluster(
         pre_script_hook = _setup_to_use_cuda_archive(env, pre_script_hook, cuda_runtime_hdfs_path)
 
     with tempfile.TemporaryDirectory() as tempdir:
-        print('setting up task files and environment')
-        with catchtime():
-            task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
+        task_files, task_env = _setup_task_env(tempdir, files, env, n_try)
 
         services = {}
         for task_type, task_spec in list(task_specs.items()):
@@ -218,26 +223,24 @@ def _setup_skein_cluster(
             if task_spec.tb_extra_args:
                 service_env["TB_EXTRA_ARGS"] = str(task_spec.tb_extra_args)
 
-            print(f'setting up skein service "{task_type}')
-            with catchtime():
-                services[task_type] = skein.Service(
-                    script=f'''
-                                set -x
-                                {pre_script_hook}
-                                {_env.gen_task_cmd(
-                        pyenv,
-                        task_type,
-                        custom_task_module)}
-                            ''',
-                    resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
-                    max_restarts=0,
-                    instances=task_spec.instances,
-                    node_label=task_spec.label.value,
-                    files={
-                        **task_files,
-                        pyenv.dest_path: pyenv.path_to_archive
-                    },
-                    env=service_env)
+            services[task_type] = skein.Service(
+                script=f'''
+                            set -x
+                            {pre_script_hook}
+                            {_env.gen_task_cmd(
+                    pyenv,
+                    task_type,
+                    custom_task_module)}
+                        ''',
+                resources=skein.model.Resources(task_spec.memory, task_spec.vcores),
+                max_restarts=0,
+                instances=task_spec.instances,
+                node_label=task_spec.label.value,
+                files={
+                    **task_files,
+                    pyenv.dest_path: pyenv.path_to_archive
+                },
+                env=service_env)
 
         # on the cluster we don't ask again for delegation tokens
         if "HADOOP_TOKEN_FILE_LOCATION" in os.environ:
@@ -258,8 +261,7 @@ def _setup_skein_cluster(
                           for task_type, spec in task_specs.items()]
         events: Dict[ContainerKey, Dict[str, str]] = {
             task.to_container_key(): {} for task in _internal.iter_tasks(container_info)}
-        print('submitting skein Application')
-        with catchtime():
+        with catchtime('submit skein Application'):
             app = skein_client.submit_and_connect(spec)
 
         # Start a thread which collects all events posted by all tasks in kv store
@@ -276,9 +278,7 @@ def _run_on_cluster(
         n_try: int = 0
 ) -> Optional[metrics.Metrics]:
     # Attempt serialization early to avoid allocating unnecesary resources
-    print('Serializing experiment function ...')
-    with catchtime():
-        serialized_fn = cloudpickle.dumps(experiment_fn)
+    serialized_fn = cloudpickle.dumps(experiment_fn)
     with skein_cluster.client:
         return _execute_and_await_termination(
             skein_cluster,
@@ -419,8 +419,7 @@ def run_on_yarn(
     updated_files = _add_editable_requirements(files)
     _pyenv_zip_path = pyenv_zip_path
     if _pyenv_zip_path is None:
-        print("building and uploading venv")
-        with catchtime():
+        with catchtime("building and uploading venv"):
             _pyenv_zip_path = cluster_pack.upload_env()[0]
 
     if nb_retries < 0:
@@ -432,23 +431,21 @@ def run_on_yarn(
     while True:
         print(f'Try: {n_try +1}')
         try:
-            with catchtime():
-                print('Setupping skein cluster')
-                skein_cluster = _setup_skein_cluster(
-                    pyenvs=pyenvs,
-                    task_specs=task_specs,
-                    skein_client=skein_client,
-                    files=updated_files,
-                    env=env,
-                    queue=queue,
-                    acls=acls,
-                    file_systems=file_systems,
-                    name=name,
-                    n_try=n_try,
-                    custom_task_module=custom_task_module,
-                    pre_script_hook=pre_script_hook,
-                    cuda_runtime_hdfs_path=cuda_runtime_hdfs_path
-                )
+            skein_cluster = _setup_skein_cluster(
+                pyenvs=pyenvs,
+                task_specs=task_specs,
+                skein_client=skein_client,
+                files=updated_files,
+                env=env,
+                queue=queue,
+                acls=acls,
+                file_systems=file_systems,
+                name=name,
+                n_try=n_try,
+                custom_task_module=custom_task_module,
+                pre_script_hook=pre_script_hook,
+                cuda_runtime_hdfs_path=cuda_runtime_hdfs_path
+            )
             with _shutdown_on_exception(skein_cluster.app):
                 _setup_cluster_spec(skein_cluster.tasks, skein_cluster.app)
 
@@ -531,8 +528,7 @@ def _execute_and_await_termination(
         n_try: int = 0,
         poll_every_secs: int = 10
 ) -> Optional[metrics.Metrics]:
-    logger.info("posting serialized Experiment fcn to skein KV store")
-    with catchtime():
+    with catchtime("post serialized Experiment fcn to skein KV store"):
         skein_cluster.app.kv[constants.KV_EXPERIMENT_FN] = serialized_fn
     eval_metrics_logger = evaluator_metrics.EvaluatorMetricsLogger(
         [task for task in _internal.iter_tasks(skein_cluster.tasks)

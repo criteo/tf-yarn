@@ -12,7 +12,6 @@ import torch.nn.functional as F
 
 from tf_yarn.distributed import client
 from tf_yarn.distributed.task import get_task
-from tf_yarn._task_commons import catchtime
 from tf_yarn.topologies import TaskSpec, NodeLabel
 from tf_yarn.pytorch import model_ckpt
 
@@ -119,10 +118,8 @@ def train_fcn(local_rank: int):
 
 
 if __name__ == "__main__":
-    print("packaging venv")
-    with catchtime():
-        pyenv_path, _ = cluster_pack.upload_env(
-            allow_large_pex=True, additional_repo='https://download.pytorch.org/whl/cu117')
+    pyenv_path, _ = cluster_pack.upload_env(
+        allow_large_pex=True, additional_repo='https://download.pytorch.org/whl/cu117')
     print(f"venv uploaded to {pyenv_path}")
 
     task_specs = {

@@ -56,7 +56,8 @@ def get_task(local_rank: int):
 
 
 def unpickle_and_exec(experiment: bytes, local_rank: int):
-    fcn = cloudpickle.loads(experiment)
+    with catchtime('unpickle target function'):
+        fcn = cloudpickle.loads(experiment)
     fcn(local_rank)
 
 
@@ -81,8 +82,7 @@ def parallel_run(n_workers: int, task_id: int,
 def main():
     _log_sys_info()
     client = skein.ApplicationClient.from_current()
-    print("Fetching Experiment function ...")
-    with catchtime():
+    with catchtime("fetch Experiment function"):
         experiment = get_pickled_experiment(client)
 
     task_key = get_task_key()

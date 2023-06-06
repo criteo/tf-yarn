@@ -22,7 +22,7 @@ def test_get_device():
 
 
 def test_setup_master_rank_0():
-    with mock.patch(f"{MODULE_UNDER_TEST}._internal") as internal_mock:
+    with mock.patch("tf_yarn._task_commons._internal") as internal_mock:
         addr = "127.0.0.1"
         port = 1313
         internal_mock.reserve_sock_addr.return_value.__enter__.return_value = (addr, port)

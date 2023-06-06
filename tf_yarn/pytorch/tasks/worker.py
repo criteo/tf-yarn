@@ -25,6 +25,8 @@ from tf_yarn._task_commons import (
     _compute_world_size,
     _get_nb_workers,
     _get_experiment,
+    compute_rank,
+    choose_master,
     get_task_key,
     setup_logging
 )
@@ -37,7 +39,6 @@ _logger = logging.getLogger(__file__)
 
 MASTER_ADDR = "MASTER_ADDR"
 MASTER_PORT = "MASTER_PORT"
-PYTORCH_DPP_RANK = "PYTORCH_DPP_RANK"
 
 
 def _log_sys_info() -> None:
@@ -93,7 +94,6 @@ def _create_dataloader(
 def _train(device: int, rank: int, world_size: int, collective_ops_backend: str) -> None:
     os.environ["NCCL_DEBUG"] = "INFO"
     _logger.info(f"[{os.getpid()}] device: {device}; rank: {rank}")
-    os.environ[PYTORCH_DPP_RANK] = str(rank)
 
     client = skein.ApplicationClient.from_current()
     _setup_master(client, rank)
@@ -153,17 +153,10 @@ def _upload_tensorboard_on_hdfs(local_dir: str, hdfs_dir: str) -> None:
 
 
 def _setup_master(client: skein.ApplicationClient, rank: int) -> None:
-    if rank == 0:
-        with _internal.reserve_sock_addr() as host_port:
-            event.broadcast(client, MASTER_ADDR, host_port[0])
-            event.broadcast(client, MASTER_PORT, str(host_port[1]))
-            os.environ[MASTER_ADDR] = host_port[0]
-            os.environ[MASTER_PORT] = str(host_port[1])
-    else:
-        master_addr = event.wait(client, MASTER_ADDR)
-        master_port = event.wait(client, MASTER_PORT)
-        os.environ[MASTER_ADDR] = master_addr
-        os.environ[MASTER_PORT] = master_port
+    addr, port = choose_master(client, rank)
+    os.environ[MASTER_ADDR] = addr
+    os.environ[MASTER_PORT] = str(port)
+    _logger.info(f'master: {addr}:{port}')
 
 
 def _get_device(worker_id: int) -> int:
@@ -201,12 +194,11 @@ def main() -> None:
         workers = list()
         mp.set_start_method("spawn", force=True)
         for n in range(n_workers_per_executor):
-            rank = (task_key.id * n_workers_per_executor) + n
+            rank = compute_rank(task_key.id, n, n_workers_per_executor)
             worker = mp.Process(
                 target=_train,
                 args=(
                     _get_device(n),
-                    # Todo: better computation of rank as sum[0:taskid](n_process(task))
                     rank,
                     world_size,
                     _get_collective_ops_backend(n_workers_per_executor),

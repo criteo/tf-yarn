@@ -1,14 +1,19 @@
 import json
 import logging
 import os
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Tuple
+from time import perf_counter
 
 import cloudpickle
 import skein
 
-from tf_yarn import event, constants
+from tf_yarn import _internal, event, constants
 from tf_yarn._internal import iter_tasks
 from tf_yarn.topologies import ContainerTask, ContainerKey
+
+
+MASTER_ADDR = "MASTER_ADDR"
+MASTER_PORT = "MASTER_PORT"
 
 
 def setup_logging():
@@ -39,15 +44,17 @@ def _compute_world_size(cluster_tasks: List[ContainerTask]):
     return sum([task.nb_proc for task in cluster_tasks])
 
 
-def _get_nb_workers(task_id: str, cluster_tasks: List[ContainerTask]):
+def _get_nb_workers(task_id: int, cluster_tasks: List[ContainerTask]):
     return [task.nb_proc for task in cluster_tasks if task.id == task_id][0]
 
 
-def _get_experiment(
-    client: skein.ApplicationClient
-) -> NamedTuple:
+def get_pickled_experiment(client: skein.ApplicationClient) -> bytes:
+    return client.kv.wait(constants.KV_EXPERIMENT_FN)
+
+
+def _get_experiment(client: skein.ApplicationClient) -> NamedTuple:
     try:
-        experiment = cloudpickle.loads(client.kv.wait(constants.KV_EXPERIMENT_FN))()
+        experiment = cloudpickle.loads(get_pickled_experiment(client))()
     except Exception as e:
         task = get_task_key()
         event.start_event(client, task)
@@ -83,3 +90,36 @@ def is_chief(task_type: str = None) -> bool:
         task_type = get_task_key().type
 
     return task_type == 'chief'
+
+
+def choose_master(client: skein.ApplicationClient, rank: int) -> Tuple[str, int]:
+    if rank == 0:
+        # ideally launching the train function on the master node should happen inside this context
+        # manager, but existing tf-yarn jobs run correctly with the port reservation as is
+        with _internal.reserve_sock_addr() as host_port:
+            master_addr = host_port[0]
+            master_port = host_port[1]
+            event.broadcast(client, MASTER_ADDR, master_addr)
+            event.broadcast(client, MASTER_PORT, str(master_port))
+    else:
+        master_addr = event.wait(client, MASTER_ADDR)
+        master_port = int(event.wait(client, MASTER_PORT))
+
+    return master_addr, master_port
+
+
+def compute_rank(task_id: int, local_rank: int, n_workers):
+    # Todo: better computation of rank as sum[0:taskid](n_process(task))
+    return (task_id * n_workers) + local_rank
+
+
+# Context manager to print time elapsed in a block of code
+class catchtime:
+    def __enter__(self):
+        self.time = perf_counter()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.time = perf_counter() - self.time
+        self.readout = f'Time: {self.time:.3f} seconds'
+        print(self.readout)

@@ -8,6 +8,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import torch.nn.functional as F
+from torch.utils.tensorboard.writer import SummaryWriter
 
 import cluster_pack
 from tf_yarn.pytorch import run_on_yarn, TaskSpec, NodeLabel
@@ -40,7 +41,7 @@ def main_fn(
     trainloader: torch.utils.data.dataloader.DataLoader,
     device: str,
     rank: int,
-    tb_writer: torch.utils.tensorboard.writer.SummaryWriter
+    tb_writer: SummaryWriter
 ):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
@@ -72,7 +73,8 @@ def main_fn(
                 running_loss = 0.0
                 running_ite = 0
             train_ite_num += 1
-        model_ckpt.save_ckpt(model_ckpt_path, model, optimizer, epoch)
+        if (rank == 0):
+            model_ckpt.save_ckpt(model_ckpt_path, model, optimizer, epoch)
 
     print('Finished Training')
 

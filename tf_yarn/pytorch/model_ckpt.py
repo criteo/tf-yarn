@@ -8,8 +8,6 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from cluster_pack import filesystem
 
-from tf_yarn.pytorch.tasks.worker import PYTORCH_DPP_RANK
-
 
 _logger = logging.getLogger(__name__)
 
@@ -57,10 +55,7 @@ def load_ckpt(
 def save_ckpt(
     model_dir: str, model: Union[DDP, torch.nn.Module], optimizer: torch.optim.Optimizer,
     epoch: int, **kwargs: Dict[Any, Any]
-) -> Optional[str]:
-    if int(os.environ[PYTORCH_DPP_RANK]) != 0:
-        return None
-
+) -> str:
     state = {
         'model': _unwrap_model(model).state_dict(),
         'optimizer': optimizer.state_dict(),
